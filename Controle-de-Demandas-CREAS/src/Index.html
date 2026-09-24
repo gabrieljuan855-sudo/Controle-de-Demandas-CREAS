@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Controle de Demandas CREAS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+  <?!= include('Estilo'); ?>
+</head>
+<body>
+  <div class="carregando" id="carregando">Carregando os casos…</div>
+  <div class="app" id="app" hidden>
+    <aside class="side">
+      <div class="brand"><b>CREAS Taquara</b><span>Controle de demandas · PSE</span></div>
+      <nav id="nav"></nav>
+      <div class="who whoami" id="whoami"></div>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+  <div id="layer"></div>
+
+  <!-- leitor de PDF (relatório do GESUAS), roda no navegador -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <?!= include('App'); ?>
+</body>
+</html>

@@ -1,0 +1,672 @@
+<script>
+/* ================= utilidades ================= */
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+const D = s => { if (!s) return null; const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; };
+const iso = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
+let HOJE = new Date(); HOJE.setHours(0,0,0,0);
+const fmt = s => { const d = s instanceof Date ? s : D(s); return d ? d.toLocaleDateString('pt-BR') : '—'; };
+const fmtC = s => { const d = s instanceof Date ? s : D(s); return d ? d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : '—'; };
+const dias = s => { const d = s instanceof Date ? s : D(s); return d ? Math.round((HOJE - d)/864e5) : 0; };
+const idade = s => { const n = D(s); if (!n) return ''; let a = HOJE.getFullYear()-n.getFullYear(); if (HOJE < new Date(HOJE.getFullYear(), n.getMonth(), n.getDate())) a--; return a; };
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3000); }
+
+/* chamada ao servidor (Apps Script) como Promise */
+let ocupados = 0;
+function run(fn, ...args){
+  ocupados++; mostrarOcupado();
+  return new Promise((ok, falha) => {
+    google.script.run
+      .withSuccessHandler(r => { ocupados--; mostrarOcupado(); ok(r); })
+      .withFailureHandler(e => { ocupados--; mostrarOcupado(); toast(e && e.message ? e.message : String(e)); falha(e); })[fn](...args);
+  });
+}
+function mostrarOcupado(){
+  let el = $('#ocupado');
+  if (ocupados > 0 && !el){ el = document.createElement('div'); el.id='ocupado'; el.className='ocupado'; el.textContent='Salvando…'; document.body.appendChild(el); }
+  if (ocupados <= 0 && el) el.remove();
+}
+
+/* ================= constantes ================= */
+const ETAPAS = {triagem:'Aguardando triagem', avaliacao:'Em avaliação social', repasse:'Aguardando repasse', acompanhamento:'Em acompanhamento', encerrado:'Encerrado'};
+const COMPLEX = {0.5:'Baixa (0,5)', 1:'Média (1)', 1.5:'Alta (1,5)'};
+const DIAG = [
+  {g:'1. Violências físicas, psicológicas e morais', itens:[['fis','Violência física'],['psi','Violência psicológica'],['mor','Violência moral'],['pat','Violência patrimonial'],['ins','Violência institucional']]},
+  {g:'2. Violências sexuais e exploração', itens:[['sex','Abuso/violência sexual'],['exp','Exploração sexual, de imagem ou relacionados']]},
+  {g:'3. Negligência', itens:[
+    ['ng1','Negligência severa e persistente, com prejuízo grave ao desenvolvimento da criança ou idoso'],
+    ['ng2','Recusa deliberada ou omissão grave nos cuidados (saúde, alimentação, higiene, proteção)'],
+    ['ng3','Infrequência ou evasão escolar associada a negligência familiar grave'],
+    ['ng4','Negligência associada a outras violações de direitos'],
+    ['pbf','Descumprimento de condicionalidades do PBF e do PETI com violação de direitos']]},
+  {g:'4. Abandono ou ausência de cuidado', subs:[
+    {s:'Crianças e adolescentes', itens:[['ca1','Deixado sem supervisão ou cuidados adequados'],['ca2','Abandono pelos responsáveis legais'],['ca3','Desaparecimento intencional dos responsáveis'],['ca4','Rompimento de vínculos por negligência ou violência'],['ti','Trabalho infantil']]},
+    {s:'Pessoas idosas', itens:[['id1','Idoso abandonado em hospital, residência, instituição ou espaço público']]},
+    {s:'Pessoas com deficiência, transtornos ou dependência química', itens:[['pd1','Pessoa com deficiência em abandono ou desassistência familiar'],['pd2','Pessoa com transtorno mental ou dependência química abandonada pela família']]},
+    {s:'Situações gerais', itens:[['sg1','Abandono de criança, adolescente, PcD ou idoso, mesmo que eventual'],['sg2','Desvinculação familiar reiterada, com acompanhamentos anteriores sem mudança']]}]},
+  {g:'5. Discriminações e violações de direitos', itens:[['dso','Discriminação por orientação sexual'],['dre','Discriminação por raça/etnia']]}
+];
+const DIAG_LABEL = {}, DIAG_GRUPO = {};
+DIAG.forEach(g => (g.itens || g.subs.flatMap(s => s.itens)).forEach(([k,l]) => { DIAG_LABEL[k]=l; DIAG_GRUPO[k]=g.g.replace(/^\d\.\s*/,''); }));
+const DESFECHOS_AVAL = [
+  ['indicar_acompanhamento','Indicar acompanhamento','Coordenação escolhe a técnica'],
+  ['Contrarreferenciado ao CRAS','Contrarreferenciar ao CRAS','Sem violação que justifique PAEFI'],
+  ['Denúncia não confirmada — respondido ao órgão','Não confirmado','Responder ao órgão e encerrar'],
+  ['Não localizado','Não localizado','Após tentativas registradas'],
+  ['Encaminhado a outro serviço','Outro serviço','CAPS, saúde, CRM…'],
+  ['Arquivado','Arquivar','Não é demanda do CREAS']
+];
+
+/* ================= estado ================= */
+let DB = { papel:'', email:'', casos:[], ges:null, listas:{} };
+const S = { view:'painel', caso:null, tab:'dados', filtroEtapa:'ativos', busca:'', draft:null, editando:null, gTec:'', gPrevia:null, prev:'painel' };
+const coord = () => DB.papel === 'coordenacao';
+const aval = () => DB.papel === 'avaliacao';
+const TECNICAS = () => (DB.listas.tecnicas || []);
+function substituir(c){ const i = DB.casos.findIndex(x => x.id === c.id); if (i >= 0) DB.casos[i] = c; else DB.casos.unshift(c); }
+function go(view, extra={}){ Object.assign(S, {view}, extra); render(); window.scrollTo(0,0); }
+
+/* ================= GESUAS: cruzamento ================= */
+const PART = new Set(['DE','DA','DO','DOS','DAS','E']);
+const toks = s => norm(s).replace(/[^A-Z ]/g,' ').split(' ').filter(t => t && !PART.has(t));
+function mesmoNome(a,b){
+  const A=toks(a), B=toks(b);
+  if (A.length<2 || B.length<2 || A[0]!==B[0]) return false;
+  const sa=new Set(A), sb=new Set(B); const [sm,bg] = sa.size<=sb.size ? [sa,sb] : [sb,sa];
+  let n=0; sm.forEach(t => { if (bg.has(t)) n++; });
+  return n>=2 && n>=Math.min(sm.size,3);
+}
+const primeiroNome = s => toks(s)[0] || '';
+const TIT = s => String(s||'').toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase()).replace(/\b(De|Da|Do|Dos|Das|E)\b/g, m => m.toLowerCase());
+const temGes = () => DB.ges && DB.ges.linhas && DB.ges.linhas.length > 0;
+function noGesuas(c){
+  if (!temGes()) return null;
+  const pessoas = [c.responsavel, ...c.pessoas.map(p => p.nome)];
+  return DB.ges.linhas.find(g => pessoas.some(p => mesmoNome(p, g.responsavel))) || null;
+}
+function statusGes(c){
+  if (!temGes() || c.etapa !== 'acompanhamento') return null;
+  const g = noGesuas(c);
+  if (!g) return {tipo:'ausente', dias: dias(c.inicio_acomp)};
+  return {tipo:'ok', g, tecOk: primeiroNome(g.tecnico) === primeiroNome(c.tecnica), paf: g.paf};
+}
+
+/* leitura do PDF "Famílias Acompanhadas por Técnico" (pdf.js) */
+async function lerPdfGesuas(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  const ev=[]; let headerY=null, headerPage=null, periodo='';
+  const OPS = pdfjsLib.OPS;
+  const mul=(m,n)=>[m[0]*n[0]+m[2]*n[1], m[1]*n[0]+m[3]*n[1], m[0]*n[2]+m[2]*n[3], m[1]*n[2]+m[3]*n[3], m[0]*n[4]+m[2]*n[5]+m[4], m[1]*n[4]+m[3]*n[5]+m[5]];
+  const ap=(m,x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
+  for (let pi=1; pi<=pdf.numPages; pi++){
+    const page = await pdf.getPage(pi);
+    const vp = page.getViewport({scale:1}); const H = vp.viewBox[3]-vp.viewBox[1];
+    const ol = await page.getOperatorList();
+    let ctm=[1,0,0,1,0,0]; const st=[];
+    for (let i=0;i<ol.fnArray.length;i++){
+      const fn=ol.fnArray[i], a=ol.argsArray[i];
+      if (fn===OPS.save) st.push(ctm.slice());
+      else if (fn===OPS.restore) ctm=st.pop()||[1,0,0,1,0,0];
+      else if (fn===OPS.transform) ctm=mul(ctm,a);
+      else if (fn===OPS.constructPath){
+        const ops=a[0], args=a[1]; let k=0;
+        for (const op of ops){
+          if (op===OPS.rectangle){
+            const [x,y,w,h]=args.slice(k,k+4); k+=4;
+            const p1=ap(ctm,x,y), p2=ap(ctm,x+w,y+h);
+            const x0=Math.min(p1[0],p2[0]), x1=Math.max(p1[0],p2[0]), y0=Math.min(p1[1],p2[1]), y1=Math.max(p1[1],p2[1]);
+            // linha horizontal fina na coluna "Técnico" = troca de técnico
+            if (x0<32 && x1>138 && x1<160 && (y1-y0)<2.2){ const top=H-y1; if (top>=0 && top<=H) ev.push({pi,y:top,k:'B'}); }
+          } else if (op===OPS.moveTo || op===OPS.lineTo) k+=2;
+          else if (op===OPS.curveTo) k+=6;
+          else if (op===OPS.curveTo2 || op===OPS.curveTo3) k+=4;
+        }
+      }
+    }
+    const tc = await page.getTextContent();
+    for (const it of tc.items){
+      const s = it.str.trim(); if (!s) continue;
+      const x = it.transform[4], y = H - it.transform[5] - (it.height||8)*0.8;
+      if (/^P+A+F+$/.test(s) && headerY===null){ headerY=y; headerPage=pi; }
+      const mp = s.match(/(\d\d\/\d\d\/\d{4})\s*a\s*(\d\d\/\d\d\/\d{4})/); if (mp && !periodo) periodo = `${mp[1]} a ${mp[2]}`;
+      ev.push({pi,y,k:'T',x,s});
+    }
+  }
+  if (headerY===null) throw new Error('Não encontrei a tabela "Famílias Acompanhadas por Técnico" neste PDF.');
+  ev.sort((a,b) => a.pi-b.pi || a.y-b.y);
+  let seg=-1, lastB=null; const labels={}, rows=[], frag=[];
+  const DATE=/(\d\d\/\d\d\/\d{4})/;
+  for (const e of ev){
+    if (e.pi<headerPage || (e.pi===headerPage && e.y<=headerY+6)) continue;
+    if (e.k==='B'){ if (lastB && lastB.pi===e.pi && Math.abs(lastB.y-e.y)<4) continue; lastB=e; seg++; continue; }
+    if (seg<0) continue;
+    if (e.x<146){ (labels[seg]=labels[seg]||[]).push({y:e.y,s:e.s}); continue; }
+    if (e.x>=268 && e.x<300 && DATE.test(e.s)){ rows.push({seg,pi:e.pi,y:e.y,inicio:e.s.match(DATE)[1],nome:[],serv:[],paf:[]}); continue; }
+    frag.push(e);
+  }
+  for (const f of frag){
+    const cand = rows.filter(r => r.pi===f.pi); if (!cand.length) continue;
+    let best=cand[0]; for (const r of cand) if (Math.abs(r.y-f.y) < Math.abs(best.y-f.y)) best=r;
+    const dy=Math.abs(best.y-f.y), ultimo=cand[cand.length-1];
+    if (dy>13 && !(best===ultimo && f.y>ultimo.y && dy<24)) continue;
+    if (f.x>=510) best.paf.push(f.s); else if (f.x>=355) best.serv.push(f.s); else best.nome.push(f);
+  }
+  const out=[];
+  for (const r of rows){
+    const nome = r.nome.sort((a,b)=>(Math.round(a.y)-Math.round(b.y))||(a.x-b.x)).map(f=>f.s).join(' ').replace(/\s+/g,' ').trim();
+    const tecnico = (labels[r.seg]||[]).sort((a,b)=>a.y-b.y).map(l=>l.s).join(' ').replace(/\s+/g,' ').trim() || 'Sem técnico identificado';
+    const o = {tecnico, responsavel:nome, inicio:r.inicio, servico:r.serv.join(' ').replace(/\s+/g,' ').trim()||'PAEFI', paf:r.paf.join(' ').trim(), seg:r.seg};
+    const prev = out[out.length-1];
+    if (prev && prev.seg===o.seg && prev.inicio===o.inicio && (prev.responsavel.startsWith(o.responsavel) || o.responsavel.startsWith(prev.responsavel))){
+      if (o.responsavel.length > prev.responsavel.length) out[out.length-1]=o; continue;
+    }
+    if (o.responsavel) out.push(o);
+  }
+  if (!out.length) throw new Error('O PDF abriu, mas nenhuma família foi lida. Confira se é o relatório "Famílias Acompanhadas por Técnico".');
+  return {origem:file.name, periodo, linhas: out.map(({seg,...r}) => r)};
+}
+
+/* ================= alertas ================= */
+function ultimaMov(c){ return c.registros.length ? c.registros[c.registros.length-1].data : c.recebido; }
+function alertas(){
+  const a=[];
+  DB.casos.forEach(c => {
+    if (coord() && c.prazo && !c.prazo_respondido && c.etapa!=='encerrado'){
+      const r = -dias(c.prazo);
+      if (r<0) a.push({sev:'crit',c,t:`Prazo de resposta vencido há ${-r} dia${-r>1?'s':''}`,s:`${c.remetente} · ${c.doc_tipo} ${c.doc_num}`});
+      else if (r<=7) a.push({sev:'warn',c,t:`Prazo de resposta em ${r} dia${r!==1?'s':''} (${fmtC(c.prazo)})`,s:`${c.remetente} · ${c.doc_tipo} ${c.doc_num}`});
+    }
+    if (coord() && c.etapa==='triagem') a.push({sev:'info',c,t:'Aguardando triagem',s:`Recebido em ${fmt(c.recebido)}`});
+    if (coord() && c.etapa==='repasse') a.push({sev:'warn',c,t:'Avaliação indicou acompanhamento: escolher a técnica',s:`Concluída em ${fmt(c.desfecho_data)}`});
+    if (c.etapa==='avaliacao' && dias(ultimaMov(c))>30) a.push({sev:'warn',c,t:`Avaliação sem movimentação há ${dias(ultimaMov(c))} dias`,s:`Recebido em ${fmt(c.recebido)}`});
+    if (coord() && c.etapa==='acompanhamento'){
+      const g = statusGes(c);
+      if (g && g.tipo==='ausente') a.push({sev:g.dias>7?'crit':'warn',c,t:`Repassado há ${g.dias} dias e não está no GESUAS`,s:`Técnica: ${c.tecnica}`});
+      if (g && g.tipo==='ok' && g.paf!=='Preenchido') a.push({sev:'info',c,t:'PAF em branco no GESUAS',s:`Técnica: ${c.tecnica}`});
+      if (g && g.tipo==='ok' && !g.tecOk) a.push({sev:'warn',c,t:`No GESUAS está com outra técnica (${TIT(g.g.tecnico).split(' ')[0]})`,s:`No sistema: ${c.tecnica}`});
+    }
+  });
+  const ord={crit:0,warn:1,info:2}; return a.sort((x,y) => ord[x.sev]-ord[y.sev]);
+}
+
+/* ================= navegação ================= */
+function renderNav(){
+  const n = e => DB.casos.filter(c => c.etapa===e).length;
+  const items = [
+    ['painel','Painel', alertas().length],
+    ['novo','Novo encaminhamento',''],
+    ['casos','Casos', DB.casos.filter(c => c.etapa!=='encerrado').length],
+    ['avaliacao','Avaliação social', n('avaliacao')],
+    ['acompanhamento','Acompanhamento', n('acompanhamento')],
+    ['gesuas','Conferência GESUAS',''],
+    ['indicadores','Indicadores','']
+  ].filter(i => coord() || !['novo','acompanhamento','gesuas'].includes(i[0]));
+  $('#nav').innerHTML = items.map(([k,l,c]) => `<button class="${S.view===k||(S.view==='caso'&&k==='casos')?'on':''}" data-go="${k}">${l}${c!==''?`<span class="count">${c}</span>`:''}</button>`).join('');
+  $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => { if (b.dataset.go==='novo'){ S.draft=null; S.editando=null; } go(b.dataset.go); });
+}
+const pill = c => `<span class="pill p-${c.etapa}">${ETAPAS[c.etapa]||c.etapa}</span>`;
+const prio = p => `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>`;
+const pessoasTxt = c => c.pessoas.map(p => p.nome).join(', ') || '—';
+
+/* ================= painel ================= */
+function vPainel(){
+  const al = alertas();
+  const venc = al.filter(a => a.t.startsWith('Prazo')).length;
+  const semGes = DB.casos.filter(c => { const g=statusGes(c); return g && g.tipo==='ausente'; }).length;
+  const n = e => DB.casos.filter(c => c.etapa===e).length;
+  return `
+  <div class="top"><div><h1>${coord()?'Painel da coordenação':'Painel da avaliação social'}</h1>
+    <p>O que precisa de atenção hoje, ${HOJE.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}.</p></div>
+    ${coord()?'<button class="btn primary" data-act="novo">+ Novo encaminhamento</button>':''}</div>
+  <div class="kpis">
+    ${coord()?`<button class="kpi" data-list="triagem"><span>Aguardando triagem</span><b>${n('triagem')}</b></button>`:''}
+    <button class="kpi" data-list="avaliacao"><span>Em avaliação social</span><b>${n('avaliacao')}</b></button>
+    ${coord()?`<button class="kpi ${n('repasse')?'alert':''}" data-list="repasse"><span>Aguardando repasse à técnica</span><b>${n('repasse')}</b></button>
+    <button class="kpi" data-list="acompanhamento"><span>Em acompanhamento</span><b>${n('acompanhamento')}</b></button>
+    <button class="kpi ${venc?'alert':''}" data-list="ativos"><span>Prazos vencidos ou em 7 dias</span><b>${venc}</b></button>
+    <button class="kpi ${semGes?'alert':''}" data-go2="gesuas"><span>Repassados e não registrados no GESUAS</span><b>${temGes()?semGes:'—'}</b></button>`:''}
+  </div>
+  <div class="${coord()?'dash':''}">
+    <section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>Pendências</h2><span class="muted">${al.length} itens</span></div>
+      <div class="alist">${al.length ? al.slice(0,80).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${esc(a.c.responsavel)} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>80?`<div class="empty">Mais ${al.length-80} itens. Use a lista de casos ou a conferência do GESUAS.</div>`:'') : '<div class="empty">Nenhuma pendência.</div>'}</div>
+    </section>
+    ${coord()?`<section class="panel stack">
+      <div><h2>Conferência com o GESUAS</h2><div class="muted" style="font-size:12.5px">${temGes()?`${esc(DB.ges.origem)}${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}`:'Nenhum relatório importado ainda.'}</div></div>
+      ${temGes()?tabelaTecnicas(resumoTecnicas()):''}
+      <div><button class="btn small" data-go2="gesuas">${temGes()?'Abrir conferência':'Importar relatório do GESUAS'}</button></div>
+    </section>`:''}
+  </div>`;
+}
+
+/* ================= listas ================= */
+function vCasos(fixo){
+  const f = fixo || S.filtroEtapa;
+  let L = DB.casos.filter(c => f==='todos' ? true : f==='ativos' ? c.etapa!=='encerrado' : c.etapa===f);
+  if (S.busca){ const q=norm(S.busca); L = L.filter(c => norm([c.responsavel, pessoasTxt(c), c.id, c.remetente, c.remetente_detalhe, c.doc_num, c.tecnica].join(' ')).includes(q)); }
+  L.sort((a,b) => String(b.recebido||'').localeCompare(String(a.recebido||'')));
+  const titulo = fixo==='avaliacao'?'Avaliação social':fixo==='acompanhamento'?'Acompanhamento (PAEFI)':'Casos';
+  const sub = fixo==='avaliacao'?'Fila de casos em avaliação. Abra um caso para registrar visitas, marcar o diagnóstico e definir o desfecho.'
+            : fixo==='acompanhamento'?'Casos repassados às técnicas, com a situação no GESUAS.'
+            : 'Todos os encaminhamentos. Cada família tem um único registro.';
+  const segs = [['ativos','Ativos'],['triagem','Triagem'],['avaliacao','Avaliação'],['repasse','Repasse'],['acompanhamento','Acompanhamento'],['encerrado','Encerrados'],['todos','Todos']].filter(s => coord() || !['triagem','repasse'].includes(s[0]));
+  const head = fixo==='acompanhamento'
+    ? '<th>Nº</th><th>Responsável familiar</th><th>Técnica</th><th>Repasse</th><th>Complexidade</th><th>No GESUAS</th><th>PAF (GESUAS)</th>'
+    : '<th>Nº</th><th>Responsável familiar</th><th>Pessoas</th><th>Remetente</th><th>Recebido</th><th>Prazo</th><th>Etapa</th>';
+  const lim = 300, total = L.length; L = L.slice(0, lim);
+  const rows = L.map(c => fixo==='acompanhamento'
+    ? `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td class="nm">${esc(c.responsavel)}</td><td>${esc(c.tecnica)}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
+    : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${esc(c.responsavel)}</div>${prio(c.prioridade)}</td><td>${esc(pessoasTxt(c))}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td><td>${pill(c)}${c.etapa==='acompanhamento'?`<div class="muted" style="font-size:12px">${esc(c.tecnica)}</div>`:''}</td></tr>`).join('');
+  return `<div class="top"><div><h1>${titulo}</h1><p>${sub}</p></div></div>
+  <div class="filters"><input id="busca" type="search" placeholder="Buscar nome, nº, remetente, ofício, técnica" value="${esc(S.busca)}">
+  ${fixo?'':`<div class="seg">${segs.map(([k,l]) => `<button class="${f===k?'on':''}" data-seg="${k}">${l}</button>`).join('')}</div>`}</div>
+  <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso encontrado.</td></tr>`}</tbody></table></div>
+  ${total>lim?`<p class="muted">Mostrando ${lim} de ${total}. Use a busca para achar os demais.</p>`:''}`;
+}
+function prazoCell(c){
+  if (!c.prazo) return '<span class="muted">—</span>';
+  if (c.prazo_respondido) return `<span class="muted">${fmtC(c.prazo)} ✓</span>`;
+  const r = -dias(c.prazo);
+  const col = r<0?'var(--crit)':r<=7?'var(--warn)':'var(--ink-2)';
+  return `<span style="color:${col};font-weight:600">${fmtC(c.prazo)}</span>`;
+}
+
+/* ================= novo / editar ================= */
+function draft(){
+  if (S.draft) return S.draft;
+  const c = S.editando ? DB.casos.find(x => x.id===S.editando) : null;
+  S.draft = c ? {
+    responsavel:c.responsavel, cpf:c.cpf||'', pessoas:(c.pessoas.length?c.pessoas:[{nome:'',nascimento:'',sexo:''}]).map(p=>({...p})),
+    endereco:c.endereco||'', bairro:c.bairro||'', contato:c.contato||'', remetente:c.remetente||'', remetente_detalhe:c.remetente_detalhe||'',
+    doc_tipo:c.doc_tipo||'Ofício', doc_num:c.doc_num||'', recebido:c.recebido||'', prazo:c.prazo||'', descricao:c.descricao||'', prioridade:String(c.prioridade||2)
+  } : {
+    responsavel:'', cpf:'', pessoas:[{nome:'',nascimento:'',sexo:''}], endereco:'', bairro:'', contato:'', remetente:'', remetente_detalhe:'',
+    doc_tipo:'Ofício', doc_num:'', recebido:iso(HOJE), prazo:'', descricao:'', prioridade:'2', destino:'avaliacao', tecnica:TECNICAS()[0]||'', complexidade:'1'
+  };
+  return S.draft;
+}
+function duplicados(nome){
+  const q = norm(nome); if (q.length<4) return [];
+  const partes = toks(nome);
+  return DB.casos.filter(c => c.id!==S.editando && [c.responsavel, ...c.pessoas.map(p=>p.nome)].some(n => partes.length>=2 ? mesmoNome(nome,n) || norm(n).includes(q) : norm(n).includes(q))).slice(0,6);
+}
+function opcoes(lista, atual){ const l = lista.slice(); if (atual && !l.includes(atual)) l.push(atual); return l.map(v => `<option ${v===atual?'selected':''}>${esc(v)}</option>`).join(''); }
+function vNovo(){
+  const Dd = draft(); const edit = !!S.editando;
+  return `<div class="top"><div><h1>${edit?'Editar dados do caso '+esc(S.editando):'Novo encaminhamento'}</h1><p>${edit?'Corrija os dados de identificação e origem.':'Registre ao receber o ofício, requisição ou denúncia. Estes dados seguem para a avaliação e o acompanhamento sem precisar digitar de novo.'}</p></div></div>
+  <form id="fNovo" class="stack">
+  <section class="panel stack"><h2>Família</h2>
+    <div class="grid2">
+      <label class="field"><span>Responsável familiar *</span><input id="n_resp" data-k="responsavel" value="${esc(Dd.responsavel)}" placeholder="Nome completo" required></label>
+      <label class="field"><span>CPF</span><input id="n_cpf" data-k="cpf" value="${esc(Dd.cpf)}" placeholder="000.000.000-00"></label>
+    </div>
+    <div id="dupBox">${dupHtml(duplicados(Dd.responsavel))}</div>
+    <div class="stack" style="gap:8px"><span class="label">Pessoas da família / possíveis vítimas</span>
+      ${Dd.pessoas.map((v,i) => `<div class="vit">
+        <label class="field"><span>Nome</span><input id="v_nome_${i}" data-v="${i}" data-vk="nome" value="${esc(v.nome)}"></label>
+        <label class="field"><span>Nascimento</span><input id="v_nasc_${i}" type="date" data-v="${i}" data-vk="nascimento" value="${esc(v.nascimento)}"></label>
+        <label class="field"><span>Sexo</span><select id="v_sexo_${i}" data-v="${i}" data-vk="sexo"><option value=""></option><option ${v.sexo==='F'?'selected':''} value="F">Feminino</option><option ${v.sexo==='M'?'selected':''} value="M">Masculino</option></select></label>
+        <button type="button" class="btn small" data-delv="${i}" ${Dd.pessoas.length<2?'disabled':''}>Remover</button></div>`).join('')}
+      <div><button type="button" class="btn small" id="addV">+ Adicionar pessoa</button></div>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>Endereço</span><input id="n_end" data-k="endereco" value="${esc(Dd.endereco)}"></label>
+      <label class="field"><span>Bairro / território</span><input id="n_bairro" data-k="bairro" value="${esc(Dd.bairro)}" list="bairros"></label>
+      <label class="field"><span>Contato</span><input id="n_cont" data-k="contato" value="${esc(Dd.contato)}" placeholder="(51) 9 0000-0000"></label>
+    </div>
+    <datalist id="bairros">${(DB.listas.bairros||[]).map(b => `<option>${esc(b)}</option>`).join('')}</datalist>
+  </section>
+  <section class="panel stack"><h2>Origem e prazo</h2>
+    <div class="grid2">
+      <label class="field"><span>Remetente *</span><select id="n_rem" data-k="remetente" required><option value="">Selecione</option>${opcoes(DB.listas.remetentes||[], Dd.remetente)}</select></label>
+      <label class="field"><span>Detalhe do remetente</span><input id="n_remd" data-k="remetente_detalhe" value="${esc(Dd.remetente_detalhe)}" placeholder="Ex.: UBS Empresa, CRAS Santa Maria"></label>
+      <label class="field"><span>Tipo de documento</span><select id="n_doc" data-k="doc_tipo">${opcoes(DB.listas.tipos_documento||[], Dd.doc_tipo)}</select></label>
+      <label class="field"><span>Número</span><input id="n_num" data-k="doc_num" value="${esc(Dd.doc_num)}" placeholder="Ex.: 145/2026"></label>
+      <label class="field"><span>Data de recebimento *</span><input id="n_rec" type="date" data-k="recebido" value="${esc(Dd.recebido)}" required></label>
+      <label class="field"><span>Prazo de resposta</span><input id="n_prazo" type="date" data-k="prazo" value="${esc(Dd.prazo)}"><small>Com data, o painel avisa quando estiver perto de vencer.</small></label>
+      <label class="field"><span>Prioridade</span><select id="n_prio" data-k="prioridade"><option value="1" ${Dd.prioridade==='1'?'selected':''}>1 · Urgente (risco iminente)</option><option value="2" ${Dd.prioridade==='2'?'selected':''}>2 · Alta</option><option value="3" ${Dd.prioridade==='3'?'selected':''}>3 · Regular</option></select></label>
+    </div>
+    <label class="field"><span>Descrição breve *</span><textarea id="n_desc" data-k="descricao" required placeholder="O que o encaminhamento relata">${esc(Dd.descricao)}</textarea></label>
+  </section>
+  ${edit?'':`<section class="panel stack"><h2>Para onde vai</h2>
+    <div class="choice">
+      <label class="opt"><input type="radio" name="destino" value="avaliacao" ${Dd.destino==='avaliacao'?'checked':''}><div><b>Avaliação social</b><small>Entra na fila da avaliação com a ficha já preenchida</small></div></label>
+      <label class="opt"><input type="radio" name="destino" value="acompanhamento" ${Dd.destino==='acompanhamento'?'checked':''}><div><b>Direto para acompanhamento</b><small>Caso já conhecido ou de alta gravidade</small></div></label>
+      <label class="opt"><input type="radio" name="destino" value="triagem" ${Dd.destino==='triagem'?'checked':''}><div><b>Decidir depois</b><small>Fica em "Aguardando triagem" no painel</small></div></label>
+    </div>
+    ${Dd.destino==='acompanhamento'?`<div class="grid2"><label class="field"><span>Técnica de referência</span><select id="n_tec" data-k="tecnica">${opcoes(TECNICAS(), Dd.tecnica)}</select></label>
+    <label class="field"><span>Complexidade</span><select id="n_cx" data-k="complexidade">${[0.5,1,1.5].map(v => `<option value="${v}" ${String(v)===String(Dd.complexidade)?'selected':''}>${COMPLEX[v]}</option>`).join('')}</select></label></div>`:''}
+  </section>`}
+  <div class="row"><button class="btn primary" type="submit">${edit?'Salvar alterações':'Registrar encaminhamento'}</button><button class="btn" type="button" id="cancelar">${edit?'Cancelar':'Limpar'}</button></div>
+  </form>`;
+}
+function dupHtml(dup){
+  if (!dup.length) return '';
+  return `<div class="dup"><b>Já existe registro com esse nome.</b> Confira antes de abrir um caso novo:<ul style="margin:6px 0 0;padding-left:18px">${dup.map(c => `<li><a href="#" data-caso="${c.id}" style="color:inherit"><span class="mono">${c.id}</span> · ${esc(c.responsavel)}</a> · ${ETAPAS[c.etapa]}${c.etapa==='acompanhamento'?' com '+esc(c.tecnica):''}${c.desfecho?' · '+esc(c.desfecho):''}</li>`).join('')}</ul></div>`;
+}
+async function salvarNovo(){
+  const Dd = draft();
+  if (!Dd.responsavel.trim() || !Dd.remetente || !Dd.descricao.trim() || !Dd.recebido){ toast('Preencha responsável, remetente, data de recebimento e descrição.'); return; }
+  const btn = $('#fNovo button[type=submit]'); btn.disabled = true;
+  try {
+    if (S.editando){
+      const {pessoas, ...campos} = Dd;
+      const c = await run('api_editarCaso', S.editando, campos, pessoas);
+      substituir(c); toast('Dados salvos'); const id = S.editando; S.draft=null; S.editando=null; go('caso',{caso:id,tab:'dados'});
+    } else {
+      const c = await run('api_novoCaso', Dd);
+      substituir(c); S.draft=null; toast(`Caso ${c.id} registrado`); go('caso',{caso:c.id,tab:'dados',prev:'painel'});
+    }
+  } catch(e){ btn.disabled = false; }
+}
+
+/* ================= caso ================= */
+function vCaso(){
+  const c = DB.casos.find(x => x.id===S.caso); if (!c) return '<p>Caso não encontrado.</p>';
+  const pulouAval = !['triagem','avaliacao'].includes(c.etapa) && !c.passou_avaliacao;
+  const stepsArr = [['Entrada',true],['Triagem',c.etapa!=='triagem'],['Avaliação social', c.passou_avaliacao],['Desfecho',!!c.desfecho],['Acompanhamento',c.etapa==='acompanhamento'||!!c.inicio_acomp],['Desligamento',!!c.desligamento]];
+  const nowIdx = {triagem:1,avaliacao:2,repasse:3,acompanhamento:4,encerrado:-1}[c.etapa];
+  const tabs=[['dados','Dados do caso'],['avaliacao','Ficha de avaliação'],['registros',`Registros (${c.registros.length})`]];
+  if (c.inicio_acomp && coord()) tabs.push(['acomp','Acompanhamento']);
+  tabs.push(['hist','Histórico']);
+  if (!tabs.find(t => t[0]===S.tab)) S.tab='dados';
+  return `<div class="row" style="margin-bottom:10px"><button class="btn small" data-back>← Voltar</button>${coord()?'<button class="btn small" data-editar>Editar dados</button>':''}</div>
+  <div class="top"><div><div class="row" style="gap:8px"><span class="mono muted">Caso ${c.id}</span>${pill(c)}${prio(c.prioridade)}${String(c.origem||'').startsWith('migra')?'<span class="pill p-encerrado">migrado</span>':''}</div><h1 style="margin-top:6px">${esc(c.responsavel)}</h1>
+  <p>${esc(c.descricao)}</p></div></div>
+  <div class="steps">${stepsArr.map(([l,done],i) => `<div class="step ${i===nowIdx?'now':done?'done':''}"><div class="bar"></div>${l}${i===2&&pulouAval?' <span class="muted">(não houve)</span>':''}</div>`).join('')}</div>
+  ${acaoEtapa(c)}
+  <div class="detail">
+    <aside class="panel stack">
+      <dl>
+        <dt>CPF</dt><dd>${esc(c.cpf)||'—'}</dd>
+        <dt>Endereço</dt><dd>${esc(c.endereco)||'—'}</dd>
+        <dt>Bairro</dt><dd>${esc(c.bairro)||'—'}</dd>
+        <dt>Contato</dt><dd>${esc(c.contato)||'—'}</dd>
+        <dt>Remetente</dt><dd>${esc(c.remetente)||'—'}${c.remetente_detalhe&&c.remetente_detalhe!==c.remetente?`<div class="muted" style="font-size:12.5px">${esc(c.remetente_detalhe)}</div>`:''}</dd>
+        <dt>Documento</dt><dd>${esc(c.doc_tipo)} ${esc(c.doc_num)}</dd>
+        <dt>Recebido</dt><dd class="mono">${fmt(c.recebido)}</dd>
+        <dt>Prazo</dt><dd>${c.prazo?`${prazoCell(c)} ${coord()&&!c.prazo_respondido&&c.etapa!=='encerrado'?'<button class="btn small" data-prazook style="margin-left:6px">Marcar respondido</button>':''}`:'—'}</dd>
+        ${c.tecnica&&coord()?`<dt>Técnica ref.</dt><dd>${esc(c.tecnica)}</dd>`:''}
+      </dl>
+      <div><span class="label">Pessoas</span>
+      ${c.pessoas.map(v => `<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${esc(v.nome)}</b><div class="muted" style="font-size:12.5px">${v.nascimento?idade(v.nascimento)+' anos · ':''}${v.sexo==='F'?'Feminino':v.sexo==='M'?'Masculino':''}</div></div>`).join('')||'<div class="muted">—</div>'}</div>
+    </aside>
+    <section class="panel">
+      <div class="tabs">${tabs.map(([k,l]) => `<button class="${S.tab===k?'on':''}" data-tab="${k}">${l}</button>`).join('')}</div>
+      ${S.tab==='dados'?tabDados(c): S.tab==='avaliacao'?tabAval(c): S.tab==='registros'?tabReg(c): S.tab==='acomp'?tabAcomp(c): tabHist(c)}
+    </section>
+  </div>`;
+}
+function acaoEtapa(c){
+  if (c.etapa==='triagem' && coord()) return `<section class="panel stack" style="margin-bottom:16px"><h2>Triagem: definir destino</h2>
+    <div class="outcomes">
+      <button class="main-o" data-out="p_aval"><b>Enviar para avaliação social</b><small>Entra na fila da avaliação</small></button>
+      <button data-out="p_acomp"><b>Direto para acompanhamento</b><small>Escolher técnica</small></button>
+      <button data-out="Arquivado"><b>Arquivar / não é demanda do CREAS</b><small>Registra o motivo</small></button>
+    </div></section>`;
+  if (c.etapa==='repasse' && coord()) return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Avaliação indicou acompanhamento</h2><div class="muted" style="font-size:12.5px">${c.desfecho_obs?esc(c.desfecho_obs):'Escolha a técnica de referência.'}</div></div>
+    <div class="outcomes"><button class="main-o" data-out="p_acomp"><b>Repassar à técnica</b><small>Técnica e complexidade</small></button>
+    <button data-out="Arquivado"><b>Arquivar</b><small>Registra o motivo</small></button></div></section>`;
+  if (c.etapa==='avaliacao') return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Desfecho da avaliação</h2><div class="muted" style="font-size:12.5px">${coord()?'Ao indicar acompanhamento, você já escolhe a técnica.':'Ao indicar acompanhamento, o caso vai para a coordenação escolher a técnica.'}</div></div>
+    <div class="outcomes">${DESFECHOS_AVAL.map(([k,t,s],i) => `<button class="${i===0?'main-o':''}" data-out="${esc(k)}"><b>${t}</b><small>${s}</small></button>`).join('')}</div></section>`;
+  if (c.etapa==='acompanhamento' && coord()) return `<div class="row" style="margin-bottom:16px;justify-content:flex-end"><button class="btn" data-out="deslig">Desligar do acompanhamento</button></div>`;
+  if (c.etapa==='encerrado') return `<div class="panel row" style="margin-bottom:16px;justify-content:space-between"><div><span class="label">Desfecho</span><div style="font-weight:600;margin-top:4px">${esc(c.desfecho||'—')}${c.desfecho_data?' em '+fmt(c.desfecho_data):''}</div>${c.desfecho_obs?`<div class="muted">${esc(c.desfecho_obs)}</div>`:''}</div>${coord()?'<button class="btn small" data-reabrir>Reabrir caso</button>':''}</div>`;
+  return '';
+}
+function tabDados(c){
+  return `<div class="stack"><div><span class="label">Descrição breve</span><p style="margin:4px 0 0">${esc(c.descricao)}</p></div>
+  <div><span class="label">Diagnóstico marcado</span><div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(DIAG_LABEL[k]||k)}</span>`).join(''):'<span class="muted">Ainda não marcado. Use a aba Ficha de avaliação.</span>'}</div></div>
+  ${c.desfecho&&c.etapa!=='encerrado'?`<div><span class="label">Desfecho</span><div>${esc(c.desfecho)} em ${fmt(c.desfecho_data)}</div></div>`:''}
+  <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1]):'<div class="muted">Nenhum registro ainda.</div>'}</div>
+  ${coord()&&c.etapa==='acompanhamento'?gesBox(c):''}</div>`;
+}
+function tabAval(c){
+  const box = ([k,l]) => `<label class="chk"><input type="checkbox" id="dg_${k}" data-diag="${k}" ${c.diagnostico.includes(k)?'checked':''}><span>${esc(l)}</span></label>`;
+  return `<div class="diag"><p class="muted" style="margin-top:0">Mesmos itens da ficha em papel. Identificação, endereço e descrição já vêm do encaminhamento. As marcações são salvas na hora.</p>
+  ${DIAG.map(g => `<fieldset><legend>${g.g}</legend>${g.itens?g.itens.map(box).join(''):g.subs.map(s => `<div class="sub">${s.s}</div>${s.itens.map(box).join('')}`).join('')}</fieldset>`).join('')}</div>`;
+}
+function evHtml(r){ return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div></div></div>`; }
+function tabReg(c){
+  return `<form id="fReg" class="stack" style="margin-bottom:14px">
+    <div class="grid2"><label class="field"><span>Data</span><input id="r_data" type="date" value="${iso(HOJE)}"></label>
+    <label class="field"><span>Tipo</span><select id="r_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], 'Atendimento')}</select></label></div>
+    <label class="field"><span>Evolução</span><textarea id="r_txt" placeholder="O que aconteceu, combinações e próximos passos"></textarea></label>
+    <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${coord()?'Coordenação':'Avaliação social'}</span></div></form>
+  <div class="timeline">${[...c.registros].reverse().map(evHtml).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
+}
+function tabAcomp(c){
+  return `<div class="stack">
+    ${c.etapa==='acompanhamento'?`<div class="grid2">
+      <label class="field"><span>Técnica de referência</span><select id="a_tec">${opcoes(TECNICAS(), c.tecnica)}</select></label>
+      <label class="field"><span>Complexidade</span><select id="a_cx">${[0.5,1,1.5].map(v => `<option value="${v}" ${c.complexidade===v?'selected':''}>${COMPLEX[v]}</option>`).join('')}</select></label>
+    </div>`:''}
+    <dl><dt>Técnica</dt><dd>${esc(c.tecnica||'—')}</dd><dt>Repasse</dt><dd class="mono">${fmt(c.inicio_acomp)}</dd>${c.desligamento?`<dt>Desligamento</dt><dd class="mono">${fmt(c.desligamento)}</dd>`:''}</dl>
+    ${gesBox(c)}
+    <div><h3 style="margin-bottom:6px">Discussões de caso</h3><div class="muted" style="font-size:12.5px;margin-bottom:8px">Cada reunião vira um registro com data.</div>
+    <form id="fDisc" class="row" style="align-items:flex-end"><label class="field" style="width:150px"><span>Data</span><input id="disc_data" type="date" value="${iso(HOJE)}"></label><label class="field" style="flex:1;min-width:220px"><span>Plano definido na reunião</span><input id="disc_txt" placeholder="Ex.: Reavaliar em 3 meses; contato com escola"></label><button class="btn" type="submit">Registrar discussão</button></form>
+    <div class="timeline" style="margin-top:8px">${[...c.discussoes].reverse().map(x => evHtml({data:x.data,tipo:'Discussão de caso',autor:'Equipe',texto:x.texto})).join('')||'<div class="empty">Nenhuma discussão registrada.</div>'}</div></div>
+  </div>`;
+}
+function tabHist(c){
+  const h = [...c.historico].sort((a,b) => String(a.data_hora).localeCompare(String(b.data_hora)));
+  return `<div class="muted" style="font-size:12.5px;margin-bottom:6px">Registro automático de cada mudança no caso.</div><div class="timeline">${h.map(x => `<div class="ev"><div class="when">${fmt(String(x.data_hora).slice(0,10))}</div><div>${esc(x.acao)} <span class="muted">· ${esc(x.usuario)}</span></div></div>`).join('')||'<div class="empty">Sem histórico.</div>'}</div>`;
+}
+
+/* ================= modais ================= */
+function modal(html, onOk){
+  $('#layer').innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true">${html}<div class="row" style="justify-content:flex-end"><button class="btn" data-mx>Cancelar</button><button class="btn primary" data-mok>Confirmar</button></div></div></div>`;
+  const fechar = () => $('#layer').innerHTML='';
+  $('#layer [data-mx]').onclick = fechar;
+  $('#layer .modal-bg').onclick = e => { if (e.target.classList.contains('modal-bg')) fechar(); };
+  $('#layer [data-mok]').onclick = async () => {
+    const b = $('#layer [data-mok]'); b.disabled = true;
+    try { const c = await onOk(); if (c){ substituir(c); fechar(); render(); } else b.disabled = false; } catch(e){ b.disabled = false; }
+  };
+  const f = $('#layer input, #layer select, #layer textarea'); if (f) f.focus();
+}
+const campoTecnica = () => `<label class="field"><span>Técnica de referência</span><select id="m_tec">${opcoes(TECNICAS(), '')}</select></label>
+  <label class="field"><span>Complexidade</span><select id="m_cx"><option value="0.5">Baixa (0,5)</option><option value="1" selected>Média (1)</option><option value="1.5">Alta (1,5)</option></select></label>`;
+function acao(c, tipo){
+  if (tipo==='p_aval') return modal(`<h2>Enviar para avaliação social</h2><p style="margin:0">${esc(c.responsavel)} entra na fila da avaliação com os dados do encaminhamento.</p>`,
+    async () => { const r = await run('api_encaminhar', c.id, 'avaliacao'); toast('Enviado para avaliação social'); return r; });
+  if (tipo==='p_acomp') return modal(`<h2>Repassar para acompanhamento</h2><p class="muted" style="margin:0">${esc(c.responsavel)} · registros e diagnóstico seguem junto.</p>${campoTecnica()}`,
+    async () => { const t=$('#m_tec').value; const r = await run('api_encaminhar', c.id, 'acompanhamento', t, $('#m_cx').value); S.tab='acomp'; toast(`Caso repassado a ${t}`); return r; });
+  if (tipo==='indicar_acompanhamento'){
+    if (coord()) return modal(`<h2>Concluir avaliação e repassar</h2>${campoTecnica()}<label class="field"><span>Observação</span><textarea id="m_obs"></textarea></label>`,
+      async () => { const t=$('#m_tec').value; const r = await run('api_desfecho', c.id, 'indicar_acompanhamento', $('#m_obs').value, t, $('#m_cx').value); toast(`Caso repassado a ${t}`); return r; });
+    return modal(`<h2>Indicar acompanhamento</h2><p style="margin:0">A coordenação vai escolher a técnica de referência.</p><label class="field"><span>Observação para a coordenação</span><textarea id="m_obs" placeholder="Ex.: situação de risco, sugestão de técnica pelo território"></textarea></label>`,
+      async () => { const r = await run('api_desfecho', c.id, 'indicar_acompanhamento', $('#m_obs').value); toast('Enviado para a coordenação'); return r; });
+  }
+  if (tipo==='deslig') return modal(`<h2>Desligar do acompanhamento</h2><label class="field"><span>Motivo</span><select id="m_mot"><option>Superação da situação de violação</option><option>Contrarreferenciado ao CRAS</option><option>Mudança de município</option><option>Recusa / não adesão</option><option>Óbito</option><option>Outro</option></select></label><label class="field"><span>Observação</span><textarea id="m_obs"></textarea></label>`,
+    async () => { const r = await run('api_desligar', c.id, $('#m_mot').value, $('#m_obs').value); toast('Caso desligado'); return r; });
+  return modal(`<h2>${esc(tipo)}</h2><label class="field"><span>Observação</span><textarea id="m_obs" placeholder="Ex.: respondido ofício nº…"></textarea></label>`,
+    async () => { const r = await run('api_desfecho', c.id, tipo, $('#m_obs').value); toast('Desfecho registrado'); return r; });
+}
+
+/* ================= conferência GESUAS ================= */
+function tecnicasGes(){
+  const mapa = new Map();
+  (DB.ges && DB.ges.linhas || []).forEach(g => { const k=primeiroNome(g.tecnico); if (!mapa.has(k)) mapa.set(k, TIT(g.tecnico)); });
+  TECNICAS().forEach(t => { const k=primeiroNome(t); if (k && !mapa.has(k)) mapa.set(k, t); });
+  return [...mapa.entries()].map(([k,nome]) => ({k,nome}));
+}
+function pendencias(k){
+  const acomp = DB.casos.filter(c => c.etapa==='acompanhamento' && primeiroNome(c.tecnica)===k);
+  const st = acomp.map(c => ({c, s:statusGes(c)})).filter(x => x.s);
+  const ausentes = st.filter(x => x.s.tipo==='ausente').map(x => x.c).sort((a,b) => String(b.inicio_acomp).localeCompare(String(a.inicio_acomp)));
+  const outra = st.filter(x => x.s.tipo==='ok' && !x.s.tecOk);
+  const doGes = (DB.ges && DB.ges.linhas || []).filter(g => primeiroNome(g.tecnico)===k);
+  const pafBranco = doGes.filter(g => g.paf!=='Preenchido');
+  return {ausentes, outra, doGes, pafBranco};
+}
+function resumoTecnicas(){ return tecnicasGes().map(t => ({...t, ...pendencias(t.k)})).filter(t => t.doGes.length || t.ausentes.length); }
+function tabelaTecnicas(R){
+  return `<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">No GESUAS</th><th style="text-align:right">PAF em branco</th><th style="text-align:right">Não registrados</th></tr></thead><tbody>
+  ${R.map(t => `<tr data-gtec="${t.k}"><td>${esc(t.nome.split(' ')[0])}</td><td class="mono" style="text-align:right">${t.doGes.length}</td><td class="mono" style="text-align:right;${t.pafBranco.length?'color:var(--warn);font-weight:600':''}">${t.pafBranco.length}</td><td class="mono" style="text-align:right;${t.ausentes.length?'color:var(--crit);font-weight:600':''}">${t.ausentes.length}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function gesCells(c){
+  const s = statusGes(c); if (!s) return '<td class="muted">—</td><td class="muted">—</td>';
+  if (s.tipo==='ausente') return `<td><span class="pill p-crit">Não registrado</span><div class="muted" style="font-size:12px">há ${s.dias} dias</div></td><td class="muted">—</td>`;
+  return `<td><span class="pill p-ok">Registrado</span>${s.tecOk?'':`<div style="font-size:12px;color:var(--warn)">com ${esc(TIT(s.g.tecnico).split(' ')[0])}</div>`}</td><td><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></td>`;
+}
+function gesBox(c){
+  const s = statusGes(c); if (!s) return temGes() ? '' : '<div class="muted">Importe o relatório do GESUAS para ver a situação deste caso.</div>';
+  if (s.tipo==='ausente') return `<div class="dup" style="border-color:var(--crit);background:var(--crit-soft)"><b style="color:var(--crit)">Não encontrado no GESUAS.</b> Repassado a ${esc(c.tecnica)} há ${s.dias} dias. Conferido no relatório ${esc(DB.ges.origem)}.</div>`;
+  return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><span class="label">No GESUAS</span><dl style="margin-top:6px"><dt>Responsável</dt><dd>${esc(TIT(s.g.responsavel))}</dd><dt>Técnica</dt><dd>${esc(TIT(s.g.tecnico))}${s.tecOk?'':' <span class="pill p-avaliacao">diferente do sistema</span>'}</dd><dt>Início</dt><dd class="mono">${esc(s.g.inicio)}</dd><dt>Serviço</dt><dd>${esc(s.g.servico)}</dd><dt>PAF</dt><dd><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></dd></dl></div>`;
+}
+function mensagem(t){
+  const p = pendencias(t.k); const nome = t.nome.split(' ')[0];
+  let m = `Olá, ${nome}! Conferência do GESUAS em ${fmt(HOJE)}.\n`;
+  if (p.ausentes.length) m += `\nFamílias repassadas para acompanhamento e ainda não cadastradas no GESUAS:\n` + p.ausentes.map(c => `- ${c.responsavel} (repasse em ${fmt(c.inicio_acomp)})`).join('\n') + '\n';
+  if (p.outra.length) m += `\nFamílias que no GESUAS aparecem com outra técnica:\n` + p.outra.map(x => `- ${x.c.responsavel} (no GESUAS: ${TIT(x.s.g.tecnico).split(' ')[0]})`).join('\n') + '\n';
+  if (p.pafBranco.length) m += `\nFamílias com PAF em branco no GESUAS:\n` + p.pafBranco.map(g => `- ${TIT(g.responsavel)} (início ${g.inicio})`).join('\n') + '\n';
+  if (!p.ausentes.length && !p.outra.length && !p.pafBranco.length) m += '\nNenhuma pendência encontrada. Obrigado!';
+  return m;
+}
+function vGesuas(){
+  const prev = S.gPrevia;
+  const R = resumoTecnicas().filter(t => !S.gTec || t.k===S.gTec);
+  const totAus=R.reduce((s,t)=>s+t.ausentes.length,0), totPaf=R.reduce((s,t)=>s+t.pafBranco.length,0), totOut=R.reduce((s,t)=>s+t.outra.length,0);
+  return `<div class="top"><div><h1>Conferência com o GESUAS</h1><p>Importe o PDF do relatório <b>Famílias Acompanhadas por Técnico</b>. O sistema cruza com os casos repassados para acompanhamento e monta as pendências de cada técnica.</p></div></div>
+  <section class="panel stack" style="margin-bottom:16px">
+    <div class="row" style="justify-content:space-between">
+      <div><span class="label">Relatório em uso</span><div style="font-weight:600">${temGes()?esc(DB.ges.origem):'Nenhum relatório importado'}</div>${temGes()?`<div class="muted" style="font-size:12.5px">${DB.ges.linhas.length} famílias${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}</div>`:''}</div>
+      <div class="row"><label class="btn primary" for="gFile" style="cursor:pointer">Importar PDF do GESUAS</label><input id="gFile" type="file" accept="application/pdf" hidden></div>
+    </div>
+    <div id="gStatus" class="muted" style="font-size:12.5px">O PDF é lido neste navegador. Só a lista de famílias lida é salva na planilha.</div>
+    ${prev?`<div class="dup"><b>Relatório lido: ${prev.linhas.length} famílias${prev.periodo?' ('+esc(prev.periodo)+')':''}.</b> ${[...new Set(prev.linhas.map(g=>TIT(g.tecnico).split(' ')[0]))].map(esc).join(', ')}. Confira e salve para substituir o relatório anterior.<div class="row" style="margin-top:8px"><button class="btn primary small" id="gSalvar">Salvar este relatório</button><button class="btn small" id="gDescartar">Descartar</button></div></div>`:''}
+  </section>
+  ${temGes()?`
+  <div class="filters"><select id="gTec"><option value="">Todas as técnicas</option>${tecnicasGes().map(t => `<option value="${t.k}" ${S.gTec===t.k?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
+  <div class="kpis">
+    <div class="kpi ${totAus?'alert':''}"><span>Repassados e não registrados</span><b>${totAus}</b></div>
+    <div class="kpi"><span>Com outra técnica no GESUAS</span><b>${totOut}</b></div>
+    <div class="kpi"><span>PAF em branco</span><b>${totPaf}</b></div>
+  </div>
+  <div class="stack">${R.map(t => `<section class="panel stack">
+    <div class="row" style="justify-content:space-between"><div><h2>${esc(t.nome)}</h2><div class="muted" style="font-size:12.5px">${t.doGes.length} famílias no GESUAS · ${t.pafBranco.length} com PAF em branco · ${t.ausentes.length} repassadas sem registro</div></div>
+    <button class="btn small" data-copy="${t.k}">Copiar mensagem para ${esc(t.nome.split(' ')[0])}</button></div>
+    ${t.ausentes.length?`<div><h3 style="color:var(--crit)">Repassadas e ainda não registradas no GESUAS</h3><div class="alist">${t.ausentes.map(c => `<div class="aitem" data-caso="${c.id}" tabindex="0"><div class="sev crit"></div><div><div class="nm">${esc(c.responsavel)} <span class="mono muted">${c.id}</span></div><div class="muted" style="font-size:12.5px">Repasse em ${fmt(c.inicio_acomp)}${c.inicio_acomp?' · há '+dias(c.inicio_acomp)+' dias':''}</div></div><span></span></div>`).join('')}</div></div>`:''}
+    ${t.outra.length?`<div><h3 style="color:var(--warn)">No GESUAS com outra técnica</h3><div class="alist">${t.outra.map(x => `<div class="aitem" data-caso="${x.c.id}" tabindex="0"><div class="sev warn"></div><div><div class="nm">${esc(x.c.responsavel)}</div><div class="muted" style="font-size:12.5px">No GESUAS: ${esc(TIT(x.s.g.tecnico))}</div></div><span></span></div>`).join('')}</div></div>`:''}
+    ${t.pafBranco.length?`<details><summary style="cursor:pointer;font-weight:600">PAF em branco (${t.pafBranco.length})</summary><div style="overflow-x:auto;margin-top:8px"><table style="min-width:0"><thead><tr><th>Responsável familiar</th><th>Início</th><th>Serviço</th></tr></thead><tbody>${t.pafBranco.map(g => `<tr style="cursor:default"><td>${esc(TIT(g.responsavel))}</td><td class="mono">${esc(g.inicio)}</td><td>${/MSE/.test(g.servico)?'MSE (LA/PSC)':esc(g.servico)}</td></tr>`).join('')}</tbody></table></div></details>`:''}
+    <textarea id="msg_${t.k}" readonly hidden>${esc(mensagem(t))}</textarea>
+  </section>`).join('')}</div>`:''}`;
+}
+
+/* ================= indicadores ================= */
+function vInd(){
+  const C = DB.casos.filter(c => c.recebido);
+  const meses=[]; for (let i=11;i>=0;i--) meses.push(new Date(HOJE.getFullYear(), HOJE.getMonth()-i, 1));
+  const porMes = meses.map(m => ({l:m.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''), n:C.filter(c => { const d=D(c.recebido); return d.getFullYear()===m.getFullYear() && d.getMonth()===m.getMonth(); }).length}));
+  const maxM = Math.max(1, ...porMes.map(x => x.n));
+  const ultimos12 = C.filter(c => dias(c.recebido) <= 365);
+  const cont = arr => { const o={}; arr.forEach(k => { if (k) o[k]=(o[k]||0)+1; }); return Object.entries(o).sort((a,b) => b[1]-a[1]); };
+  const rem = cont(ultimos12.map(c => c.remetente)).slice(0,10);
+  const grp = cont(DB.casos.flatMap(c => c.diagnostico.map(k => DIAG_GRUPO[k])));
+  const tip = cont(DB.casos.flatMap(c => c.diagnostico.map(k => DIAG_LABEL[k]))).slice(0,8);
+  const concl = DB.casos.filter(c => c.passou_avaliacao && c.desfecho_data && c.recebido && !String(c.origem||'').startsWith('migra'));
+  const espera = concl.length ? Math.round(concl.reduce((s,c) => s + (D(c.desfecho_data)-D(c.recebido))/864e5, 0)/concl.length) : null;
+  const pafPct = temGes() ? Math.round(DB.ges.linhas.filter(g => g.paf==='Preenchido').length / DB.ges.linhas.length * 100) : null;
+  const hb = rows => { if (!rows.length) return '<div class="empty">Sem dados ainda.</div>'; const mx=Math.max(...rows.map(r=>r[1])); return `<div class="hbars">${rows.map(([l,n]) => `<div class="hb" title="${esc(l)}: ${n}"><span>${esc(l)}</span><div class="track"><i style="width:${n/mx*100}%"></i></div><b>${n}</b></div>`).join('')}</div>`; };
+  return `<div class="top"><div><h1>Indicadores</h1><p>Calculados a partir dos casos registrados no sistema.</p></div></div>
+  <div class="kpis">
+    <div class="kpi"><span>Encaminhamentos nos últimos 12 meses</span><b>${ultimos12.length}</b></div>
+    <div class="kpi"><span>Tempo médio até concluir a avaliação</span><b>${espera===null?'—':espera+' dias'}</b></div>
+    ${coord()?`<div class="kpi"><span>Famílias com PAF preenchido (GESUAS)</span><b>${pafPct===null?'—':pafPct+'%'}</b></div>`:''}
+  </div>
+  <div class="charts">
+    <section class="panel stack"><h2>Encaminhamentos recebidos por mês</h2>
+      <div><div class="vbars">${porMes.map(x => `<div class="vbar" title="${x.l}: ${x.n}"><em>${x.n}</em><i style="height:${x.n/maxM*100}%"></i></div>`).join('')}</div>
+      <div class="xl">${porMes.map(x => `<span>${x.l}</span>`).join('')}</div></div></section>
+    <section class="panel stack"><h2>Por remetente (12 meses)</h2>${hb(rem)}</section>
+    <section class="panel stack"><h2>Por grupo de violação</h2>${hb(grp)}<div class="muted" style="font-size:12px">Vem das marcações da ficha de avaliação.</div></section>
+    <section class="panel stack"><h2>Situações mais frequentes</h2>${hb(tip)}</section>
+  </div>`;
+}
+
+/* ================= render + eventos ================= */
+function render(){
+  renderNav();
+  const m = $('#main');
+  if (!coord() && ['novo','acompanhamento','gesuas'].includes(S.view)) S.view='painel';
+  m.innerHTML = S.view==='painel'?vPainel(): S.view==='novo'?vNovo(): S.view==='casos'?vCasos(): S.view==='avaliacao'?vCasos('avaliacao'): S.view==='acompanhamento'?vCasos('acompanhamento'): S.view==='caso'?vCaso(): S.view==='gesuas'?vGesuas(): vInd();
+  bind();
+}
+function bind(){
+  const m = $('#main');
+  m.querySelectorAll('[data-caso]').forEach(el => { const open = e => { e.preventDefault(); go('caso',{caso:el.dataset.caso, tab:'dados', prev: S.view==='caso'?S.prev:S.view}); }; el.onclick=open; el.onkeydown=e => { if (e.key==='Enter') open(e); }; });
+  m.querySelectorAll('[data-list]').forEach(el => el.onclick = () => { const k=el.dataset.list; if (k==='avaliacao'||k==='acompanhamento') go(k); else go('casos',{filtroEtapa:k}); });
+  m.querySelectorAll('[data-go2]').forEach(el => el.onclick = () => go(el.dataset.go2));
+  m.querySelectorAll('[data-gtec]').forEach(el => el.onclick = () => go('gesuas',{gTec:el.dataset.gtec}));
+  m.querySelectorAll('[data-act="novo"]').forEach(el => el.onclick = () => { S.draft=null; S.editando=null; go('novo'); });
+  m.querySelectorAll('[data-seg]').forEach(el => el.onclick = () => { S.filtroEtapa=el.dataset.seg; render(); });
+  const b = $('#busca'); if (b) b.oninput = () => { S.busca=b.value; const pos=b.selectionStart; render(); const nb=$('#busca'); nb.focus(); nb.setSelectionRange(pos,pos); };
+  const back = m.querySelector('[data-back]'); if (back) back.onclick = () => go(S.prev||'casos');
+  const ed = m.querySelector('[data-editar]'); if (ed) ed.onclick = () => { S.editando=S.caso; S.draft=null; go('novo'); };
+  m.querySelectorAll('[data-tab]').forEach(el => el.onclick = () => { S.tab=el.dataset.tab; render(); });
+  const c = DB.casos.find(x => x.id===S.caso);
+  m.querySelectorAll('[data-out]').forEach(el => el.onclick = () => acao(c, el.dataset.out));
+  const rb = m.querySelector('[data-reabrir]'); if (rb) rb.onclick = () => modal(`<h2>Reabrir caso</h2><p style="margin:0">O caso volta para "Aguardando triagem".</p>`, async () => { const r = await run('api_reabrir', c.id); toast('Caso reaberto'); return r; });
+  const pk = m.querySelector('[data-prazook]'); if (pk) pk.onclick = async () => { const r = await run('api_prazoRespondido', c.id); substituir(r); toast('Prazo marcado como respondido'); render(); };
+  if (m.querySelector('[data-diag]')){
+    let timer=null;
+    m.querySelectorAll('[data-diag]').forEach(el => el.onchange = () => {
+      const k=el.dataset.diag; if (el.checked){ if (!c.diagnostico.includes(k)) c.diagnostico.push(k); } else c.diagnostico = c.diagnostico.filter(x => x!==k);
+      clearTimeout(timer); timer = setTimeout(async () => { const r = await run('api_diagnostico', c.id, c.diagnostico); substituir(r); toast('Diagnóstico salvo'); }, 700);
+    });
+  }
+  const fr = $('#fReg'); if (fr) fr.onsubmit = async e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; } fr.querySelector('button').disabled=true;
+    try { const r = await run('api_registro', c.id, {data:$('#r_data').value, tipo:$('#r_tipo').value, texto:t}); substituir(r); toast('Registro adicionado'); render(); } catch(e){ fr.querySelector('button').disabled=false; } };
+  const fd = $('#fDisc'); if (fd) fd.onsubmit = async e => { e.preventDefault(); const t=$('#disc_txt').value.trim(); if (!t) return;
+    const r = await run('api_discussao', c.id, t, $('#disc_data').value); substituir(r); toast('Discussão registrada'); render(); };
+  ['#a_tec','#a_cx'].forEach(s => { const el=$(s); if (el) el.onchange = async () => { const r = await run('api_acompanhamento', c.id, $('#a_tec').value, $('#a_cx').value); substituir(r); toast('Salvo'); render(); }; });
+  // GESUAS
+  const gt = $('#gTec'); if (gt) gt.onchange = () => { S.gTec=gt.value; render(); };
+  const gf = $('#gFile'); if (gf) gf.onchange = async () => {
+    const f = gf.files[0]; if (!f) return;
+    $('#gStatus').textContent = 'Lendo o PDF…';
+    try {
+      if (!window.pdfjsLib) throw new Error('O leitor de PDF não carregou. Verifique a conexão e recarregue a página.');
+      S.gPrevia = await lerPdfGesuas(f); render();
+    } catch(err){ $('#gStatus').textContent = err.message; $('#gStatus').style.color='var(--crit)'; }
+  };
+  const gs = $('#gSalvar'); if (gs) gs.onclick = async () => { gs.disabled=true;
+    try { DB.ges = await run('api_salvarGesuas', {origem:S.gPrevia.origem, periodo:S.gPrevia.periodo}, S.gPrevia.linhas); S.gPrevia=null; S.gTec=''; toast(`${DB.ges.linhas.length} famílias salvas`); render(); } catch(e){ gs.disabled=false; } };
+  const gd = $('#gDescartar'); if (gd) gd.onclick = () => { S.gPrevia=null; render(); };
+  m.querySelectorAll('[data-copy]').forEach(el => el.onclick = () => {
+    const ta = $('#msg_'+el.dataset.copy); const txt = ta.value;
+    const fallback = () => { ta.hidden=false; ta.style.minHeight='180px'; ta.focus(); ta.select(); toast('Texto selecionado. Use Ctrl+C para copiar.'); };
+    try { navigator.clipboard.writeText(txt).then(() => toast('Mensagem copiada. Cole no WhatsApp ou e-mail.'), fallback); } catch(e){ fallback(); }
+  });
+  // formulário
+  const fn = $('#fNovo'); if (fn){
+    const Dd = draft();
+    fn.querySelectorAll('[data-k]').forEach(el => { el.oninput = el.onchange = () => { Dd[el.dataset.k]=el.value; if (el.dataset.k==='responsavel'){ $('#dupBox').innerHTML = dupHtml(duplicados(el.value)); bindDup(); } }; });
+    fn.querySelectorAll('[data-v]').forEach(el => { el.oninput = el.onchange = () => { Dd.pessoas[+el.dataset.v][el.dataset.vk] = el.value; }; });
+    fn.querySelectorAll('input[name="destino"]').forEach(el => el.onchange = () => { Dd.destino=el.value; render(); });
+    fn.querySelectorAll('[data-delv]').forEach(el => el.onclick = () => { Dd.pessoas.splice(+el.dataset.delv,1); render(); });
+    $('#addV').onclick = () => { Dd.pessoas.push({nome:'',nascimento:'',sexo:''}); render(); };
+    $('#cancelar').onclick = () => { const id=S.editando; S.draft=null; S.editando=null; if (id) go('caso',{caso:id}); else render(); };
+    fn.onsubmit = e => { e.preventDefault(); salvarNovo(); };
+    bindDup();
+  }
+}
+function bindDup(){ document.querySelectorAll('#dupBox [data-caso]').forEach(el => el.onclick = e => { e.preventDefault(); go('caso',{caso:el.dataset.caso, tab:'dados', prev:'novo'}); }); }
+
+/* ================= início ================= */
+function iniciar(){
+  google.script.run
+    .withSuccessHandler(r => {
+      DB = r; const h = D(r.hoje); if (h) HOJE = h;
+      $('#carregando').remove(); $('#app').hidden = false;
+      $('#whoami').innerHTML = `<b>${coord()?'Coordenação':'Avaliação social'}</b>${esc(r.email)}`;
+      render();
+    })
+    .withFailureHandler(e => {
+      $('#carregando').innerHTML = `<div class="erro-total panel"><h2>Não foi possível abrir o sistema</h2><p>${esc(e && e.message ? e.message : e)}</p></div>`;
+    })
+    .api_iniciar();
+}
+iniciar();
+</script>
