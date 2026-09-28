@@ -371,7 +371,7 @@ function vCaso(){
   if (c.inicio_acomp && coord()) tabs.push(['acomp','Acompanhamento']);
   tabs.push(['hist','Histórico']);
   if (!tabs.find(t => t[0]===S.tab)) S.tab='dados';
-  return `<div class="row" style="margin-bottom:10px"><button class="btn small" data-back>← Voltar</button>${coord()?'<button class="btn small" data-editar>Editar dados</button>':''}</div>
+  return `<div class="row" style="margin-bottom:10px"><button class="btn small" data-back>← Voltar</button>${coord()?'<button class="btn small" data-editar>Editar dados</button>':''}<button class="btn small" data-imprimir>Imprimir ficha</button></div>
   <div class="top"><div><div class="row" style="gap:8px"><span class="mono muted">Caso ${c.id}</span>${pill(c)}${prio(c.prioridade)}${String(c.origem||'').startsWith('migra')?'<span class="pill p-encerrado">migrado</span>':''}</div><h1 style="margin-top:6px">${esc(c.responsavel)}</h1>
   <p>${esc(c.descricao)}</p></div></div>
   <div class="steps">${stepsArr.map(([l,done],i) => `<div class="step ${i===nowIdx?'now':done?'done':''}"><div class="bar"></div>${l}${i===2&&pulouAval?' <span class="muted">(não houve)</span>':''}</div>`).join('')}</div>
@@ -425,6 +425,47 @@ function tabAval(c){
   const box = ([k,l]) => `<label class="chk"><input type="checkbox" id="dg_${k}" data-diag="${k}" ${c.diagnostico.includes(k)?'checked':''}><span>${esc(l)}</span></label>`;
   return `<div class="diag"><p class="muted" style="margin-top:0">Mesmos itens da ficha em papel. Identificação, endereço e descrição já vêm do encaminhamento. As marcações são salvas na hora.</p>
   ${DIAG.map(g => `<fieldset><legend>${g.g}</legend>${g.itens?g.itens.map(box).join(''):g.subs.map(s => `<div class="sub">${s.s}</div>${s.itens.map(box).join('')}`).join('')}</fieldset>`).join('')}</div>`;
+}
+function imprimirFicha(c){
+  if (!c) return;
+  const boxImp = ([k,l]) => `<div class="fi-item">${c.diagnostico.includes(k)?'☑':'☐'} ${esc(l)}</div>`;
+  const diagHtml = DIAG.map(g => `<div class="fi-grupo"><div class="fi-titulo">${esc(g.g)}</div>${g.itens?g.itens.map(boxImp).join(''):g.subs.map(s => `<div class="fi-sub">${esc(s.s)}</div>${s.itens.map(boxImp).join('')}`).join('')}</div>`).join('');
+  const vitimas = c.pessoas.map(p => esc(p.nome)).join(', ');
+  const registros = c.registros.map(r => `<div class="fi-reg"><b>${fmt(r.data)} — ${esc(r.tipo)} (${esc(r.autor)})</b><div style="white-space:pre-wrap">${esc(r.texto)}</div></div>`).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Ficha de Avaliação Social — ${esc(c.id)}</title>
+  <style>
+    @page{ size:A4; margin:16mm 14mm; }
+    body{ font-family:Arial, Helvetica, sans-serif; font-size:11.5px; color:#111; margin:0; }
+    h1{ font-size:16px; margin:0 0 2px; }
+    .fi-sub-titulo{ font-size:10.5px; color:#555; margin:0 0 14px; }
+    .campo{ margin:7px 0; border-bottom:1px solid #999; padding-bottom:3px; }
+    .campo b{ display:inline-block; min-width:160px; }
+    h2{ font-size:13px; margin:16px 0 6px; }
+    .fi-titulo{ font-weight:700; margin:10px 0 2px; font-size:11.5px; }
+    .fi-sub{ font-weight:600; margin:5px 0 2px; font-size:11px; }
+    .fi-item{ margin:2px 0 2px 10px; }
+    .fi-reg{ margin:6px 0; border-bottom:1px dashed #ccc; padding-bottom:5px; }
+    .fi-linha{ border-bottom:1px solid #999; height:22px; }
+    .noprint{ text-align:right; margin-bottom:10px; }
+    @media print{ .noprint{ display:none; } }
+  </style></head><body>
+  <div class="noprint"><button onclick="window.print()">Imprimir</button></div>
+  <h1>Ficha de Avaliação Social</h1>
+  <div class="fi-sub-titulo">(Grampear no encaminhamento recebido) — Caso ${esc(c.id)}</div>
+  <div class="campo"><b>Responsável familiar/CPF:</b> ${esc(c.responsavel)}${c.cpf?' / '+esc(c.cpf):''}</div>
+  <div class="campo"><b>Possível(is) vítima(s):</b> ${vitimas}</div>
+  <div class="campo"><b>Endereço:</b> ${esc(c.endereco)}${c.bairro?' — '+esc(c.bairro):''}</div>
+  <div class="campo"><b>Contato:</b> ${esc(c.contato)}</div>
+  <div class="campo"><b>Descrição breve:</b> ${esc(c.descricao)}</div>
+  <h2>Diagnóstico Socioassistencial</h2>
+  ${diagHtml}
+  <h2>Registros de Atendimento</h2>
+  ${registros}
+  ${Array.from({length:8}).map(() => '<div class="fi-linha"></div>').join('')}
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w){ toast('Permita pop-ups para imprimir a ficha.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 function evHtml(r){ return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div></div></div>`; }
 function tabReg(c){
@@ -604,6 +645,7 @@ function bind(){
   const b = $('#busca'); if (b) b.oninput = () => { S.busca=b.value; const pos=b.selectionStart; render(); const nb=$('#busca'); nb.focus(); nb.setSelectionRange(pos,pos); };
   const back = m.querySelector('[data-back]'); if (back) back.onclick = () => go(S.prev||'casos');
   const ed = m.querySelector('[data-editar]'); if (ed) ed.onclick = () => { S.editando=S.caso; S.draft=null; go('novo'); };
+  const ip = m.querySelector('[data-imprimir]'); if (ip) ip.onclick = () => imprimirFicha(DB.casos.find(x => x.id===S.caso));
   m.querySelectorAll('[data-tab]').forEach(el => el.onclick = () => { S.tab=el.dataset.tab; render(); });
   const c = DB.casos.find(x => x.id===S.caso);
   m.querySelectorAll('[data-out]').forEach(el => el.onclick = () => acao(c, el.dataset.out));

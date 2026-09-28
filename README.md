@@ -14,6 +14,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - não localizado;
   - outro serviço;
   - arquivar.
+- **Impressão da ficha.** O botão "Imprimir ficha", na tela do caso, gera a mesma Ficha de Avaliação Social em papel — identificação, endereço, descrição, checklist de diagnóstico (com o que já foi marcado) e os registros de atendimento — pronta para entregar à técnica ou anexar ao encaminhamento.
 - **Repasse.** A coordenação escolhe a técnica e a complexidade. As discussões de caso ficam registradas por data.
 - **Conferência com o GESUAS.** Você importa o PDF do relatório "Famílias Acompanhadas por Técnico". O sistema aponta, por técnica:
   - famílias repassadas e ainda não cadastradas no GESUAS;
