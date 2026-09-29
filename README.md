@@ -6,7 +6,9 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
 ## O que o sistema faz
 
-- **Novo encaminhamento** (coordenação). Remetente, documento e prazo vêm de listas. O sistema avisa quando a família já tem registro.
+- **Novo encaminhamento** (coordenação). A vítima é o dado principal e obrigatório; o responsável familiar é opcional. Remetente, documento e prazo vêm de listas. O sistema avisa quando a vítima ou a família já tem registro.
+- **Vítima como nome do caso.** Listas, painel e ficha mostram o nome da vítima. A conferência com o GESUAS continua cruzando pelo responsável familiar e pelas demais pessoas do caso.
+- **Tema claro ou escuro.** No menu lateral, escolha Automático (segue o aparelho), Claro ou Escuro. A escolha fica salva no navegador.
 - **Ficha de avaliação digital.** Tem os mesmos itens do diagnóstico da ficha em papel, além dos registros de atendimento com data. O desfecho é escolhido entre as opções prontas:
   - indicar acompanhamento;
   - contrarreferenciar ao CRAS;

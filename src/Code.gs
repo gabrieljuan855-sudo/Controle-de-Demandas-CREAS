@@ -177,12 +177,12 @@ function api_iniciar() {
 function api_novoCaso(d) {
   exigir(['coordenacao']);
   return comTrava(function () {
-    if (!String(d.responsavel || '').trim()) throw new Error('Informe o responsável familiar.');
+    exigirVitima(d.pessoas);
     var receb = isoParaData(d.recebido) || new Date();
     var id = proximoIdCaso(receb.getFullYear());
     var agora = new Date();
     var caso = {
-      id: id, criado_em: agora, criado_por: emailAtual(), responsavel: d.responsavel.trim(), cpf: d.cpf, endereco: d.endereco,
+      id: id, criado_em: agora, criado_por: emailAtual(), responsavel: String(d.responsavel || '').trim(), cpf: d.cpf, endereco: d.endereco,
       bairro: d.bairro, contato: d.contato, remetente: d.remetente, remetente_detalhe: d.remetente_detalhe,
       doc_tipo: d.doc_tipo, doc_num: d.doc_num, recebido: receb, prazo: isoParaData(d.prazo), prazo_respondido: '',
       descricao: d.descricao, prioridade: Number(d.prioridade) || 2, etapa: 'triagem', passou_avaliacao: '', diagnostico: '',
@@ -202,6 +202,11 @@ function api_novoCaso(d) {
   });
 }
 
+function exigirVitima(pessoas) {
+  var ok = (pessoas || []).some(function (p) { return String(p.nome || '').trim(); });
+  if (!ok) throw new Error('Informe o nome de pelo menos uma vítima.');
+}
+
 var CAMPOS_EDITAVEIS = ['responsavel', 'cpf', 'endereco', 'bairro', 'contato', 'remetente', 'remetente_detalhe',
   'doc_tipo', 'doc_num', 'recebido', 'prazo', 'descricao', 'prioridade'];
 
@@ -210,6 +215,7 @@ function api_editarCaso(id, campos, pessoas) {
   return comTrava(function () {
     var c = buscarCaso(id);
     if (!visivelPara(papel, paraCliente(c))) throw new Error('Sem acesso a este caso.');
+    if (pessoas) exigirVitima(pessoas);
     CAMPOS_EDITAVEIS.forEach(function (k) {
       if (k in campos) c[k] = (k === 'recebido' || k === 'prazo') ? isoParaData(campos[k]) : campos[k];
     });
