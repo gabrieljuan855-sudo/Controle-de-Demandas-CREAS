@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
   <?!= include('Estilo'); ?>
+  <script>try { var t = localStorage.getItem('tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
   <div class="carregando" id="carregando">Carregando os casos…</div>
@@ -15,7 +16,10 @@
     <aside class="side">
       <div class="brand"><b>CREAS Taquara</b><span>Controle de demandas · PSE</span></div>
       <nav id="nav"></nav>
-      <div class="who whoami" id="whoami"></div>
+      <div class="who">
+        <div class="whoami" id="whoami"></div>
+        <label class="tema"><span>Tema</span><select id="tema"><option value="">Automático</option><option value="light">Claro</option><option value="dark">Escuro</option></select></label>
+      </div>
     </aside>
     <main class="main" id="main"></main>
   </div>
