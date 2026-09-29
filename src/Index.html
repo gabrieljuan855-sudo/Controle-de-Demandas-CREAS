@@ -24,6 +24,10 @@
     <main class="main" id="main"></main>
   </div>
   <div id="layer"></div>
+  <div id="fila" class="fila" role="status" aria-live="polite" hidden>
+    <div class="fila-cab"><span id="fila-titulo">Salvando</span><button type="button" id="fila-recolher" class="fila-ico" title="Recolher">▾</button><button type="button" id="fila-fechar" class="fila-ico" title="Fechar">✕</button></div>
+    <ul id="fila-itens" class="fila-itens"></ul>
+  </div>
 
   <!-- leitor de PDF (relatório do GESUAS), roda no navegador -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>

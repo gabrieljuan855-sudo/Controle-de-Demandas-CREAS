@@ -28,6 +28,101 @@ function mostrarOcupado(){
   if (ocupados <= 0 && el) el.remove();
 }
 
+/* ================= fila de gravação em segundo plano =================
+   A mudança aparece na tela na hora e a gravação segue por trás, uma de cada vez
+   e na ordem em que foi feita. Reenvio automático é seguro: registros e discussões
+   levam um id gerado aqui, e o servidor não grava o mesmo id duas vezes.
+   Nada some calado: o que falhar fica no painel com "Tentar de novo". */
+const FILA = [];
+let FILA_VOANDO = false, FILA_TIMER = null;
+const FILA_ESPERAS = [2000, 5000, 12000], FILA_SUMICO_MS = 5000;
+const idUnico = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2,10);
+/* juntar: mudanças seguidas do mesmo tipo (ex.: marcar vários itens do diagnóstico) viram um pedido só */
+function salvar(c, rotulo, fn, args, juntar, texto){
+  if (juntar){ const p = FILA.find(i => i.juntar===juntar && i.estado==='pendente' && !i.voando); if (p){ p.args = args; renderFila(); return; } }
+  FILA.unshift({chave:idUnico(), caso:c.id, nome:nomeCaso(c), rotulo, fn, args, juntar, texto:texto||'', estado:'pendente', tentativas:0, motivo:'', esperando:false, voando:false, salvoEm:0});
+  renderFila(); processarFila();
+}
+function processarFila(){
+  if (FILA_VOANDO) return;
+  // do mais antigo ao mais novo; um caso com gravação que falhou segura as seguintes dele,
+  // senão o "Tentar de novo" regravaria um estado antigo por cima de um mais novo
+  let item = null; const travados = new Set();
+  for (let i = FILA.length-1; i >= 0; i--){
+    const it = FILA[i];
+    if (it.estado==='falhou') travados.add(it.caso);
+    else if (it.estado==='pendente' && !travados.has(it.caso)){ item = it; break; }
+  }
+  if (!item || item.esperando){ renderFila(); return; }
+  FILA_VOANDO = item.voando = true; renderFila();
+  google.script.run
+    .withSuccessHandler(r => { FILA_VOANDO = item.voando = false; concluirItem(item, r); })
+    .withFailureHandler(e => { FILA_VOANDO = item.voando = false; replicar(item, e && e.message ? e.message : String(e)); })
+    [item.fn](...item.args);
+}
+function concluirItem(item, r){
+  item.estado = 'salvo'; item.salvoEm = Date.now(); item.motivo = '';
+  // com outra gravação do mesmo caso ainda na fila, a resposta desta ficaria atrasada em relação à tela
+  if (r && r.id && !FILA.some(i => i.caso===item.caso && i.estado==='pendente')){ substituir(r); if (podeRepintar()) render(); else renderNav(); }
+  renderFila(); processarFila();
+}
+function replicar(item, motivo){
+  item.motivo = motivo;
+  if (item.tentativas >= FILA_ESPERAS.length){ item.estado = 'falhou'; renderFila(); processarFila(); return; }
+  const espera = FILA_ESPERAS[item.tentativas++];
+  item.esperando = true; renderFila();
+  setTimeout(() => { item.esperando = false; processarFila(); }, espera);
+}
+/* não repinta por cima de algo que a pessoa está digitando */
+function podeRepintar(){
+  if (S.view==='novo') return false;
+  const a = document.activeElement;
+  if (a && a.id!=='busca' && a.closest && a.closest('#main') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
+  return ![...document.querySelectorAll('#main textarea, #main input:not([type]), #main input[type=text]')].some(el => el.id!=='busca' && el.value.trim());
+}
+const filaConta = e => FILA.filter(i => i.estado===e).length;
+function renderFila(){
+  const p = $('#fila'); if (!p) return;
+  if (!FILA.length){ p.hidden = true; return; }
+  p.hidden = false;
+  const pend = filaConta('pendente'), falhas = filaConta('falhou');
+  $('#fila-titulo').textContent = falhas && !FILA_VOANDO ? (falhas===1 ? '1 alteração não foi salva' : `${falhas} alterações não foram salvas`)
+    : pend ? (pend===1 ? 'Salvando 1 alteração' : `Salvando ${pend} alterações`)
+    : falhas ? (falhas===1 ? '1 alteração não foi salva' : `${falhas} alterações não foram salvas`) : 'Tudo salvo';
+  $('#fila-fechar').hidden = pend > 0;
+  const presos = new Set(), comFalha = new Set();
+  for (let k = FILA.length-1; k >= 0; k--){ const it = FILA[k]; if (it.estado==='falhou') comFalha.add(it.caso); else if (it.estado==='pendente' && comFalha.has(it.caso)) presos.add(it.chave); }
+  $('#fila-itens').innerHTML = FILA.map(i => `<li class="fila-item">
+    <span class="fila-txt"><b>${esc(i.rotulo)}</b><span class="muted">${esc(i.nome)} · ${esc(i.caso)}</span>
+    ${i.estado==='falhou'&&i.texto?`<span class="fila-texto">${esc(i.texto)}</span>`:''}
+    ${presos.has(i.chave)?'<span class="fila-texto">Aguardando a alteração deste caso que não foi salva.</span>':''}
+    ${i.motivo&&i.estado!=='salvo'?`<span class="fila-motivo">${i.estado==='falhou'?'':'Tentando de novo: '}${esc(i.motivo)}</span>`:''}
+    ${i.estado==='falhou'?`<span class="row" style="gap:6px;margin-top:6px"><button type="button" class="btn small primary" data-fre="${i.chave}">Tentar de novo</button><button type="button" class="btn small" data-fdesc="${i.chave}">Descartar</button></span>`:''}</span>
+    <span class="fila-marca ${i.estado}">${i.estado==='salvo'?'✓':i.estado==='falhou'?'!':''}</span></li>`).join('');
+  clearTimeout(FILA_TIMER);
+  if (FILA.some(i => i.estado==='salvo')) FILA_TIMER = setTimeout(() => {
+    const agora = Date.now();
+    for (let i = FILA.length-1; i >= 0; i--) if (FILA[i].estado==='salvo' && agora - FILA[i].salvoEm >= FILA_SUMICO_MS) FILA.splice(i,1);
+    renderFila();
+  }, FILA_SUMICO_MS);
+}
+function iniciarFila(){
+  const p = $('#fila'); if (!p) return;
+  $('#fila-recolher').onclick = () => p.classList.toggle('recolhido');
+  $('#fila-fechar').onclick = () => { for (let i = FILA.length-1; i >= 0; i--) if (FILA[i].estado!=='pendente') FILA.splice(i,1); renderFila(); };
+  $('#fila-itens').onclick = e => {
+    const re = e.target.closest('[data-fre]'), de = e.target.closest('[data-fdesc]');
+    const item = FILA.find(i => i.chave===(re ? re.dataset.fre : de ? de.dataset.fdesc : ''));
+    if (!item) return;
+    if (re){ Object.assign(item, {estado:'pendente', tentativas:0, motivo:''}); renderFila(); processarFila(); return; }
+    if (!confirm('Descartar esta alteração? Ela não foi salva e será perdida.')) return;
+    FILA.splice(FILA.indexOf(item), 1); renderFila();
+    // volta a tela para o que está de fato gravado na planilha
+    google.script.run.withSuccessHandler(c => { if (c){ substituir(c); if (podeRepintar()) render(); } }).api_caso(item.caso);
+  };
+  window.addEventListener('beforeunload', e => { if (!filaConta('pendente') && !filaConta('falhou')) return; e.preventDefault(); e.returnValue = ''; return ''; });
+}
+
 /* ================= constantes ================= */
 const ETAPAS = {triagem:'Aguardando triagem', avaliacao:'Em avaliação social', repasse:'Aguardando repasse', acompanhamento:'Em acompanhamento', encerrado:'Encerrado'};
 const COMPLEX = {0.5:'Baixa (0,5)', 1:'Média (1)', 1.5:'Alta (1,5)'};
@@ -372,6 +467,7 @@ function dupHtml(dup){
   if (!dup.length) return '';
   return `<div class="dup"><b>Já existe registro com esse nome.</b> Confira antes de abrir um caso novo:<ul style="margin:6px 0 0;padding-left:18px">${dup.map(c => `<li><a href="#" data-caso="${c.id}" style="color:inherit"><span class="mono">${c.id}</span> · ${esc(nomeCaso(c))}${c.responsavel&&c.responsavel!==nomeCaso(c)?' (resp.: '+esc(c.responsavel)+')':''}</a> · ${ETAPAS[c.etapa]}${c.etapa==='acompanhamento'?' com '+esc(c.tecnica):''}${c.desfecho?' · '+esc(c.desfecho):''}</li>`).join('')}</ul></div>`;
 }
+const CAMPOS_EDITAVEIS = ['responsavel','cpf','endereco','bairro','contato','remetente','remetente_detalhe','doc_tipo','doc_num','recebido','prazo','descricao','prioridade'];
 async function salvarNovo(){
   const Dd = draft();
   if (!Dd.pessoas.some(p => String(p.nome||'').trim()) || !Dd.remetente || !Dd.descricao.trim() || !Dd.recebido){ toast('Preencha vítima, remetente, data de recebimento e descrição.'); return; }
@@ -379,8 +475,12 @@ async function salvarNovo(){
   try {
     if (S.editando){
       const {pessoas, ...campos} = Dd;
-      const c = await run('api_editarCaso', S.editando, campos, pessoas);
-      substituir(c); toast('Dados salvos'); const id = S.editando; S.draft=null; S.editando=null; go('caso',{caso:id,tab:'dados'});
+      const c = DB.casos.find(x => x.id===S.editando);
+      CAMPOS_EDITAVEIS.forEach(k => { if (k in campos) c[k] = campos[k]; });
+      c.prioridade = Number(campos.prioridade) || 2;
+      c.pessoas = pessoas.filter(p => String(p.nome||'').trim()).map(p => ({...p, nome:p.nome.trim()}));
+      salvar(c, 'Dados do caso', 'api_editarCaso', [c.id, campos, pessoas]);
+      S.draft=null; S.editando=null; go('caso',{caso:c.id,tab:'dados'});
     } else {
       const c = await run('api_novoCaso', Dd);
       substituir(c); S.draft=null; toast(`Caso ${c.id} registrado`); go('caso',{caso:c.id,tab:'dados',prev:'painel'});
@@ -536,21 +636,24 @@ function modal(html, onOk){
 }
 const campoTecnica = () => `<label class="field"><span>Técnica de referência</span><select id="m_tec">${opcoes(TECNICAS(), '')}</select></label>
   <label class="field"><span>Complexidade</span><select id="m_cx"><option value="0.5">Baixa (0,5)</option><option value="1" selected>Média (1)</option><option value="1.5">Alta (1,5)</option></select></label>`;
+/* aplicam na tela, na hora, a mesma mudança que o servidor vai gravar */
+function repassarLocal(c, t, cx){ Object.assign(c, {etapa:'acompanhamento', tecnica:t, complexidade:Number(cx)||1, inicio_acomp:iso(HOJE), desfecho:'Passado para acompanhamento', desfecho_data:iso(HOJE)}); }
+function encerrarLocal(c, desfecho, obs){ Object.assign(c, {etapa:'encerrado', desfecho, desfecho_data:iso(HOJE), desfecho_obs:obs||''}); }
 function acao(c, tipo){
   if (tipo==='p_aval') return modal(`<h2>Enviar para avaliação social</h2><p style="margin:0">${esc(nomeCaso(c))} entra na fila da avaliação com os dados do encaminhamento.</p>`,
-    async () => { const r = await run('api_encaminhar', c.id, 'avaliacao'); toast('Enviado para avaliação social'); return r; });
+    async () => { Object.assign(c, {etapa:'avaliacao', passou_avaliacao:true}); salvar(c, 'Enviado para avaliação social', 'api_encaminhar', [c.id, 'avaliacao']); return c; });
   if (tipo==='p_acomp') return modal(`<h2>Repassar para acompanhamento</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))} · registros e diagnóstico seguem junto.</p>${campoTecnica()}`,
-    async () => { const t=$('#m_tec').value; const r = await run('api_encaminhar', c.id, 'acompanhamento', t, $('#m_cx').value); S.tab='acomp'; toast(`Caso repassado a ${t}`); return r; });
+    async () => { const t=$('#m_tec').value, cx=$('#m_cx').value; repassarLocal(c, t, cx); S.tab='acomp'; salvar(c, `Repasse a ${t}`, 'api_encaminhar', [c.id, 'acompanhamento', t, cx]); return c; });
   if (tipo==='indicar_acompanhamento'){
     if (coord()) return modal(`<h2>Concluir avaliação e repassar</h2>${campoTecnica()}<label class="field"><span>Observação</span><textarea id="m_obs"></textarea></label>`,
-      async () => { const t=$('#m_tec').value; const r = await run('api_desfecho', c.id, 'indicar_acompanhamento', $('#m_obs').value, t, $('#m_cx').value); toast(`Caso repassado a ${t}`); return r; });
+      async () => { const t=$('#m_tec').value, cx=$('#m_cx').value, obs=$('#m_obs').value; repassarLocal(c, t, cx); c.desfecho_obs=obs; salvar(c, `Avaliação concluída · repasse a ${t}`, 'api_desfecho', [c.id, 'indicar_acompanhamento', obs, t, cx], null, obs); return c; });
     return modal(`<h2>Indicar acompanhamento</h2><p style="margin:0">A coordenação vai escolher a técnica de referência.</p><label class="field"><span>Observação para a coordenação</span><textarea id="m_obs" placeholder="Ex.: situação de risco, sugestão de técnica pelo território"></textarea></label>`,
-      async () => { const r = await run('api_desfecho', c.id, 'indicar_acompanhamento', $('#m_obs').value); toast('Enviado para a coordenação'); return r; });
+      async () => { const obs=$('#m_obs').value; Object.assign(c, {etapa:'repasse', desfecho:'Indicado acompanhamento', desfecho_data:iso(HOJE), desfecho_obs:obs}); salvar(c, 'Indicado acompanhamento', 'api_desfecho', [c.id, 'indicar_acompanhamento', obs], null, obs); return c; });
   }
   if (tipo==='deslig') return modal(`<h2>Desligar do acompanhamento</h2><label class="field"><span>Motivo</span><select id="m_mot"><option>Superação da situação de violação</option><option>Contrarreferenciado ao CRAS</option><option>Mudança de município</option><option>Recusa / não adesão</option><option>Óbito</option><option>Outro</option></select></label><label class="field"><span>Observação</span><textarea id="m_obs"></textarea></label>`,
-    async () => { const r = await run('api_desligar', c.id, $('#m_mot').value, $('#m_obs').value); toast('Caso desligado'); return r; });
+    async () => { const mot=$('#m_mot').value, obs=$('#m_obs').value; encerrarLocal(c, 'Desligado: '+mot, obs); c.desligamento=iso(HOJE); salvar(c, 'Desligamento', 'api_desligar', [c.id, mot, obs], null, obs); return c; });
   return modal(`<h2>${esc(tipo)}</h2><label class="field"><span>Observação</span><textarea id="m_obs" placeholder="Ex.: respondido ofício nº…"></textarea></label>`,
-    async () => { const r = await run('api_desfecho', c.id, tipo, $('#m_obs').value); toast('Desfecho registrado'); return r; });
+    async () => { const obs=$('#m_obs').value; encerrarLocal(c, tipo, obs); salvar(c, 'Desfecho: '+tipo, 'api_desfecho', [c.id, tipo, obs], null, obs); return c; });
 }
 
 /* ================= conferência GESUAS ================= */
@@ -694,27 +797,34 @@ function bind(){
   m.querySelectorAll('[data-tab]').forEach(el => el.onclick = () => { S.tab=el.dataset.tab; render(); });
   const c = DB.casos.find(x => x.id===S.caso);
   m.querySelectorAll('[data-out]').forEach(el => el.onclick = () => acao(c, el.dataset.out));
-  const rb = m.querySelector('[data-reabrir]'); if (rb) rb.onclick = () => modal(`<h2>Reabrir caso</h2><p style="margin:0">O caso volta para "Aguardando triagem".</p>`, async () => { const r = await run('api_reabrir', c.id); toast('Caso reaberto'); return r; });
-  const pk = m.querySelector('[data-prazook]'); if (pk) pk.onclick = async () => { const r = await run('api_prazoRespondido', c.id); substituir(r); toast('Prazo marcado como respondido'); render(); };
-  if (m.querySelector('[data-diag]')){
-    let timer=null;
-    m.querySelectorAll('[data-diag]').forEach(el => el.onchange = () => {
-      const k=el.dataset.diag; if (el.checked){ if (!c.diagnostico.includes(k)) c.diagnostico.push(k); } else c.diagnostico = c.diagnostico.filter(x => x!==k);
-      clearTimeout(timer); timer = setTimeout(async () => { const r = await run('api_diagnostico', c.id, c.diagnostico); substituir(r); toast('Diagnóstico salvo'); }, 700);
-    });
-  }
-  const fr = $('#fReg'); if (fr) fr.onsubmit = async e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; } fr.querySelector('button').disabled=true;
-    try { const r = await run('api_registro', c.id, {data:$('#r_data').value, tipo:$('#r_tipo').value, texto:t}); substituir(r); toast('Registro adicionado'); render(); } catch(e){ fr.querySelector('button').disabled=false; } };
-  const fd = $('#fDisc'); if (fd) fd.onsubmit = async e => { e.preventDefault(); const t=$('#disc_txt').value.trim(); if (!t) return;
-    const r = await run('api_discussao', c.id, t, $('#disc_data').value); substituir(r); toast('Discussão registrada'); render(); };
-  ['#a_tec','#a_cx'].forEach(s => { const el=$(s); if (el) el.onchange = async () => { const r = await run('api_acompanhamento', c.id, $('#a_tec').value, $('#a_cx').value); substituir(r); toast('Salvo'); render(); }; });
+  const rb = m.querySelector('[data-reabrir]'); if (rb) rb.onclick = () => modal(`<h2>Reabrir caso</h2><p style="margin:0">O caso volta para "Aguardando triagem".</p>`, async () => {
+    Object.assign(c, {etapa:'triagem', desfecho:'', desfecho_data:'', desfecho_obs:'', desligamento:''}); salvar(c, 'Caso reaberto', 'api_reabrir', [c.id]); return c; });
+  const pk = m.querySelector('[data-prazook]'); if (pk) pk.onclick = () => { c.prazo_respondido = true; salvar(c, 'Prazo respondido', 'api_prazoRespondido', [c.id]); render(); };
+  m.querySelectorAll('[data-diag]').forEach(el => el.onchange = () => {
+    const k=el.dataset.diag; if (el.checked){ if (!c.diagnostico.includes(k)) c.diagnostico.push(k); } else c.diagnostico = c.diagnostico.filter(x => x!==k);
+    salvar(c, 'Diagnóstico', 'api_diagnostico', [c.id, c.diagnostico.slice()], 'diag:'+c.id);
+  });
+  const fr = $('#fReg'); if (fr) fr.onsubmit = e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; }
+    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:coord()?'Coordenação':'Avaliação social'};
+    c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
+    $('#r_txt').value=''; salvar(c, `Registro: ${reg.tipo}`, 'api_registro', [c.id, reg], null, t); render(); };
+  const fd = $('#fDisc'); if (fd) fd.onsubmit = e => { e.preventDefault(); const t=$('#disc_txt').value.trim(); if (!t) return;
+    const d = {id:idUnico(), data:$('#disc_data').value||iso(HOJE), texto:t};
+    c.discussoes.push(d); c.discussoes.sort((a,b) => a.data < b.data ? -1 : 1);
+    $('#disc_txt').value=''; salvar(c, 'Discussão de caso', 'api_discussao', [c.id, t, d.data, d.id], null, t); render(); };
+  ['#a_tec','#a_cx'].forEach(s => { const el=$(s); if (el) el.onchange = () => {
+    c.tecnica = $('#a_tec').value; c.complexidade = Number($('#a_cx').value) || c.complexidade;
+    salvar(c, 'Técnica e complexidade', 'api_acompanhamento', [c.id, c.tecnica, $('#a_cx').value], 'acomp:'+c.id); render(); }; });
   // GESUAS
-  m.querySelectorAll('[data-gv]').forEach(el => el.onclick = async e => {
-    e.stopPropagation(); el.disabled = true;
-    try {
-      const r = await run('api_vinculoGesuas', el.dataset.gcaso, el.dataset.gv, el.dataset.gnome);
-      substituir(r); toast({confirmar:'Família confirmada', rejeitar:'Marcado como outra família', manual:'Confirmado que está no GESUAS', desfazer:'Conferência desfeita'}[el.dataset.gv]); render();
-    } catch(err){ el.disabled = false; }
+  m.querySelectorAll('[data-gv]').forEach(el => el.onclick = e => {
+    e.stopPropagation();
+    const cc = DB.casos.find(x => x.id===el.dataset.gcaso), acao = el.dataset.gv, nome = el.dataset.gnome;
+    if (acao==='confirmar') cc.gesuas_vinculo = nome;
+    if (acao==='manual') cc.gesuas_vinculo = '*';
+    if (acao==='rejeitar'){ cc.gesuas_rejeitados = [...String(cc.gesuas_rejeitados||'').split('|').filter(Boolean), nome].join('|'); if (cc.gesuas_vinculo===nome) cc.gesuas_vinculo=''; }
+    if (acao==='desfazer'){ cc.gesuas_vinculo=''; cc.gesuas_rejeitados=''; }
+    salvar(cc, {confirmar:'GESUAS: família confirmada', rejeitar:'GESUAS: não é esta família', manual:'GESUAS: está no GESUAS', desfazer:'GESUAS: conferência desfeita'}[acao], 'api_vinculoGesuas', [cc.id, acao, nome]);
+    render();
   });
   const gt = $('#gTec'); if (gt) gt.onchange = () => { S.gTec=gt.value; render(); };
   const gf = $('#gFile'); if (gf) gf.onchange = async () => {
@@ -759,6 +869,7 @@ function iniciarTema(){
   };
 }
 iniciarTema();
+iniciarFila();
 function iniciar(){
   google.script.run
     .withSuccessHandler(r => {
