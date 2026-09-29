@@ -623,8 +623,8 @@ function tabHist(c){
 }
 
 /* ================= modais ================= */
-function modal(html, onOk){
-  $('#layer').innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true">${html}<div class="row" style="justify-content:flex-end"><button class="btn" data-mx>Cancelar</button><button class="btn primary" data-mok>Confirmar</button></div></div></div>`;
+function modal(html, onOk, rotuloOk='Confirmar', classeOk='primary'){
+  $('#layer').innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true">${html}<div class="row" style="justify-content:flex-end"><button class="btn" data-mx>Cancelar</button><button class="btn ${classeOk}" data-mok>${rotuloOk}</button></div></div></div>`;
   const fechar = () => $('#layer').innerHTML='';
   $('#layer [data-mx]').onclick = fechar;
   $('#layer .modal-bg').onclick = e => { if (e.target.classList.contains('modal-bg')) fechar(); };
@@ -685,6 +685,35 @@ function tabelaTecnicas(R){
   return `<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">No GESUAS</th><th style="text-align:right">PAF em branco</th><th style="text-align:right">Não registrados</th></tr></thead><tbody>
   ${R.map(t => `<tr data-gtec="${t.k}"><td>${esc(t.nome.split(' ')[0])}</td><td class="mono" style="text-align:right">${t.doGes.length}</td><td class="mono" style="text-align:right;${t.pafBranco.length?'color:var(--warn);font-weight:600':''}">${t.pafBranco.length}</td><td class="mono" style="text-align:right;${t.ausentes.length?'color:var(--crit);font-weight:600':''}">${t.ausentes.length}</td></tr>`).join('')}</tbody></table></div>`;
 }
+function vincularGesuas(c, acao, nome){
+  if (acao==='confirmar') c.gesuas_vinculo = nome;
+  if (acao==='manual') c.gesuas_vinculo = '*';
+  if (acao==='rejeitar'){ c.gesuas_rejeitados = [...String(c.gesuas_rejeitados||'').split('|').filter(Boolean), nome].join('|'); if (c.gesuas_vinculo===nome) c.gesuas_vinculo=''; }
+  if (acao==='desfazer'){ c.gesuas_vinculo=''; c.gesuas_rejeitados=''; }
+  salvar(c, {confirmar:'GESUAS: família vinculada', rejeitar:'GESUAS: não é esta família', manual:'GESUAS: está no GESUAS', desfazer:'GESUAS: conferência desfeita'}[acao], 'api_vinculoGesuas', [c.id, acao, nome]);
+}
+/* "está no GESUAS com outro nome": digita e a lista do relatório vai filtrando; um clique vincula */
+function buscarNoGesuas(c){
+  const achar = q => {
+    const t = norm(q).split(' ').filter(Boolean); if (!t.length) return [];
+    return DB.ges.linhas.filter(g => t.every(x => norm(g.responsavel).includes(x)))
+      .sort((a,b) => (primeiroNome(b.tecnico)===primeiroNome(c.tecnica)) - (primeiroNome(a.tecnico)===primeiroNome(c.tecnica)) || a.responsavel.localeCompare(b.responsavel))
+      .slice(0,8);
+  };
+  const lista = q => { const r = achar(q);
+    if (!q.trim()) return '<div class="muted" style="padding:8px 2px">Digite parte do nome ou do sobrenome como está no GESUAS.</div>';
+    if (!r.length) return '<div class="muted" style="padding:8px 2px">Nenhuma família do relatório com esse nome.</div>';
+    return r.map(g => `<button type="button" class="gbusca-item" data-gpick="${esc(g.responsavel)}"><b>${esc(TIT(g.responsavel))}</b><span class="muted">${esc(TIT(g.tecnico))} · início ${esc(g.inicio)}${primeiroNome(g.tecnico)===primeiroNome(c.tecnica)?' · mesma técnica':''}</span></button>`).join(''); };
+  modal(`<h2>Vincular à família do GESUAS</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))}${c.responsavel&&c.responsavel!==nomeCaso(c)?' · resp.: '+esc(c.responsavel):''}</p>
+    <label class="field"><span>Nome no GESUAS</span><input id="gbusca" autocomplete="off" placeholder="Ex.: Pereira, Maria Souza"></label>
+    <div id="gbusca-res" class="gbusca">${lista('')}</div>`,
+    async () => { vincularGesuas(c, 'manual'); return c; }, 'Não achei, confirmar sem vincular', '');
+  const inp = $('#gbusca'), res = $('#gbusca-res');
+  inp.oninput = () => { res.innerHTML = lista(inp.value); };
+  res.onclick = e => { const b = e.target.closest('[data-gpick]'); if (!b) return;
+    vincularGesuas(c, 'confirmar', b.dataset.gpick); $('#layer').innerHTML=''; render(); toast('Caso vinculado à família do GESUAS'); };
+  inp.onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); const b = res.querySelector('[data-gpick]'); if (b) b.click(); } };
+}
 function gesCells(c){
   const s = statusGes(c); if (!s) return '<td class="muted">—</td><td class="muted">—</td>';
   if (s.tipo==='ausente') return `<td><span class="pill p-crit">Não registrado</span><div class="muted" style="font-size:12px">há ${s.dias} dias</div></td><td class="muted">—</td>`;
@@ -699,7 +728,7 @@ function gesBox(c){
   if (s.tipo==='possivel') return `<div class="dup stack" style="gap:8px"><div><b>Possível família no GESUAS pelo sobrenome.</b> Confira e confirme:</div>${conferirHtml(c, s)}
     <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS com outro nome')}${desfazer}</div></div>`;
   if (s.tipo==='ausente') return `<div class="dup stack" style="gap:8px;border-color:var(--crit);background:var(--crit-soft)"><div><b style="color:var(--crit)">Não encontrado no GESUAS.</b> Repassado a ${esc(c.tecnica)} há ${s.dias} dias. Conferido no relatório ${esc(DB.ges.origem)}.</div>
-    <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS (confirmar)')}${desfazer}</div></div>`;
+    <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
   return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><div class="row" style="justify-content:space-between;gap:6px"><span class="label">No GESUAS${s.confirmado?' · confirmado':''}</span><div class="row" style="gap:6px">${s.confirmado?'':gvBtn(c,'rejeitar','Não é esta família',s.g.responsavel)}${desfazer}</div></div><dl style="margin-top:6px"><dt>Responsável</dt><dd>${esc(TIT(s.g.responsavel))}</dd><dt>Técnica</dt><dd>${esc(TIT(s.g.tecnico))}${s.tecOk?'':' <span class="pill p-avaliacao">diferente do sistema</span>'}</dd><dt>Início</dt><dd class="mono">${esc(s.g.inicio)}</dd><dt>Serviço</dt><dd>${esc(s.g.servico)}</dd><dt>PAF</dt><dd><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></dd></dl></div>`;
 }
 function mensagem(t){
@@ -818,13 +847,9 @@ function bind(){
   // GESUAS
   m.querySelectorAll('[data-gv]').forEach(el => el.onclick = e => {
     e.stopPropagation();
-    const cc = DB.casos.find(x => x.id===el.dataset.gcaso), acao = el.dataset.gv, nome = el.dataset.gnome;
-    if (acao==='confirmar') cc.gesuas_vinculo = nome;
-    if (acao==='manual') cc.gesuas_vinculo = '*';
-    if (acao==='rejeitar'){ cc.gesuas_rejeitados = [...String(cc.gesuas_rejeitados||'').split('|').filter(Boolean), nome].join('|'); if (cc.gesuas_vinculo===nome) cc.gesuas_vinculo=''; }
-    if (acao==='desfazer'){ cc.gesuas_vinculo=''; cc.gesuas_rejeitados=''; }
-    salvar(cc, {confirmar:'GESUAS: família confirmada', rejeitar:'GESUAS: não é esta família', manual:'GESUAS: está no GESUAS', desfazer:'GESUAS: conferência desfeita'}[acao], 'api_vinculoGesuas', [cc.id, acao, nome]);
-    render();
+    const cc = DB.casos.find(x => x.id===el.dataset.gcaso);
+    if (el.dataset.gv==='manual') return buscarNoGesuas(cc);
+    vincularGesuas(cc, el.dataset.gv, el.dataset.gnome); render();
   });
   const gt = $('#gTec'); if (gt) gt.onchange = () => { S.gTec=gt.value; render(); };
   const gf = $('#gFile'); if (gf) gf.onchange = async () => {

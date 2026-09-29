@@ -196,6 +196,10 @@ dd{margin:0;font-weight:500}
 .erro-total{max-width:520px;margin:15vh auto;padding:24px}
 .whoami{font-size:12.5px;color:var(--ink-2);word-break:break-all}
 .whoami b{display:block;color:var(--ink);font-size:13px}
+.gbusca{display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto}
+.gbusca-item{all:unset;cursor:pointer;display:flex;flex-direction:column;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+.gbusca-item:hover,.gbusca-item:focus-visible{border-color:var(--accent);background:var(--accent-soft)}
+.gbusca-item .muted{font-size:12px}
 /* painel de gravação em segundo plano, no modelo da caixa de uploads do Drive */
 .fila{position:fixed;right:16px;bottom:0;z-index:60;width:340px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:10px 10px 0 0;box-shadow:0 -2px 16px rgba(20,40,45,.16);overflow:hidden}
 .fila[hidden]{display:none}
