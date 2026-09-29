@@ -283,12 +283,26 @@ function api_diagnostico(id, codigos) {
   });
 }
 
+function jaGravado(nomeAba, idLinha) {
+  return lerTabela(nomeAba).some(function (x) { return String(x.id) === String(idLinha); });
+}
+
+/** Relê um caso da planilha (usado quando uma gravação da fila é descartada). */
+function api_caso(id) {
+  var papel = papelAtual();
+  var c = montarCasos([String(id)])[0];
+  if (!c || !visivelPara(papel, c)) throw new Error('Caso ' + id + ' não encontrado.');
+  return c;
+}
+
 function api_registro(id, r) {
   var papel = papelAtual();
   return comTrava(function () {
     if (!String(r.texto || '').trim()) throw new Error('Escreva o registro antes de salvar.');
+    // o id vem do navegador: um reenvio da fila traz o mesmo id e não grava de novo
+    if (r.id && jaGravado('Registros', r.id)) return montarCasos([String(id)])[0];
     inserirLinhas('Registros', [{
-      id: proximoIdSimples('R'), caso_id: id, data: isoParaData(r.data) || new Date(), tipo: r.tipo, texto: r.texto.trim(),
+      id: r.id || proximoIdSimples('R'), caso_id: id, data: isoParaData(r.data) || new Date(), tipo: r.tipo, texto: r.texto.trim(),
       autor: AUTOR[papel], criado_em: new Date(), criado_por: emailAtual()
     }]);
     return montarCasos([String(id)])[0];
@@ -316,11 +330,12 @@ function api_acompanhamento(id, tecnica, complexidade) {
   });
 }
 
-function api_discussao(id, texto, data) {
+function api_discussao(id, texto, data, idCliente) {
   exigir(['coordenacao']);
   return comTrava(function () {
     if (!String(texto || '').trim()) throw new Error('Escreva o plano definido na discussão.');
-    inserirLinhas('Discussoes', [{ id: proximoIdSimples('D'), caso_id: id, data: isoParaData(data) || new Date(), texto: texto.trim(), criado_em: new Date(), criado_por: emailAtual() }]);
+    if (idCliente && jaGravado('Discussoes', idCliente)) return montarCasos([String(id)])[0];
+    inserirLinhas('Discussoes', [{ id: idCliente || proximoIdSimples('D'), caso_id: id, data: isoParaData(data) || new Date(), texto: texto.trim(), criado_em: new Date(), criado_por: emailAtual() }]);
     return montarCasos([String(id)])[0];
   });
 }
