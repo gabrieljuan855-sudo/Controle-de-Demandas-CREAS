@@ -8,7 +8,7 @@ var ESQUEMA = {
     'remetente', 'remetente_detalhe', 'doc_tipo', 'doc_num', 'recebido', 'prazo', 'prazo_respondido',
     'descricao', 'prioridade', 'etapa', 'passou_avaliacao', 'diagnostico',
     'desfecho', 'desfecho_data', 'desfecho_obs', 'tecnica', 'inicio_acomp', 'complexidade',
-    'desligamento', 'origem', 'atualizado_em'],
+    'desligamento', 'origem', 'atualizado_em', 'gesuas_vinculo', 'gesuas_rejeitados'],
   Pessoas: ['caso_id', 'nome', 'nascimento', 'sexo'],
   Registros: ['id', 'caso_id', 'data', 'tipo', 'texto', 'autor', 'criado_em', 'criado_por'],
   Discussoes: ['id', 'caso_id', 'data', 'texto', 'criado_em', 'criado_por'],
@@ -35,6 +35,12 @@ function planilhaBase() {
 function aba(nome) {
   var sh = planilhaBase().getSheetByName(nome);
   if (!sh) throw new Error('Aba "' + nome + '" não encontrada. Rode a função configurar().');
+  // colunas novas do ESQUEMA entram sozinhas em planilhas criadas antes delas
+  var cols = ESQUEMA[nome];
+  if (cols && sh.getLastColumn() < cols.length) {
+    if (sh.getMaxColumns() < cols.length) sh.insertColumnsAfter(sh.getMaxColumns(), cols.length - sh.getMaxColumns());
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
+  }
   return sh;
 }
 

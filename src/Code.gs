@@ -346,6 +346,37 @@ function api_reabrir(id) {
   });
 }
 
+/**
+ * Conferência manual com o GESUAS.
+ * confirmar: nome é a família do GESUAS; manual: está no GESUAS sem escolher família;
+ * rejeitar: nome não é esta família; desfazer: volta à comparação automática.
+ */
+function api_vinculoGesuas(id, acao, nome) {
+  exigir(['coordenacao']);
+  return comTrava(function () {
+    var c = buscarCaso(id);
+    nome = String(nome || '').trim();
+    if (acao === 'confirmar' && nome) {
+      c.gesuas_vinculo = nome;
+      registrarHistorico(id, 'GESUAS: confirmado como a família "' + nome + '"');
+    } else if (acao === 'manual') {
+      c.gesuas_vinculo = '*';
+      registrarHistorico(id, 'GESUAS: confirmado manualmente que está em acompanhamento');
+    } else if (acao === 'rejeitar' && nome) {
+      var rej = String(c.gesuas_rejeitados || '').split('|').filter(Boolean);
+      if (rej.indexOf(nome) < 0) rej.push(nome);
+      c.gesuas_rejeitados = rej.join('|');
+      if (c.gesuas_vinculo === nome) c.gesuas_vinculo = '';
+      registrarHistorico(id, 'GESUAS: "' + nome + '" não é esta família');
+    } else if (acao === 'desfazer') {
+      c.gesuas_vinculo = '';
+      c.gesuas_rejeitados = '';
+      registrarHistorico(id, 'GESUAS: conferência desfeita, volta à comparação automática');
+    } else throw new Error('Ação inválida.');
+    return salvarCasoLinha(c);
+  });
+}
+
 /** Grava o relatório "Famílias Acompanhadas por Técnico" lido no navegador. */
 function api_salvarGesuas(meta, linhas) {
   exigir(['coordenacao']);
