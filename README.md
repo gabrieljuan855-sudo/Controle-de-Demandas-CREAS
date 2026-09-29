@@ -23,6 +23,8 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - famílias que no GESUAS estão com outra técnica;
   - famílias com PAF em branco.
 
+  Quando o nome não bate, mas há família com o mesmo sobrenome (da mesma técnica, ou com dois sobrenomes em comum), o caso aparece como **a conferir**. A coordenação confirma ("É esta família") ou recusa ("Não é"). Também dá para marcar **"Está no GESUAS"** manualmente quando a família foi cadastrada com outro nome. A decisão fica salva no caso e pode ser desfeita.
+
   Um botão copia a mensagem pronta para cada técnica.
 - **Painel de pendências.** Mostra prazos de ofício, casos aguardando triagem ou repasse, avaliações paradas e pendências do GESUAS.
 - **Indicadores.** Entradas por mês, por remetente e por tipo de violação, e o tempo médio da avaliação.
