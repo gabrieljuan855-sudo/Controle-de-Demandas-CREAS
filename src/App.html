@@ -323,6 +323,30 @@ const prio = p => `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>
 const pessoasTxt = c => c.pessoas.map(p => p.nome).join(', ') || '—';
 const nomeCaso = c => (c.pessoas[0] && c.pessoas[0].nome) || c.responsavel || '(sem nome)';
 const nomeFamilia = c => c.responsavel || nomeCaso(c);
+/* ícone de copiar ao lado de nomes, para colar na busca do GESUAS */
+const ICONE_COPIAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
+const cp = t => t ? `<button type="button" class="copiar" data-copiar="${esc(t)}" title="Copiar" aria-label="Copiar ${esc(t)}">${ICONE_COPIAR}</button>` : '';
+const comCopia = t => { if (!t) return ''; const s = String(t).trim(), i = s.lastIndexOf(' '); return `${esc(s.slice(0, i+1))}<span class="nw">${esc(s.slice(i+1))}${cp(s)}</span>`; };
+/* mostra um texto e copia outro (nome do GESUAS: mostra em Título, copia como está no relatório) */
+const comCopiaComo = (mostra, copia) => { const i = mostra.lastIndexOf(' '); return `${esc(mostra.slice(0, i+1))}<span class="nw">${esc(mostra.slice(i+1))}${cp(copia)}</span>`; };
+const vitimasComCopia = c => c.pessoas.length ? c.pessoas.map(p => comCopia(p.nome)).join(', ') : '—';
+async function copiarTexto(t){
+  try { await navigator.clipboard.writeText(t); return true; } catch(e){}
+  const ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly',''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch(e){} ta.remove(); return ok;
+}
+/* captura antes dos cliques de linha/cartão: copiar não abre o caso */
+function iniciarCopiar(){
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-copiar]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    copiarTexto(b.dataset.copiar).then(ok => {
+      toast(ok ? `Copiado: ${b.dataset.copiar}` : 'Não foi possível copiar. Selecione o nome e use Ctrl+C.');
+      if (ok){ b.classList.add('ok'); setTimeout(() => b.classList.remove('ok'), 1200); }
+    });
+  }, true);
+  document.addEventListener('keydown', e => { if ((e.key==='Enter' || e.key===' ') && e.target.closest && e.target.closest('[data-copiar]')) e.stopPropagation(); }, true);
+}
 
 /* ================= painel ================= */
 function vPainel(){
@@ -344,7 +368,7 @@ function vPainel(){
   </div>
   <div class="${coord()?'dash':''}">
     <section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>Pendências</h2><span class="muted">${al.length} itens</span></div>
-      <div class="alist">${al.length ? al.slice(0,80).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${esc(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>80?`<div class="empty">Mais ${al.length-80} itens. Use a lista de casos ou a conferência do GESUAS.</div>`:'') : '<div class="empty">Nenhuma pendência.</div>'}</div>
+      <div class="alist">${al.length ? al.slice(0,80).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${comCopia(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>80?`<div class="empty">Mais ${al.length-80} itens. Use a lista de casos ou a conferência do GESUAS.</div>`:'') : '<div class="empty">Nenhuma pendência.</div>'}</div>
     </section>
     ${coord()?`<section class="panel stack">
       <div><h2>Conferência com o GESUAS</h2><div class="muted" style="font-size:12.5px">${temGes()?`${esc(DB.ges.origem)}${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}`:'Nenhum relatório importado ainda.'}</div></div>
@@ -370,8 +394,8 @@ function vCasos(fixo){
     : '<th>Nº</th><th>Vítima(s)</th><th>Responsável familiar</th><th>Remetente</th><th>Recebido</th><th>Prazo</th><th>Etapa</th>';
   const lim = 300, total = L.length; L = L.slice(0, lim);
   const rows = L.map(c => fixo==='acompanhamento'
-    ? `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${esc(pessoasTxt(c))}</div>${c.responsavel?`<div class="muted" style="font-size:12px">Resp.: ${esc(c.responsavel)}</div>`:''}</td><td>${esc(c.tecnica)}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
-    : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${esc(pessoasTxt(c))}</div>${prio(c.prioridade)}</td><td>${esc(c.responsavel||'—')}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td><td>${pill(c)}${c.etapa==='acompanhamento'?`<div class="muted" style="font-size:12px">${esc(c.tecnica)}</div>`:''}</td></tr>`).join('');
+    ? `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${c.responsavel?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(c.responsavel)}</div>`:''}</td><td>${esc(c.tecnica)}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
+    : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${prio(c.prioridade)}</td><td>${c.responsavel?comCopia(c.responsavel):'—'}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td><td>${pill(c)}${c.etapa==='acompanhamento'?`<div class="muted" style="font-size:12px">${esc(c.tecnica)}</div>`:''}</td></tr>`).join('');
   return `<div class="top"><div><h1>${titulo}</h1><p>${sub}</p></div></div>
   <div class="filters"><input id="busca" type="search" placeholder="Buscar nome, nº, remetente, ofício, técnica" value="${esc(S.busca)}">
   ${fixo?'':`<div class="seg">${segs.map(([k,l]) => `<button class="${f===k?'on':''}" data-seg="${k}">${l}</button>`).join('')}</div>`}</div>
@@ -499,17 +523,17 @@ function vCaso(){
   tabs.push(['hist','Histórico']);
   if (!tabs.find(t => t[0]===S.tab)) S.tab='dados';
   return `<div class="row" style="margin-bottom:10px"><button class="btn small" data-back>← Voltar</button>${coord()?'<button class="btn small" data-editar>Editar dados</button>':''}<button class="btn small" data-imprimir>Imprimir ficha</button></div>
-  <div class="top"><div><div class="row" style="gap:8px"><span class="mono muted">Caso ${c.id}</span>${pill(c)}${prio(c.prioridade)}${String(c.origem||'').startsWith('migra')?'<span class="pill p-encerrado">migrado</span>':''}</div><h1 style="margin-top:6px">${esc(nomeCaso(c))}</h1>
+  <div class="top"><div><div class="row" style="gap:8px"><span class="mono muted">Caso ${c.id}</span>${pill(c)}${prio(c.prioridade)}${String(c.origem||'').startsWith('migra')?'<span class="pill p-encerrado">migrado</span>':''}</div><h1 style="margin-top:6px">${comCopia(nomeCaso(c))}</h1>
   <p>${esc(c.descricao)}</p></div></div>
   <div class="steps">${stepsArr.map(([l,done],i) => `<div class="step ${i===nowIdx?'now':done?'done':''}"><div class="bar"></div>${l}${i===2&&pulouAval?' <span class="muted">(não houve)</span>':''}</div>`).join('')}</div>
   ${acaoEtapa(c)}
   <div class="detail">
     <aside class="panel stack">
       <div><span class="label">Vítima(s)</span>
-      ${c.pessoas.map(v => `<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${esc(v.nome)}</b><div class="muted" style="font-size:12.5px">${v.nascimento?idade(v.nascimento)+' anos · ':''}${v.sexo==='F'?'Feminino':v.sexo==='M'?'Masculino':''}</div></div>`).join('')||'<div class="muted">—</div>'}</div>
+      ${c.pessoas.map(v => `<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${comCopia(v.nome)}</b><div class="muted" style="font-size:12.5px">${v.nascimento?idade(v.nascimento)+' anos · ':''}${v.sexo==='F'?'Feminino':v.sexo==='M'?'Masculino':''}</div></div>`).join('')||'<div class="muted">—</div>'}</div>
       <dl>
-        <dt>Responsável</dt><dd>${esc(c.responsavel)||'—'}</dd>
-        <dt>CPF resp.</dt><dd>${esc(c.cpf)||'—'}</dd>
+        <dt>Responsável</dt><dd>${c.responsavel?comCopia(c.responsavel):'—'}</dd>
+        <dt>CPF resp.</dt><dd>${c.cpf?comCopia(c.cpf):'—'}</dd>
         <dt>Endereço</dt><dd>${esc(c.endereco)||'—'}</dd>
         <dt>Bairro</dt><dd>${esc(c.bairro)||'—'}</dd>
         <dt>Contato</dt><dd>${esc(c.contato)||'—'}</dd>
@@ -678,7 +702,7 @@ function resumoTecnicas(){ return tecnicasGes().map(t => ({...t, ...pendencias(t
 const gvBtn = (c, acao, rotulo, nome='', cls='') => `<button type="button" class="btn small ${cls}" data-gv="${acao}" data-gcaso="${c.id}" data-gnome="${esc(nome)}">${rotulo}</button>`;
 function conferirHtml(c, s){
   return `<div class="stack" style="gap:6px">${s.cand.map(g => `<div class="row" style="justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)">
-    <div><b>${esc(TIT(g.responsavel))}</b><div class="muted" style="font-size:12.5px">${esc(TIT(g.tecnico))} · início ${esc(g.inicio)}</div></div>
+    <div><b>${comCopiaComo(TIT(g.responsavel), g.responsavel)}</b><div class="muted" style="font-size:12.5px">${esc(TIT(g.tecnico))} · início ${esc(g.inicio)}</div></div>
     <div class="row" style="gap:6px">${gvBtn(c,'confirmar','É esta família',g.responsavel,'primary')}${gvBtn(c,'rejeitar','Não é',g.responsavel)}</div></div>`).join('')}</div>`;
 }
 function tabelaTecnicas(R){
@@ -704,7 +728,7 @@ function buscarNoGesuas(c){
     if (!q.trim()) return '<div class="muted" style="padding:8px 2px">Digite parte do nome ou do sobrenome como está no GESUAS.</div>';
     if (!r.length) return '<div class="muted" style="padding:8px 2px">Nenhuma família do relatório com esse nome.</div>';
     return r.map(g => `<button type="button" class="gbusca-item" data-gpick="${esc(g.responsavel)}"><b>${esc(TIT(g.responsavel))}</b><span class="muted">${esc(TIT(g.tecnico))} · início ${esc(g.inicio)}${primeiroNome(g.tecnico)===primeiroNome(c.tecnica)?' · mesma técnica':''}</span></button>`).join(''); };
-  modal(`<h2>Vincular à família do GESUAS</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))}${c.responsavel&&c.responsavel!==nomeCaso(c)?' · resp.: '+esc(c.responsavel):''}</p>
+  modal(`<h2>Vincular à família do GESUAS</h2><p class="muted" style="margin:0">${comCopia(nomeCaso(c))}${c.responsavel&&c.responsavel!==nomeCaso(c)?' · resp.: '+comCopia(c.responsavel):''}</p>
     <label class="field"><span>Nome no GESUAS</span><input id="gbusca" autocomplete="off" placeholder="Ex.: Pereira, Maria Souza"></label>
     <div id="gbusca-res" class="gbusca">${lista('')}</div>`,
     async () => { vincularGesuas(c, 'manual'); return c; }, 'Não achei, confirmar sem vincular', '');
@@ -729,7 +753,7 @@ function gesBox(c){
     <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS com outro nome')}${desfazer}</div></div>`;
   if (s.tipo==='ausente') return `<div class="dup stack" style="gap:8px;border-color:var(--crit);background:var(--crit-soft)"><div><b style="color:var(--crit)">Não encontrado no GESUAS.</b> Repassado a ${esc(c.tecnica)} há ${s.dias} dias. Conferido no relatório ${esc(DB.ges.origem)}.</div>
     <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
-  return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><div class="row" style="justify-content:space-between;gap:6px"><span class="label">No GESUAS${s.confirmado?' · confirmado':''}</span><div class="row" style="gap:6px">${s.confirmado?'':gvBtn(c,'rejeitar','Não é esta família',s.g.responsavel)}${desfazer}</div></div><dl style="margin-top:6px"><dt>Responsável</dt><dd>${esc(TIT(s.g.responsavel))}</dd><dt>Técnica</dt><dd>${esc(TIT(s.g.tecnico))}${s.tecOk?'':' <span class="pill p-avaliacao">diferente do sistema</span>'}</dd><dt>Início</dt><dd class="mono">${esc(s.g.inicio)}</dd><dt>Serviço</dt><dd>${esc(s.g.servico)}</dd><dt>PAF</dt><dd><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></dd></dl></div>`;
+  return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><div class="row" style="justify-content:space-between;gap:6px"><span class="label">No GESUAS${s.confirmado?' · confirmado':''}</span><div class="row" style="gap:6px">${s.confirmado?'':gvBtn(c,'rejeitar','Não é esta família',s.g.responsavel)}${desfazer}</div></div><dl style="margin-top:6px"><dt>Responsável</dt><dd>${comCopiaComo(TIT(s.g.responsavel), s.g.responsavel)}</dd><dt>Técnica</dt><dd>${esc(TIT(s.g.tecnico))}${s.tecOk?'':' <span class="pill p-avaliacao">diferente do sistema</span>'}</dd><dt>Início</dt><dd class="mono">${esc(s.g.inicio)}</dd><dt>Serviço</dt><dd>${esc(s.g.servico)}</dd><dt>PAF</dt><dd><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></dd></dl></div>`;
 }
 function mensagem(t){
   const p = pendencias(t.k); const nome = t.nome.split(' ')[0];
@@ -764,10 +788,10 @@ function vGesuas(){
   <div class="stack">${R.map(t => `<section class="panel stack">
     <div class="row" style="justify-content:space-between"><div><h2>${esc(t.nome)}</h2><div class="muted" style="font-size:12.5px">${t.doGes.length} famílias no GESUAS · ${t.pafBranco.length} com PAF em branco · ${t.ausentes.length} repassadas sem registro</div></div>
     <button class="btn small" data-copy="${t.k}">Copiar mensagem para ${esc(t.nome.split(' ')[0])}</button></div>
-    ${t.possiveis.length?`<div><h3 style="color:var(--warn)">Conferir: possível família pelo sobrenome</h3><div class="alist">${t.possiveis.map(x => `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="aitem" data-caso="${x.c.id}" tabindex="0" style="border-top:0;padding:0 0 4px"><div class="sev warn"></div><div><div class="nm">${esc(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">${x.c.responsavel?'Resp.: '+esc(x.c.responsavel)+' · ':''}Repasse em ${fmt(x.c.inicio_acomp)}</div></div><span></span></div>${conferirHtml(x.c, x.s)}<div class="row" style="margin-top:6px">${gvBtn(x.c,'manual','Está no GESUAS com outro nome')}</div></div>`).join('')}</div></div>`:''}
-    ${t.ausentes.length?`<div><h3 style="color:var(--crit)">Repassadas e ainda não registradas no GESUAS</h3><div class="alist">${t.ausentes.map(c => `<div class="aitem" data-caso="${c.id}" tabindex="0"><div class="sev crit"></div><div><div class="nm">${esc(nomeFamilia(c))} <span class="mono muted">${c.id}</span></div><div class="muted" style="font-size:12.5px">Repasse em ${fmt(c.inicio_acomp)}${c.inicio_acomp?' · há '+dias(c.inicio_acomp)+' dias':''}</div></div><span></span></div>`).join('')}</div></div>`:''}
-    ${t.outra.length?`<div><h3 style="color:var(--warn)">No GESUAS com outra técnica</h3><div class="alist">${t.outra.map(x => `<div class="aitem" data-caso="${x.c.id}" tabindex="0"><div class="sev warn"></div><div><div class="nm">${esc(nomeFamilia(x.c))}</div><div class="muted" style="font-size:12.5px">No GESUAS: ${esc(TIT(x.s.g.tecnico))}</div></div><span></span></div>`).join('')}</div></div>`:''}
-    ${t.pafBranco.length?`<details><summary style="cursor:pointer;font-weight:600">PAF em branco (${t.pafBranco.length})</summary><div style="overflow-x:auto;margin-top:8px"><table style="min-width:0"><thead><tr><th>Responsável familiar</th><th>Início</th><th>Serviço</th></tr></thead><tbody>${t.pafBranco.map(g => `<tr style="cursor:default"><td>${esc(TIT(g.responsavel))}</td><td class="mono">${esc(g.inicio)}</td><td>${/MSE/.test(g.servico)?'MSE (LA/PSC)':esc(g.servico)}</td></tr>`).join('')}</tbody></table></div></details>`:''}
+    ${t.possiveis.length?`<div><h3 style="color:var(--warn)">Conferir: possível família pelo sobrenome</h3><div class="alist">${t.possiveis.map(x => `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="aitem" data-caso="${x.c.id}" tabindex="0" style="border-top:0;padding:0 0 4px"><div class="sev warn"></div><div><div class="nm">${comCopia(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">${x.c.responsavel?'Resp.: '+comCopia(x.c.responsavel)+' · ':''}Repasse em ${fmt(x.c.inicio_acomp)}</div></div><span></span></div>${conferirHtml(x.c, x.s)}<div class="row" style="margin-top:6px">${gvBtn(x.c,'manual','Está no GESUAS com outro nome')}</div></div>`).join('')}</div></div>`:''}
+    ${t.ausentes.length?`<div><h3 style="color:var(--crit)">Repassadas e ainda não registradas no GESUAS</h3><div class="alist">${t.ausentes.map(c => `<div class="aitem" data-caso="${c.id}" tabindex="0"><div class="sev crit"></div><div><div class="nm">${comCopia(nomeFamilia(c))} <span class="mono muted">${c.id}</span></div><div class="muted" style="font-size:12.5px">Repasse em ${fmt(c.inicio_acomp)}${c.inicio_acomp?' · há '+dias(c.inicio_acomp)+' dias':''}</div></div><span></span></div>`).join('')}</div></div>`:''}
+    ${t.outra.length?`<div><h3 style="color:var(--warn)">No GESUAS com outra técnica</h3><div class="alist">${t.outra.map(x => `<div class="aitem" data-caso="${x.c.id}" tabindex="0"><div class="sev warn"></div><div><div class="nm">${comCopia(nomeFamilia(x.c))}</div><div class="muted" style="font-size:12.5px">No GESUAS: ${esc(TIT(x.s.g.tecnico))}</div></div><span></span></div>`).join('')}</div></div>`:''}
+    ${t.pafBranco.length?`<details><summary style="cursor:pointer;font-weight:600">PAF em branco (${t.pafBranco.length})</summary><div style="overflow-x:auto;margin-top:8px"><table style="min-width:0"><thead><tr><th>Responsável familiar</th><th>Início</th><th>Serviço</th></tr></thead><tbody>${t.pafBranco.map(g => `<tr style="cursor:default"><td>${comCopiaComo(TIT(g.responsavel), g.responsavel)}</td><td class="mono">${esc(g.inicio)}</td><td>${/MSE/.test(g.servico)?'MSE (LA/PSC)':esc(g.servico)}</td></tr>`).join('')}</tbody></table></div></details>`:''}
     <textarea id="msg_${t.k}" readonly hidden>${esc(mensagem(t))}</textarea>
   </section>`).join('')}</div>`:''}`;
 }
@@ -895,6 +919,7 @@ function iniciarTema(){
 }
 iniciarTema();
 iniciarFila();
+iniciarCopiar();
 function iniciar(){
   google.script.run
     .withSuccessHandler(r => {
