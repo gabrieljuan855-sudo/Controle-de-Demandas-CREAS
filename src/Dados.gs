@@ -33,7 +33,11 @@ function planilhaBase() {
   return SpreadsheetApp.openById(id);
 }
 
+/* cada chamada ao servidor é uma execução nova: abas e Config lidas uma vez valem até o fim dela */
+var ABAS_CACHE = {}, CONFIG_CACHE = null;
+
 function aba(nome) {
+  if (ABAS_CACHE[nome]) return ABAS_CACHE[nome];
   var sh = planilhaBase().getSheetByName(nome);
   var cols = ESQUEMA[nome];
   if (!sh && cols) sh = planilhaBase().insertSheet(nome);  // abas novas do ESQUEMA nascem sozinhas
@@ -45,6 +49,7 @@ function aba(nome) {
     sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
     formatarColunas(sh, cols, antes);
   }
+  ABAS_CACHE[nome] = sh;
   return sh;
 }
 
@@ -92,6 +97,17 @@ function inserirLinhas(nome, objetos) {
   sh.getRange(sh.getLastRow() + 1, 1, linhas.length, linhas[0].length).setValues(linhas);
 }
 
+/** Grava várias linhas já lidas (com _linha) em uma leitura e uma escrita, em vez de uma por linha. */
+function atualizarLinhas(nome, objs) {
+  if (!objs.length) return;
+  var sh = aba(nome), n = ESQUEMA[nome].length;
+  var ls = objs.map(function (o) { return o._linha; });
+  var ini = Math.min.apply(null, ls), fim = Math.max.apply(null, ls);
+  var vals = sh.getRange(ini, 1, fim - ini + 1, n).getValues();
+  objs.forEach(function (o) { vals[o._linha - ini] = objetoParaLinha(nome, o); });
+  sh.getRange(ini, 1, vals.length, n).setValues(vals);
+}
+
 function atualizarLinha(nome, linha, obj) {
   var sh = aba(nome);
   var l = objetoParaLinha(nome, obj);
@@ -113,12 +129,14 @@ function paraCliente(o) {
 /* ---------- Config ---------- */
 
 function lerConfig() {
+  if (CONFIG_CACHE) return CONFIG_CACHE;
   var c = {};
   lerTabela('Config').forEach(function (l) { c[String(l.chave).trim()] = l.valor; });
-  return c;
+  return CONFIG_CACHE = c;
 }
 
 function gravarConfig(chave, valor, observacao) {
+  CONFIG_CACHE = null;
   var linhas = lerTabela('Config');
   for (var i = 0; i < linhas.length; i++) {
     if (String(linhas[i].chave).trim() === chave) {

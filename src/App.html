@@ -1310,12 +1310,20 @@ function bind(){
   m.querySelectorAll('[data-saida]').forEach(el => el.onchange = () => { if (el.checked) S.gPrevia.desligar.add(el.dataset.saida); else S.gPrevia.desligar.delete(el.dataset.saida); });
   const gs = $('#gSalvar'); if (gs) gs.onclick = async () => { gs.disabled=true;
     try {
-      const P = S.gPrevia;
-      const r = await run('api_importarGesuas', {ges:P.ges||null, desligar:[...P.desligar], completar:P.completar, atendimentos:P.atendimentos});
-      DB.ges = r.ges; DB.atend = atendObj(r.atend); r.casos.forEach(substituir); S.gPrevia=null; S.gTec='';
+      const P = S.gPrevia, st = $('#gStatus'), at = P.atendimentos, LOTE = 1000;
+      // primeiro a lista do GESUAS e os casos; depois os atendimentos em lotes, com progresso na tela
+      st.textContent = 'Salvando a lista do GESUAS…';
+      const r = await run('api_importarGesuas', {ges:P.ges||null, desligar:[...P.desligar], completar:P.completar, atendimentos:[], fim:!at.length});
+      let novos = 0, lista = r.atend;
+      for (let i = 0; i < at.length; i += LOTE){
+        st.textContent = `Salvando atendimentos: ${Math.min(i+LOTE, at.length)} de ${at.length}…`;
+        const q = await run('api_importarGesuas', {soAtendimentos:true, atendimentos:at.slice(i, i+LOTE), fim:i+LOTE >= at.length});
+        novos += q.novos; if (q.atend) lista = q.atend;
+      }
+      DB.ges = r.ges; if (lista) DB.atend = atendObj(lista); r.casos.forEach(substituir); S.gPrevia=null; S.gTec='';
       const desl = r.casos.filter(c => P.desligar.has(c.id)).length;
-      toast([P.ges?`${DB.ges.linhas.length} famílias salvas`:'', desl?`${desl} desligada${desl>1?'s':''}`:'', P.atendimentos.length?`${r.novos} atendimentos novos`:''].filter(Boolean).join(' · ')); render();
-    } catch(e){ gs.disabled=false; } };
+      toast([P.ges?`${DB.ges.linhas.length} famílias salvas`:'', desl?`${desl} desligada${desl>1?'s':''}`:'', at.length?`${novos} atendimentos novos`:''].filter(Boolean).join(' · ')); render();
+    } catch(e){ gs.disabled=false; const st = $('#gStatus'); if (st){ st.style.color='var(--crit)'; st.textContent = `A importação parou: ${e && e.message ? e.message : e}. Pode importar os mesmos arquivos de novo: o que já foi salvo não se repete.`; } } };
   m.querySelectorAll('[data-sgv]').forEach(el => el.onclick = () => vincularLinhaModal(DB.ges.linhas[+el.dataset.sgv]));
   m.querySelectorAll('[data-sgc]').forEach(el => el.onclick = async () => { el.disabled = true;
     try { const c = await criarCasoDoGesuas(DB.ges.linhas[+el.dataset.sgc]); substituir(c); render(); } catch(e){ el.disabled = false; } });
