@@ -239,6 +239,31 @@ h1 .copiar svg{width:18px;height:18px}
 .fila-marca.falhou{background:var(--crit)}
 .fila-marca.pendente{border:2px solid var(--line);border-top-color:var(--accent);animation:fila-gira .8s linear infinite}
 @keyframes fila-gira{to{transform:rotate(360deg)}}
+/* modo de campo (celular) */
+body.modo-campo .app{grid-template-columns:1fr}
+body.modo-campo .side{display:none}
+body.modo-campo .main{padding:16px}
+.campo{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.campo h1{font-size:21px}
+.campo-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.campo-status{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right;font-size:12.5px}
+.campo-pend{color:var(--warn);font-weight:600}
+.campo-erro{color:var(--crit)}
+.campo input,.campo textarea,.campo select{font-size:16px}
+.campo-lista{display:flex;flex-direction:column;gap:8px}
+.campo-card{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:3px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px}
+.campo-card b{font-size:16px}
+.campo-card:focus-visible{outline:2px solid var(--accent)}
+.campo-card .pend{color:var(--warn)}
+.campo-info{display:flex;flex-direction:column;gap:4px;margin-top:6px;color:var(--ink-2)}
+.campo-info a{color:var(--accent);font-weight:600;font-size:16px}
+.campo-info summary{cursor:pointer;color:var(--ink-2)}
+.campo-tipos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.campo-tipo{cursor:pointer;padding:14px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-weight:600;font-size:14.5px}
+.campo-tipo.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.campo textarea{min-height:150px}
+.campo-salvar{justify-content:center;padding:15px;font-size:16px}
+.campo-link{justify-content:center;margin-top:8px}
 .tema{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2)}
 .tema select{width:auto;padding:4px 8px}
 details summary{padding:4px 0}

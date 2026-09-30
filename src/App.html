@@ -431,8 +431,9 @@ function renderNav(){
     ['gesuas','Conferência GESUAS',''],
     ['indicadores','Indicadores','']
   ].filter(i => coord() || !['novo','acompanhamento','gesuas'].includes(i[0]));
+  if (CELULAR) items.unshift(['campo','Modo de campo','']);
   $('#nav').innerHTML = items.map(([k,l,c]) => `<button class="${S.view===k||(S.view==='caso'&&k==='casos')?'on':''}" data-go="${k}">${l}${c!==''?`<span class="count">${c}</span>`:''}</button>`).join('');
-  $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => { if (b.dataset.go==='novo'){ S.draft=null; S.editando=null; } go(b.dataset.go); });
+  $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => { if (b.dataset.go==='novo'){ S.draft=null; S.editando=null; } if (b.dataset.go==='campo') lsSet(COMPLETO_KEY, null); go(b.dataset.go); });
 }
 const pill = c => `<span class="pill p-${c.etapa}">${ETAPAS[c.etapa]||c.etapa}</span>`;
 const prio = p => `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>`;
@@ -1140,12 +1141,109 @@ function vInd(){
   </div>`;
 }
 
+/* ================= modo de campo (celular) =================
+   No celular o app abre só com a fila da avaliação social e o registro de atendimento.
+   Sem internet, o registro fica guardado no aparelho e é enviado sozinho quando o sinal volta
+   (o id gerado aqui impede que o reenvio duplique). A página precisa ter sido aberta com internet:
+   o Apps Script não permite abrir o sistema do zero offline. */
+const CELULAR = window.matchMedia && matchMedia('(max-width: 700px)').matches;
+const PEND_KEY = 'creas:registros-pendentes', COMPLETO_KEY = 'creas:versao-completa';
+let MEM_PEND = [], STORAGE_OK = true, ENVIANDO = false, ERRO_ENVIO = '';
+const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ STORAGE_OK = false; return null; } };
+const lsSet = (k, v) => { try { if (v===null) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; } catch(e){ STORAGE_OK = false; return false; } };
+function pendLer(){ const v = lsGet(PEND_KEY); if (v===null) return MEM_PEND; try { return JSON.parse(v) || []; } catch(e){ return MEM_PEND; } }
+function pendGravar(L){ MEM_PEND = L; lsSet(PEND_KEY, L.length ? JSON.stringify(L) : null); }
+const querCampo = () => CELULAR && lsGet(COMPLETO_KEY)!=='1';
+const ROT_TIPO = {'VD':'Visita domiciliar', 'Tentativa de VD':'Tentativa de visita', 'Contato telefônico / WhatsApp':'Telefone / WhatsApp'};
+const casosCampo = () => DB.casos.filter(c => c.etapa==='avaliacao').sort((a,b) => String(a.recebido).localeCompare(String(b.recebido)));
+function statusCampoHtml(){
+  const L = pendLer().filter(p => p.email===DB.email), on = navigator.onLine!==false;
+  return `<span class="pill ${on?'p-ok':'p-avaliacao'}">${on?'Com internet':'Sem internet'}</span>${L.length?`<div class="campo-pend">${L.length} registro${L.length>1?'s':''} guardado${L.length>1?'s':''} no celular${on?(ENVIANDO?' · enviando…':''):' · envia quando houver internet'}</div>`:''}${ERRO_ENVIO&&L.length?`<div class="campo-erro">Não foi possível enviar: ${esc(ERRO_ENVIO)}. Tentando de novo.</div>`:''}`;
+}
+function atualizarStatusCampo(){ const el = $('#campoStatus'); if (el) el.innerHTML = statusCampoHtml(); }
+function vCampo(){
+  const c = S.campoCaso && DB.casos.find(x => x.id===S.campoCaso);
+  if (c) return vCampoRegistro(c);
+  const pend = pendLer(), q = norm(S.campoBusca||'');
+  const L = casosCampo().filter(c => !q || norm([...nomesCaso(c), c.bairro, c.endereco, c.id].join(' ')).includes(q));
+  return `<div class="campo">
+    <div class="campo-top"><div><h1>Avaliação social</h1><div class="muted">${casosCampo().length} casos na fila</div></div><div id="campoStatus" class="campo-status">${statusCampoHtml()}</div></div>
+    <input id="campoBusca" type="search" placeholder="Buscar nome, bairro ou nº do caso" value="${esc(S.campoBusca||'')}">
+    <div class="campo-lista">${L.map(c => { const np = pend.filter(p => p.caso===c.id).length;
+      return `<button type="button" class="campo-card" data-campo="${c.id}"><b>${esc(nomeCaso(c))}</b><span>${esc([c.endereco, c.bairro].filter(Boolean).join(' · ') || 'Sem endereço')}</span><span class="muted">Na fila há ${dias(c.recebido)} dias · ${c.registros.length} registro${c.registros.length===1?'':'s'}${np?` · <b class="pend">${np} a enviar</b>`:''}</span></button>`; }).join('') || '<div class="empty">Nenhum caso na fila da avaliação.</div>'}</div>
+    <button type="button" class="btn campo-link" data-completo>Abrir a versão completa</button>
+  </div>`;
+}
+function vCampoRegistro(c){
+  const tipos = (DB.listas.tipos_registro||[]).length ? DB.listas.tipos_registro : ['VD','Tentativa de VD','Atendimento','Contato telefônico / WhatsApp'];
+  if (!tipos.includes(S.campoTipo)) S.campoTipo = tipos.find(t => /^VD$/i.test(t)) || tipos[0];
+  const onde = [c.endereco, c.bairro].filter(Boolean).join(' · ');
+  return `<div class="campo">
+    <div class="campo-top"><button type="button" class="btn small" data-campovolta>← Fila</button><div id="campoStatus" class="campo-status">${statusCampoHtml()}</div></div>
+    <div><h1>${esc(nomeCaso(c))}</h1><div class="campo-info">
+      ${onde?`<div>${esc(onde)}</div>`:''}${c.contato?`<a href="tel:${soDig(c.contato)}">Ligar: ${esc(c.contato)}</a>`:''}${c.responsavel?`<div class="muted">Responsável: ${esc(c.responsavel)}</div>`:''}
+      ${c.descricao?`<details><summary>Descrição do encaminhamento</summary><p style="margin:6px 0 0">${esc(c.descricao)}</p></details>`:''}</div></div>
+    <form id="fCampo" class="stack">
+      <div class="campo-tipos">${tipos.map(t => `<button type="button" class="campo-tipo ${t===S.campoTipo?'on':''}" data-ctipo="${esc(t)}">${esc(ROT_TIPO[t]||t)}</button>`).join('')}</div>
+      <label class="field"><span>Data</span><input id="c_data" type="date" value="${iso(new Date())}" max="${iso(new Date())}"></label>
+      <label class="field"><span>O que aconteceu</span><textarea id="c_txt" placeholder="Pode usar o microfone do teclado para ditar">${esc(lsGet('creas:rascunho:'+c.id)||'')}</textarea></label>
+      <button class="btn primary campo-salvar" type="submit">Salvar registro</button>
+    </form>
+    ${c.registros.length?`<div><span class="label">Últimos registros</span><div class="timeline">${[...c.registros].slice(-3).reverse().map(evHtml).join('')}</div></div>`:''}
+  </div>`;
+}
+function bindCampo(m){
+  const b = $('#campoBusca'); if (b) b.oninput = () => { S.campoBusca = b.value; const pos = b.selectionStart; render(); const nb = $('#campoBusca'); nb.focus(); nb.setSelectionRange(pos,pos); };
+  m.querySelectorAll('[data-campo]').forEach(el => el.onclick = () => { S.campoCaso = el.dataset.campo; render(); window.scrollTo(0,0); });
+  const volta = m.querySelector('[data-campovolta]'); if (volta) volta.onclick = () => { S.campoCaso = null; render(); };
+  const comp = m.querySelector('[data-completo]'); if (comp) comp.onclick = () => { lsSet(COMPLETO_KEY, '1'); go('painel'); };
+  m.querySelectorAll('[data-ctipo]').forEach(el => el.onclick = () => { S.campoTipo = el.dataset.ctipo; m.querySelectorAll('[data-ctipo]').forEach(x => x.classList.toggle('on', x===el)); });
+  const f = $('#fCampo'); if (!f) return;
+  const c = DB.casos.find(x => x.id===S.campoCaso), txt = $('#c_txt');
+  txt.oninput = () => lsSet('creas:rascunho:'+c.id, txt.value || null);  // rascunho sobrevive se a aba recarregar
+  f.onsubmit = e => { e.preventDefault(); const t = txt.value.trim(); if (!t){ toast('Escreva o que aconteceu antes de salvar.'); return; }
+    const reg = {id:idUnico(), data:$('#c_data').value || iso(new Date()), tipo:S.campoTipo, texto:t, autor:coord()?'Coordenação':'Avaliação social'};
+    c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
+    pendGravar([...pendLer(), {caso:c.id, email:DB.email, reg}]);
+    lsSet('creas:rascunho:'+c.id, null);
+    S.campoCaso = null; render(); window.scrollTo(0,0);
+    toast(navigator.onLine===false ? 'Guardado no celular. Será enviado quando houver internet.' : 'Registro salvo. Enviando…');
+    enviarPendentes(); };
+}
+/* envia um registro por vez; sem internet ou com erro, espera e tenta de novo */
+function enviarPendentes(){
+  if (ENVIANDO || !DB.email) return;
+  const p = pendLer().find(x => x.email===DB.email);
+  if (!p || navigator.onLine===false){ atualizarStatusCampo(); return; }
+  ENVIANDO = true; atualizarStatusCampo();
+  google.script.run
+    .withSuccessHandler(r => {
+      ENVIANDO = false; ERRO_ENVIO = '';
+      pendGravar(pendLer().filter(x => x.reg.id!==p.reg.id));
+      if (r && r.id){ const locais = pendLer().filter(x => x.caso===r.id).map(x => x.reg), ids = new Set(r.registros.map(x => x.id));
+        r.registros = [...r.registros, ...locais.filter(x => !ids.has(x.id))].sort((a,b) => a.data < b.data ? -1 : 1); substituir(r); }
+      if (podeRepintar()) render(); else atualizarStatusCampo();
+      enviarPendentes();
+    })
+    .withFailureHandler(e => { ENVIANDO = false; ERRO_ENVIO = e && e.message ? e.message : String(e); atualizarStatusCampo(); })
+    .api_registro(p.caso, p.reg);
+}
+function iniciarCampo(){
+  window.addEventListener('online', () => { ERRO_ENVIO = ''; enviarPendentes(); });
+  window.addEventListener('offline', atualizarStatusCampo);
+  setInterval(enviarPendentes, 30000);
+  // sem armazenamento no aparelho (aba anônima, bloqueio do navegador), fechar a aba perderia o registro
+  window.addEventListener('beforeunload', e => { if (STORAGE_OK || !MEM_PEND.length) return; e.preventDefault(); e.returnValue = ''; return ''; });
+}
+
 /* ================= render + eventos ================= */
 function render(){
   renderNav();
   const m = $('#main');
   if (!coord() && ['novo','acompanhamento','gesuas'].includes(S.view)) S.view='painel';
-  m.innerHTML = S.view==='painel'?vPainel(): S.view==='novo'?vNovo(): S.view==='casos'?vCasos(): S.view==='avaliacao'?vCasos('avaliacao'): S.view==='acompanhamento'?vCasos('acompanhamento'): S.view==='caso'?vCaso(): S.view==='gesuas'?vGesuas(): vInd();
+  document.body.classList.toggle('modo-campo', S.view==='campo');
+  m.innerHTML = S.view==='campo'?vCampo(): S.view==='painel'?vPainel(): S.view==='novo'?vNovo(): S.view==='casos'?vCasos(): S.view==='avaliacao'?vCasos('avaliacao'): S.view==='acompanhamento'?vCasos('acompanhamento'): S.view==='caso'?vCaso(): S.view==='gesuas'?vGesuas(): vInd();
+  if (S.view==='campo') return bindCampo(m);
   bind();
 }
 function bind(){
@@ -1244,16 +1342,19 @@ function iniciarTema(){
 iniciarTema();
 iniciarFila();
 iniciarCopiar();
+iniciarCampo();
 function iniciar(){
   google.script.run
     .withSuccessHandler(r => {
       DB = r; DB.atend = atendObj(r.atend); const h = D(r.hoje); if (h) HOJE = h;
       $('#carregando').remove(); $('#app').hidden = false;
       $('#whoami').innerHTML = `<b>${coord()?'Coordenação':'Avaliação social'}</b>${esc(r.email)}`;
-      render();
+      if (querCampo()) S.view = 'campo';
+      render(); enviarPendentes();
     })
     .withFailureHandler(e => {
-      $('#carregando').innerHTML = `<div class="erro-total panel"><h2>Não foi possível abrir o sistema</h2><p>${esc(e && e.message ? e.message : e)}</p></div>`;
+      const n = pendLer().length;
+      $('#carregando').innerHTML = `<div class="erro-total panel"><h2>Não foi possível abrir o sistema</h2><p>${esc(e && e.message ? e.message : e)}</p>${n?`<p><b>${n} registro${n>1?'s':''} de campo continua${n>1?'m':''} guardado${n>1?'s':''} neste celular</b> e ser${n>1?'ão':'á'} enviado${n>1?'s':''} quando o sistema abrir com internet.</p>`:''}</div>`;
     })
     .api_iniciar();
 }
