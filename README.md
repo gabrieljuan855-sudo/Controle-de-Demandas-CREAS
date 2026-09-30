@@ -22,14 +22,26 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 - **Repasse.** A coordenação escolhe a técnica e a complexidade. As discussões de caso ficam registradas por data.
 - **Conferência com o GESUAS.** Você importa o PDF do relatório "Famílias Acompanhadas por Técnico". O sistema aponta, por técnica:
   - famílias repassadas e ainda não cadastradas no GESUAS;
-  - famílias que no GESUAS estão com outra técnica;
-  - famílias com PAF em branco.
+  - famílias com PAF em branco;
+  - famílias que estão no GESUAS sem caso no sistema (incluídas direto pelas técnicas), com os botões **"Vincular a um caso"** e **"Criar caso"**.
 
-  Quando o nome não bate, mas há família com o mesmo sobrenome (da mesma técnica, ou com dois sobrenomes em comum), o caso aparece como **a conferir**. A coordenação confirma ("É esta família") ou recusa ("Não é"). Quando a família foi cadastrada com outro nome, **"Está no GESUAS com outro nome"** abre uma busca: digite parte do nome e a lista do relatório vai filtrando (famílias da mesma técnica aparecem primeiro); um clique vincula o caso àquela família. Se não achar, dá para confirmar sem vincular. A decisão fica salva no caso e pode ser desfeita.
+  O GESUAS é a referência: com a família encontrada lá, a **técnica do caso passa a ser a do GESUAS** (a indicada no repasse fica como histórico). A tela **Acompanhamento** mostra os casos em acompanhamento e também as famílias que estão só no GESUAS.
+
+  Ao importar um relatório novo, as famílias que **saíram do GESUAS** desde o relatório anterior aparecem numa lista marcada e são **desligadas ao salvar** (dá para desmarcar alguma antes). Assim o desligamento não precisa ser registrado à mão.
+
+  Quando o nome não bate, mas há família com o mesmo sobrenome (da mesma técnica, ou com dois sobrenomes em comum), o caso aparece como **a conferir**. A coordenação confirma ("É esta família"), recusa ("Não é") ou recusa todas as sugestões de uma vez ("Nenhuma destas famílias"). Quando a família foi cadastrada com outro nome, **"Está no GESUAS com outro nome"** abre uma busca: digite parte do nome e a lista do relatório vai filtrando (famílias da mesma técnica aparecem primeiro); um clique vincula o caso àquela família. Se não achar, dá para confirmar sem vincular. A decisão fica salva no caso e pode ser desfeita.
 
   Um botão copia a mensagem pronta para cada técnica.
 - **Painel de pendências.** Mostra prazos de ofício, casos aguardando triagem ou repasse, avaliações paradas e pendências do GESUAS.
-- **Indicadores.** Entradas por mês, por remetente e por tipo de violação, e o tempo médio da avaliação.
+- **Indicadores.** Só usam o que já é registrado no trabalho do dia a dia e no relatório do GESUAS, sem campos extras. Com filtro de período (últimos 12 meses, ano atual, ano anterior, tudo):
+  - encaminhamentos por mês, comparando com o mesmo mês do ano anterior;
+  - caminho dos encaminhamentos: recebidos, avaliados, indicados para acompanhamento, em acompanhamento no GESUAS;
+  - tempo (mediana) de cada etapa: recebimento até a conclusão da avaliação, conclusão até o repasse, repasse até a inclusão no GESUAS;
+  - desfecho das avaliações e, por remetente, quanto se confirma como acompanhamento ou não se confirma;
+  - violações por grupo e situações mais frequentes;
+  - registros de atendimento por tipo, registros por avaliação e avaliações com visita domiciliar;
+  - carga por técnica (famílias no GESUAS ponderadas pela complexidade), PAF preenchido e famílias aguardando inclusão;
+  - encaminhamentos de vítimas ou famílias que já tinham caso anterior.
 
 ## Quem acessa
 
