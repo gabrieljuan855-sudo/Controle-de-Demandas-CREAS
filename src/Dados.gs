@@ -13,7 +13,8 @@ var ESQUEMA = {
   Registros: ['id', 'caso_id', 'data', 'tipo', 'texto', 'autor', 'criado_em', 'criado_por'],
   Discussoes: ['id', 'caso_id', 'data', 'texto', 'criado_em', 'criado_por'],
   Historico: ['data_hora', 'usuario', 'caso_id', 'acao'],
-  GESUAS: ['tecnico', 'responsavel', 'inicio', 'servico', 'paf'],
+  GESUAS: ['tecnico', 'responsavel', 'inicio', 'servico', 'paf', 'cpf', 'nis', 'bairro', 'endereco'],
+  Atendimentos: ['chave', 'tecnico', 'responsavel', 'cpf', 'nis', 'bairro', 'data'],
   Listas: ['remetentes', 'tipos_documento', 'tecnicas', 'bairros', 'tipos_registro'],
   Config: ['chave', 'valor', 'observacao']
 };
@@ -34,14 +35,26 @@ function planilhaBase() {
 
 function aba(nome) {
   var sh = planilhaBase().getSheetByName(nome);
+  var cols = ESQUEMA[nome];
+  if (!sh && cols) sh = planilhaBase().insertSheet(nome);  // abas novas do ESQUEMA nascem sozinhas
   if (!sh) throw new Error('Aba "' + nome + '" não encontrada. Rode a função configurar().');
   // colunas novas do ESQUEMA entram sozinhas em planilhas criadas antes delas
-  var cols = ESQUEMA[nome];
   if (cols && sh.getLastColumn() < cols.length) {
+    var antes = sh.getLastColumn();
     if (sh.getMaxColumns() < cols.length) sh.insertColumnsAfter(sh.getMaxColumns(), cols.length - sh.getMaxColumns());
     sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
+    formatarColunas(sh, cols, antes);
   }
   return sh;
+}
+
+/** Texto puro nas colunas que não são data (CPF e NIS não podem perder o zero da frente). */
+function formatarColunas(sh, cols, desde) {
+  for (var j = desde; j < cols.length; j++) {
+    var c = cols[j], r = sh.getRange(2, j + 1, Math.max(sh.getMaxRows() - 1, 1), 1);
+    if (COLUNAS_DATA[c]) r.setNumberFormat('dd/mm/yyyy');
+    else if (c !== 'criado_em' && c !== 'atualizado_em' && c !== 'data_hora') r.setNumberFormat('@');
+  }
 }
 
 /** Lê uma aba inteira como lista de objetos. Cada objeto recebe _linha (número da linha). */

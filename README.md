@@ -20,9 +20,15 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - arquivar.
 - **Impressão da ficha.** O botão "Imprimir ficha", na tela do caso, gera a mesma Ficha de Avaliação Social em papel — identificação, endereço, descrição, checklist de diagnóstico (com o que já foi marcado) e os registros de atendimento — pronta para entregar à técnica ou anexar ao encaminhamento.
 - **Repasse.** A coordenação escolhe a técnica e a complexidade. As discussões de caso ficam registradas por data.
-- **Conferência com o GESUAS.** Você importa o PDF do relatório "Famílias Acompanhadas por Técnico". O sistema aponta, por técnica:
+- **Conferência com o GESUAS.** Você importa os relatórios do GESUAS exportados em .xls, os três de uma vez:
+  - **Famílias Acompanhadas por Técnico** (também aceito em PDF): quem está em acompanhamento, com técnica, início e PAF;
+  - **Acompanhamentos**: CPF, NIS, endereço e bairro das famílias. Serve para cruzar pelo CPF e completar dados vazios dos casos (nunca sobrescreve o que foi digitado);
+  - **Famílias Atendidas por Técnico**: cada atendimento com data. Na primeira vez, exporte os últimos 12 meses; depois, o mês novo. Atendimentos já importados não se repetem.
+
+  O telefone que vem nos relatórios não é guardado. O sistema aponta, por técnica:
   - famílias repassadas e ainda não cadastradas no GESUAS;
   - famílias com PAF em branco;
+  - famílias sem atendimento registrado no GESUAS há mais de 60 dias (aparece quando houver pelo menos 60 dias de atendimentos importados);
   - famílias que estão no GESUAS sem caso no sistema (incluídas direto pelas técnicas), com os botões **"Vincular a um caso"** e **"Criar caso"**.
 
   O GESUAS é a referência: com a família encontrada lá, a **técnica do caso passa a ser a do GESUAS** (a indicada no repasse fica como histórico). A tela **Acompanhamento** mostra os casos em acompanhamento e também as famílias que estão só no GESUAS.
@@ -41,6 +47,8 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - violações por grupo e situações mais frequentes;
   - registros de atendimento por tipo, registros por avaliação e avaliações com visita domiciliar;
   - carga por técnica (famílias no GESUAS ponderadas pela complexidade), PAF preenchido e famílias aguardando inclusão;
+  - atendimentos registrados no GESUAS por mês, produção por técnica e tempo do repasse até o primeiro atendimento;
+  - encaminhamentos por território e território × violação (bairro do caso ou do GESUAS), e famílias em acompanhamento por território;
   - encaminhamentos de vítimas ou famílias que já tinham caso anterior.
 
 ## Quem acessa
@@ -121,7 +129,8 @@ src/
 | Registros | Evoluções com data (visitas, atendimentos, contatos) |
 | Discussoes | Planos definidos nas discussões de caso |
 | Historico | Registro automático de cada mudança (quem e quando) |
-| GESUAS | Último relatório "Famílias Acompanhadas por Técnico" importado |
+| GESUAS | Último relatório "Famílias Acompanhadas por Técnico" importado, com CPF, NIS, bairro e endereço do relatório Acompanhamentos |
+| Atendimentos | Atendimentos importados do relatório "Famílias Atendidas por Técnico" (técnico, responsável, CPF/NIS, bairro e data) |
 | Listas | Remetentes, tipos de documento, técnicas, bairros e tipos de registro. Edite aqui para mudar as opções do site |
 | Config | E-mails de acesso, numeração dos casos e dados da última importação do GESUAS |
 
