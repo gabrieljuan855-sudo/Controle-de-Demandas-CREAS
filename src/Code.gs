@@ -78,12 +78,14 @@ function listaEmails(s) {
   return String(s || '').toLowerCase().split(/[,;\s]+/).filter(Boolean);
 }
 
+var PAPEL_CACHE = null;
 function papelAtual() {
+  if (PAPEL_CACHE) return PAPEL_CACHE;
   var cfg = lerConfig();
   var e = emailAtual();
   if (!e) throw new Error('Não foi possível identificar sua conta Google. Entre com a conta autorizada e recarregue.');
-  if (listaEmails(cfg.emails_coordenacao).indexOf(e) >= 0) return 'coordenacao';
-  if (listaEmails(cfg.emails_avaliacao).indexOf(e) >= 0) return 'avaliacao';
+  if (listaEmails(cfg.emails_coordenacao).indexOf(e) >= 0) return PAPEL_CACHE = 'coordenacao';
+  if (listaEmails(cfg.emails_avaliacao).indexOf(e) >= 0) return PAPEL_CACHE = 'avaliacao';
   throw new Error('A conta ' + e + ' não tem acesso a este sistema.');
 }
 
@@ -451,11 +453,15 @@ function api_casoDoGesuas(d) {
  *  desligar:     casos que saíram do GESUAS desde o relatório anterior;
  *  completar:    [{id, campos}] dados vazios dos casos preenchidos a partir do GESUAS (nunca sobrescreve);
  *  atendimentos: atendimentos por técnico; só entram os que ainda não estão na planilha.
+ * O navegador manda os atendimentos em lotes (soAtendimentos) para cada execução ficar curta;
+ * a lista completa de atendimentos só volta no último lote (fim).
  */
 function api_importarGesuas(p) {
   exigir(['coordenacao']);
   return comTrava(function () {
-    var agora = new Date(), tocados = {}, novos = 0;
+    var agora = new Date(), tocados = {}, novos = 0, hist = [], mudados = [];
+    var autor = AUTOR[papelAtual()] || emailAtual();
+    var anotar = function (id, acao) { hist.push({ data_hora: agora, usuario: autor, caso_id: id, acao: acao }); };
     if (p.ges) {
       var sh = aba('GESUAS');
       if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ESQUEMA.GESUAS.length).clearContent();
@@ -477,16 +483,18 @@ function api_importarGesuas(p) {
           ['responsavel', 'cpf', 'endereco', 'bairro'].forEach(function (k) {
             if (completar[id][k] && !String(c[k] || '').trim()) { c[k] = completar[id][k]; feitos.push(k); }
           });
-          if (feitos.length) { mudou = true; registrarHistorico(id, 'Dados completados a partir do GESUAS: ' + feitos.join(', ')); }
+          if (feitos.length) { mudou = true; anotar(id, 'Dados completados a partir do GESUAS: ' + feitos.join(', ')); }
         }
         if (desligar.indexOf(id) >= 0 && c.etapa === 'acompanhamento') {
           c.etapa = 'encerrado'; c.desligamento = agora; c.desfecho = 'Desligado: saiu do GESUAS';
           c.desfecho_data = agora; c.desfecho_obs = 'Não consta no relatório ' + ((p.ges && p.ges.origem) || '') + '.';
-          registrarHistorico(id, 'Desligado: não consta mais no relatório do GESUAS');
+          anotar(id, 'Desligado: não consta mais no relatório do GESUAS');
           mudou = true;
         }
-        if (mudou) { c.atualizado_em = agora; atualizarLinha('Casos', c._linha, c); tocados[id] = 1; }
+        if (mudou) { c.atualizado_em = agora; mudados.push(c); tocados[id] = 1; }
       });
+      atualizarLinhas('Casos', mudados);
+      if (hist.length) inserirLinhas('Historico', hist);
     }
     if (p.atendimentos && p.atendimentos.length) {
       var ja = {};
@@ -496,6 +504,7 @@ function api_importarGesuas(p) {
       novos = entram.length;
     }
     var ids = Object.keys(tocados);
-    return { ges: lerGesuas(lerConfig()), casos: ids.length ? montarCasos(ids) : [], atend: lerAtendimentos(), novos: novos };
+    return { ges: p.soAtendimentos ? null : lerGesuas(lerConfig()), casos: ids.length ? montarCasos(ids) : [],
+      atend: p.fim ? lerAtendimentos() : null, novos: novos };
   });
 }
