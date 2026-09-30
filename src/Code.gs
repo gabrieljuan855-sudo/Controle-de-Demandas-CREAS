@@ -154,23 +154,24 @@ function salvarCasoLinha(c) {
 
 /* ---------- API chamada pelo navegador ---------- */
 
+function lerGesuas(cfg) {
+  return {
+    origem: cfg.gesuas_origem || '',
+    periodo: cfg.gesuas_periodo || '',
+    importado_em: cfg.gesuas_importado_em ? String(cfg.gesuas_importado_em) : '',
+    linhas: lerTabela('GESUAS').map(function (g) {
+      var o = paraCliente(g);
+      o.inicio = g.inicio instanceof Date ? Utilities.formatDate(g.inicio, FUSO, 'dd/MM/yyyy') : String(g.inicio);
+      return o;
+    })
+  };
+}
+
 function api_iniciar() {
   var papel = papelAtual();
   var cfg = lerConfig();
   var casos = montarCasos().filter(function (c) { return visivelPara(papel, c); });
-  var ges = null;
-  if (papel === 'coordenacao') {
-    ges = {
-      origem: cfg.gesuas_origem || '',
-      periodo: cfg.gesuas_periodo || '',
-      importado_em: cfg.gesuas_importado_em ? String(cfg.gesuas_importado_em) : '',
-      linhas: lerTabela('GESUAS').map(function (g) {
-        var o = paraCliente(g);
-        o.inicio = g.inicio instanceof Date ? Utilities.formatDate(g.inicio, FUSO, 'dd/MM/yyyy') : String(g.inicio);
-        return o;
-      })
-    };
-  }
+  var ges = papel === 'coordenacao' ? lerGesuas(cfg) : null;
   return { papel: papel, email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, listas: lerListas() };
 }
 
@@ -379,10 +380,11 @@ function api_vinculoGesuas(id, acao, nome) {
       registrarHistorico(id, 'GESUAS: confirmado manualmente que está em acompanhamento');
     } else if (acao === 'rejeitar' && nome) {
       var rej = String(c.gesuas_rejeitados || '').split('|').filter(Boolean);
-      if (rej.indexOf(nome) < 0) rej.push(nome);
+      var novos = nome.split('|').filter(Boolean);
+      novos.forEach(function (n) { if (rej.indexOf(n) < 0) rej.push(n); });
       c.gesuas_rejeitados = rej.join('|');
-      if (c.gesuas_vinculo === nome) c.gesuas_vinculo = '';
-      registrarHistorico(id, 'GESUAS: "' + nome + '" não é esta família');
+      if (novos.indexOf(c.gesuas_vinculo) >= 0) c.gesuas_vinculo = '';
+      registrarHistorico(id, novos.length > 1 ? 'GESUAS: nenhuma das famílias sugeridas é esta' : 'GESUAS: "' + nome + '" não é esta família');
     } else if (acao === 'desfazer') {
       c.gesuas_vinculo = '';
       c.gesuas_rejeitados = '';
@@ -392,8 +394,51 @@ function api_vinculoGesuas(id, acao, nome) {
   });
 }
 
+/**
+ * Família do GESUAS ligada a um caso já existente. Se o caso não estava em
+ * acompanhamento (ex.: desligado no sistema, mas ainda acompanhado no GESUAS), volta a estar.
+ * d: { responsavel (como está no GESUAS), tecnica, inicio (aaaa-mm-dd) }
+ */
+function api_vincularLinhaGesuas(id, d) {
+  exigir(['coordenacao']);
+  return comTrava(function () {
+    var c = buscarCaso(id);
+    c.gesuas_vinculo = d.responsavel;
+    c.gesuas_rejeitados = String(c.gesuas_rejeitados || '').split('|')
+      .filter(function (n) { return n && n !== d.responsavel; }).join('|');
+    if (c.etapa !== 'acompanhamento') {
+      c.etapa = 'acompanhamento'; c.tecnica = d.tecnica || c.tecnica; c.complexidade = c.complexidade || 1;
+      c.inicio_acomp = isoParaData(d.inicio) || new Date(); c.desligamento = '';
+      c.desfecho = 'Passado para acompanhamento'; c.desfecho_data = c.inicio_acomp; c.desfecho_obs = '';
+    }
+    registrarHistorico(id, 'GESUAS: vinculado à família "' + d.responsavel + '"');
+    return salvarCasoLinha(c);
+  });
+}
+
+/** Cria o caso de uma família que as técnicas incluíram direto no GESUAS. */
+function api_casoDoGesuas(d) {
+  exigir(['coordenacao']);
+  return comTrava(function () {
+    var ja = lerTabela('Casos').filter(function (c) { return c.gesuas_vinculo === d.responsavel; })[0];
+    if (ja) return montarCasos([String(ja.id)])[0];
+    var inicio = isoParaData(d.inicio) || new Date();
+    var id = proximoIdCaso(inicio.getFullYear());
+    var agora = new Date();
+    inserirLinhas('Casos', [{
+      id: id, criado_em: agora, criado_por: emailAtual(), responsavel: d.nome, recebido: inicio,
+      descricao: 'Família incluída a partir do relatório do GESUAS.', prioridade: 2,
+      etapa: 'acompanhamento', tecnica: d.tecnica, complexidade: 1, inicio_acomp: inicio,
+      desfecho: 'Passado para acompanhamento', desfecho_data: inicio, origem: 'GESUAS', atualizado_em: agora,
+      gesuas_vinculo: d.responsavel
+    }]);
+    registrarHistorico(id, 'Caso criado a partir do GESUAS (' + d.tecnica + ')');
+    return montarCasos([id])[0];
+  });
+}
+
 /** Grava o relatório "Famílias Acompanhadas por Técnico" lido no navegador. */
-function api_salvarGesuas(meta, linhas) {
+function api_salvarGesuas(meta, linhas, desligar) {
   exigir(['coordenacao']);
   return comTrava(function () {
     var sh = aba('GESUAS');
@@ -404,6 +449,19 @@ function api_salvarGesuas(meta, linhas) {
     gravarConfig('gesuas_origem', meta.origem || '', 'Arquivo do último relatório do GESUAS importado');
     gravarConfig('gesuas_periodo', meta.periodo || '', 'Período do último relatório do GESUAS');
     gravarConfig('gesuas_importado_em', Utilities.formatDate(new Date(), FUSO, 'dd/MM/yyyy HH:mm'), 'Quando o relatório foi importado');
-    return api_iniciar().ges;
+    // famílias que estavam no relatório anterior e não estão neste: desligadas no GESUAS
+    var ids = (desligar || []).map(String);
+    if (ids.length) {
+      var agora = new Date();
+      lerTabela('Casos').forEach(function (c) {
+        if (ids.indexOf(String(c.id)) < 0 || c.etapa !== 'acompanhamento') return;
+        c.etapa = 'encerrado'; c.desligamento = agora; c.desfecho = 'Desligado: saiu do GESUAS';
+        c.desfecho_data = agora; c.desfecho_obs = 'Não consta no relatório ' + (meta.origem || '') + '.';
+        c.atualizado_em = agora;
+        atualizarLinha('Casos', c._linha, c);
+        registrarHistorico(c.id, 'Desligado: não consta mais no relatório do GESUAS');
+      });
+    }
+    return { ges: lerGesuas(lerConfig()), casos: ids.length ? montarCasos(ids) : [] };
   });
 }
