@@ -164,7 +164,14 @@ function go(view, extra={}){ Object.assign(S, {view}, extra); render(); window.s
 
 /* ================= GESUAS: cruzamento ================= */
 const PART = new Set(['DE','DA','DO','DOS','DAS','E']);
-const toks = s => norm(s).replace(/[^A-Z ]/g,' ').split(' ').filter(t => t && !PART.has(t));
+/* cálculos pesados (cruzamento com o GESUAS) valem por "versão" dos dados: render() abre uma
+   versão nova, e dentro dela cada caso é calculado uma vez só, não a cada lista ou contador */
+let VER = 0;
+const novaVersao = () => { VER++; };
+function porVersao(fn){ const m = new WeakMap(); return x => { const e = m.get(x); if (e && e.v===VER) return e.r; const r = fn(x); m.set(x, {v:VER, r}); return r; }; }
+function umaVezPorVersao(fn){ let v = -1, r; return () => { if (v!==VER){ r = fn(); v = VER; } return r; }; }
+const TOKS = new Map();
+const toks = s => { s = String(s||''); let t = TOKS.get(s); if (!t){ if (TOKS.size > 20000) TOKS.clear(); t = norm(s).replace(/[^A-Z ]/g,' ').split(' ').filter(t => t && !PART.has(t)); TOKS.set(s, t); } return t; };
 function mesmoNome(a,b){
   const A=toks(a), B=toks(b);
   if (A.length<2 || B.length<2 || A[0]!==B[0]) return false;
@@ -192,7 +199,8 @@ function atendIdx(){
 const temAtend = () => (DB.atend||[]).length > 0;
 /* dias de histórico de atendimentos importado: abaixo de 60, "sem atendimento há 60 dias" não é confiável */
 const coberturaAtend = () => { const m = atendIdx().min; return m ? dias(m) : 0; };
-function atendimentosDaFamilia(g){
+const atendimentosDaFamilia = porVersao(atendimentosDaFamiliaCalc);
+function atendimentosDaFamiliaCalc(g){
   const I = atendIdx(), cpf = soDig(g.cpf);
   return [...new Set([...(cpf ? I.porCpf.get(cpf)||[] : []), ...(I.porNome.get(norm(g.responsavel))||[])])].sort((a,b) => a.data < b.data ? -1 : 1);
 }
@@ -223,7 +231,8 @@ const nomeTecnica = t => TECNICAS().find(x => primeiroNome(x)===primeiroNome(t))
 function tecnicaRef(c){ const s = statusGes(c); return s && s.tipo==='ok' ? nomeTecnica(s.g.tecnico) : c.tecnica; }
 const dataBr = s => { const m = String(s||'').match(/(\d\d)\/(\d\d)\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
 /* famílias do relatório que não correspondem a nenhum caso em acompanhamento */
-function linhasSoGesuas(){
+const linhasSoGesuas = umaVezPorVersao(linhasSoGesuasCalc);
+function linhasSoGesuasCalc(){
   if (!temGes()) return [];
   const usadas = new Set();
   DB.casos.forEach(c => { const s = statusGes(c); if (s && s.tipo==='ok') usadas.add(s.g); });
@@ -232,10 +241,11 @@ function linhasSoGesuas(){
 /* casos que estavam no relatório atual e não aparecem no novo */
 function casosQueSaem(novas){
   const antes = DB.casos.filter(c => { const s = statusGes(c); return s && s.tipo==='ok'; });
-  const velho = DB.ges; DB.ges = {...velho, linhas: novas};
-  try { return antes.filter(c => { const s = statusGes(c); return !(s && s.tipo==='ok'); }); } finally { DB.ges = velho; }
+  const velho = DB.ges; DB.ges = {...velho, linhas: novas}; novaVersao();
+  try { return antes.filter(c => { const s = statusGes(c); return !(s && s.tipo==='ok'); }); } finally { DB.ges = velho; novaVersao(); }
 }
-function statusGes(c){
+const statusGes = porVersao(statusGesCalc);
+function statusGesCalc(c){
   if (!temGes() || c.etapa !== 'acompanhamento') return null;
   if (c.gesuas_vinculo === '*') return {tipo:'manual'};
   const conf = c.gesuas_vinculo ? DB.ges.linhas.find(x => norm(x.responsavel) === norm(c.gesuas_vinculo)) : null;
@@ -367,7 +377,7 @@ function enriquecer(linhas, fonte){
 }
 /* casos com dado vazio que o GESUAS pode preencher (nunca sobrescreve o que foi digitado) */
 function casosACompletar(linhas){
-  const velho = DB.ges; DB.ges = {...(velho||{}), linhas};
+  const velho = DB.ges; DB.ges = {...(velho||{}), linhas}; novaVersao();
   try {
     return DB.casos.map(c => { const s = statusGes(c); if (!s || s.tipo!=='ok') return null; const g = s.g, campos = {};
       if (!c.responsavel) campos.responsavel = TIT(g.responsavel);
@@ -375,7 +385,7 @@ function casosACompletar(linhas){
       if (!c.endereco && g.endereco) campos.endereco = g.endereco;
       if (!c.bairro && g.bairro) campos.bairro = TIT(g.bairro);
       return Object.keys(campos).length ? {id:c.id, campos} : null; }).filter(Boolean);
-  } finally { DB.ges = velho; }
+  } finally { DB.ges = velho; novaVersao(); }
 }
 async function montarPrevia(files){
   const lidos = []; for (const f of files) lidos.push(await lerRelatorioGesuas(f));
@@ -398,7 +408,8 @@ async function montarPrevia(files){
 
 /* ================= alertas ================= */
 function ultimaMov(c){ return c.registros.length ? c.registros[c.registros.length-1].data : c.recebido; }
-function alertas(){
+const alertas = umaVezPorVersao(alertasCalc);
+function alertasCalc(){
   const a=[];
   DB.casos.forEach(c => {
     if (coord() && c.prazo && !c.prazo_respondido && c.etapa!=='encerrado'){
@@ -1238,6 +1249,7 @@ function iniciarCampo(){
 
 /* ================= render + eventos ================= */
 function render(){
+  novaVersao();
   renderNav();
   const m = $('#main');
   if (!coord() && ['novo','acompanhamento','gesuas'].includes(S.view)) S.view='painel';
