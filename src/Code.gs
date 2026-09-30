@@ -167,12 +167,20 @@ function lerGesuas(cfg) {
   };
 }
 
+/** Atendimentos do GESUAS em formato compacto: [técnico, responsável, cpf, bairro, data]. */
+function lerAtendimentos() {
+  return lerTabela('Atendimentos').map(function (a) {
+    return [String(a.tecnico), String(a.responsavel), String(a.cpf || ''), String(a.bairro || ''), a.data instanceof Date ? dataIso(a.data) : String(a.data || '')];
+  });
+}
+
 function api_iniciar() {
   var papel = papelAtual();
   var cfg = lerConfig();
   var casos = montarCasos().filter(function (c) { return visivelPara(papel, c); });
   var ges = papel === 'coordenacao' ? lerGesuas(cfg) : null;
-  return { papel: papel, email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, listas: lerListas() };
+  var atend = papel === 'coordenacao' ? lerAtendimentos() : [];
+  return { papel: papel, email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, listas: lerListas() };
 }
 
 function api_novoCaso(d) {
@@ -437,31 +445,57 @@ function api_casoDoGesuas(d) {
   });
 }
 
-/** Grava o relatório "Famílias Acompanhadas por Técnico" lido no navegador. */
-function api_salvarGesuas(meta, linhas, desligar) {
+/**
+ * Importação dos relatórios do GESUAS lidos no navegador. Cada parte é opcional:
+ *  ges:          famílias acompanhadas por técnico (substitui a lista anterior), já com CPF/bairro se vierem;
+ *  desligar:     casos que saíram do GESUAS desde o relatório anterior;
+ *  completar:    [{id, campos}] dados vazios dos casos preenchidos a partir do GESUAS (nunca sobrescreve);
+ *  atendimentos: atendimentos por técnico; só entram os que ainda não estão na planilha.
+ */
+function api_importarGesuas(p) {
   exigir(['coordenacao']);
   return comTrava(function () {
-    var sh = aba('GESUAS');
-    if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ESQUEMA.GESUAS.length).clearContent();
-    inserirLinhas('GESUAS', (linhas || []).map(function (g) {
-      return { tecnico: g.tecnico, responsavel: g.responsavel, inicio: String(g.inicio || ''), servico: g.servico, paf: g.paf };
-    }));
-    gravarConfig('gesuas_origem', meta.origem || '', 'Arquivo do último relatório do GESUAS importado');
-    gravarConfig('gesuas_periodo', meta.periodo || '', 'Período do último relatório do GESUAS');
-    gravarConfig('gesuas_importado_em', Utilities.formatDate(new Date(), FUSO, 'dd/MM/yyyy HH:mm'), 'Quando o relatório foi importado');
-    // famílias que estavam no relatório anterior e não estão neste: desligadas no GESUAS
-    var ids = (desligar || []).map(String);
-    if (ids.length) {
-      var agora = new Date();
+    var agora = new Date(), tocados = {}, novos = 0;
+    if (p.ges) {
+      var sh = aba('GESUAS');
+      if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ESQUEMA.GESUAS.length).clearContent();
+      inserirLinhas('GESUAS', (p.ges.linhas || []).map(function (g) {
+        return { tecnico: g.tecnico, responsavel: g.responsavel, inicio: String(g.inicio || ''), servico: g.servico, paf: g.paf,
+          cpf: g.cpf || '', nis: g.nis || '', bairro: g.bairro || '', endereco: g.endereco || '' };
+      }));
+      gravarConfig('gesuas_origem', p.ges.origem || '', 'Arquivo do último relatório do GESUAS importado');
+      gravarConfig('gesuas_periodo', p.ges.periodo || '', 'Período do último relatório do GESUAS');
+      gravarConfig('gesuas_importado_em', Utilities.formatDate(agora, FUSO, 'dd/MM/yyyy HH:mm'), 'Quando o relatório foi importado');
+    }
+    var desligar = (p.desligar || []).map(String), completar = {};
+    (p.completar || []).forEach(function (x) { completar[String(x.id)] = x.campos || {}; });
+    if (desligar.length || Object.keys(completar).length) {
       lerTabela('Casos').forEach(function (c) {
-        if (ids.indexOf(String(c.id)) < 0 || c.etapa !== 'acompanhamento') return;
-        c.etapa = 'encerrado'; c.desligamento = agora; c.desfecho = 'Desligado: saiu do GESUAS';
-        c.desfecho_data = agora; c.desfecho_obs = 'Não consta no relatório ' + (meta.origem || '') + '.';
-        c.atualizado_em = agora;
-        atualizarLinha('Casos', c._linha, c);
-        registrarHistorico(c.id, 'Desligado: não consta mais no relatório do GESUAS');
+        var id = String(c.id), mudou = false;
+        if (completar[id]) {
+          var feitos = [];
+          ['responsavel', 'cpf', 'endereco', 'bairro'].forEach(function (k) {
+            if (completar[id][k] && !String(c[k] || '').trim()) { c[k] = completar[id][k]; feitos.push(k); }
+          });
+          if (feitos.length) { mudou = true; registrarHistorico(id, 'Dados completados a partir do GESUAS: ' + feitos.join(', ')); }
+        }
+        if (desligar.indexOf(id) >= 0 && c.etapa === 'acompanhamento') {
+          c.etapa = 'encerrado'; c.desligamento = agora; c.desfecho = 'Desligado: saiu do GESUAS';
+          c.desfecho_data = agora; c.desfecho_obs = 'Não consta no relatório ' + ((p.ges && p.ges.origem) || '') + '.';
+          registrarHistorico(id, 'Desligado: não consta mais no relatório do GESUAS');
+          mudou = true;
+        }
+        if (mudou) { c.atualizado_em = agora; atualizarLinha('Casos', c._linha, c); tocados[id] = 1; }
       });
     }
-    return { ges: lerGesuas(lerConfig()), casos: ids.length ? montarCasos(ids) : [] };
+    if (p.atendimentos && p.atendimentos.length) {
+      var ja = {};
+      lerTabela('Atendimentos').forEach(function (a) { ja[a.chave] = 1; });
+      var entram = p.atendimentos.filter(function (a) { if (ja[a.chave]) return false; ja[a.chave] = 1; return true; });
+      inserirLinhas('Atendimentos', entram);
+      novos = entram.length;
+    }
+    var ids = Object.keys(tocados);
+    return { ges: lerGesuas(lerConfig()), casos: ids.length ? montarCasos(ids) : [], atend: lerAtendimentos(), novos: novos };
   });
 }
