@@ -405,49 +405,6 @@ function api_vinculoGesuas(id, acao, nome) {
 }
 
 /**
- * Família do GESUAS ligada a um caso já existente. Se o caso não estava em
- * acompanhamento (ex.: desligado no sistema, mas ainda acompanhado no GESUAS), volta a estar.
- * d: { responsavel (como está no GESUAS), tecnica, inicio (aaaa-mm-dd) }
- */
-function api_vincularLinhaGesuas(id, d) {
-  exigir(['coordenacao']);
-  return comTrava(function () {
-    var c = buscarCaso(id);
-    c.gesuas_vinculo = d.responsavel;
-    c.gesuas_rejeitados = String(c.gesuas_rejeitados || '').split('|')
-      .filter(function (n) { return n && n !== d.responsavel; }).join('|');
-    if (c.etapa !== 'acompanhamento') {
-      c.etapa = 'acompanhamento'; c.tecnica = d.tecnica || c.tecnica; c.complexidade = c.complexidade || 1;
-      c.inicio_acomp = isoParaData(d.inicio) || new Date(); c.desligamento = '';
-      c.desfecho = 'Passado para acompanhamento'; c.desfecho_data = c.inicio_acomp; c.desfecho_obs = '';
-    }
-    registrarHistorico(id, 'GESUAS: vinculado à família "' + d.responsavel + '"');
-    return salvarCasoLinha(c);
-  });
-}
-
-/** Cria o caso de uma família que as técnicas incluíram direto no GESUAS. */
-function api_casoDoGesuas(d) {
-  exigir(['coordenacao']);
-  return comTrava(function () {
-    var ja = lerTabela('Casos').filter(function (c) { return c.gesuas_vinculo === d.responsavel; })[0];
-    if (ja) return montarCasos([String(ja.id)])[0];
-    var inicio = isoParaData(d.inicio) || new Date();
-    var id = proximoIdCaso(inicio.getFullYear());
-    var agora = new Date();
-    inserirLinhas('Casos', [{
-      id: id, criado_em: agora, criado_por: emailAtual(), responsavel: d.nome, recebido: inicio,
-      descricao: 'Família incluída a partir do relatório do GESUAS.', prioridade: 2,
-      etapa: 'acompanhamento', tecnica: d.tecnica, complexidade: 1, inicio_acomp: inicio,
-      desfecho: 'Passado para acompanhamento', desfecho_data: inicio, origem: 'GESUAS', atualizado_em: agora,
-      gesuas_vinculo: d.responsavel
-    }]);
-    registrarHistorico(id, 'Caso criado a partir do GESUAS (' + d.tecnica + ')');
-    return montarCasos([id])[0];
-  });
-}
-
-/**
  * Importação dos relatórios do GESUAS lidos no navegador. Cada parte é opcional:
  *  ges:          famílias acompanhadas por técnico (substitui a lista anterior), já com CPF/bairro se vierem;
  *  desligar:     casos que saíram do GESUAS desde o relatório anterior;

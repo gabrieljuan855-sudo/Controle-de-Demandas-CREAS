@@ -34,9 +34,8 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - famílias repassadas e ainda não cadastradas no GESUAS;
   - famílias com PAF em branco;
   - famílias sem atendimento registrado no GESUAS há mais de 60 dias (aparece quando houver pelo menos 60 dias de atendimentos importados);
-  - famílias que estão no GESUAS sem caso no sistema (incluídas direto pelas técnicas), com os botões **"Vincular a um caso"** e **"Criar caso"**.
 
-  O GESUAS é a referência: com a família encontrada lá, a **técnica do caso passa a ser a do GESUAS** (a indicada no repasse fica como histórico). A tela **Acompanhamento** mostra os casos em acompanhamento e também as famílias que estão só no GESUAS.
+  O GESUAS é a referência: com a família encontrada lá, a **técnica do caso passa a ser a do GESUAS** (a indicada no repasse fica como histórico). A tela **Acompanhamento** mostra os casos em acompanhamento e também as famílias que as técnicas incluíram direto no GESUAS, só para consulta: não é preciso cadastrá-las aqui.
 
   Ao importar um relatório novo, as famílias que **saíram do GESUAS** desde o relatório anterior aparecem numa lista marcada e são **desligadas ao salvar** (dá para desmarcar alguma antes). Assim o desligamento não precisa ser registrado à mão.
 
