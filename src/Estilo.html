@@ -188,7 +188,10 @@ td.calor{background:color-mix(in srgb,var(--accent) calc(var(--a,0)*55%),transpa
 .empty{color:var(--ink-3);padding:14px 0}
 
 @media (max-width:900px){
-  .app{grid-template-columns:1fr}
+  .app{grid-template-columns:minmax(0,1fr)}
+  .seg{flex-wrap:wrap}
+  .filters input{max-width:none;width:100%}
+  .charts{grid-template-columns:minmax(0,1fr)}
   .side{position:static;height:auto;flex-direction:column;gap:10px;padding:12px 16px;border-right:0;border-bottom:1px solid var(--line)}
   nav{flex-direction:row;overflow-x:auto;gap:4px}
   nav button{white-space:nowrap}
@@ -196,7 +199,8 @@ td.calor{background:color-mix(in srgb,var(--accent) calc(var(--a,0)*55%),transpa
   .who{margin-top:0;flex-direction:row;align-items:center}
   .proto{display:none}
   .main{padding-inline:16px}
-  .dash,.detail{grid-template-columns:1fr}
+  .dash,.detail{grid-template-columns:minmax(0,1fr)}
+  .dash > *{min-width:0}
   .vit{grid-template-columns:1fr 1fr}
   .hb{grid-template-columns:110px 1fr 30px}
 }
@@ -270,5 +274,17 @@ body.modo-campo .main{padding:16px}
 .tema{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2)}
 .tema select{width:auto;padding:4px 8px}
 details summary{padding:4px 0}
+/* lista de casos: filtros, ordenação e contagens */
+.seg button small{font-family:var(--mono);font-size:11px;opacity:.75;margin-left:2px}
+.filters select.ativo{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.filters.mais{padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--surface-2)}
+th .ord{all:unset;cursor:pointer;border-radius:4px}
+th .ord:hover,th .ord:focus-visible{color:var(--ink);text-decoration:underline}
+th .ord.on{color:var(--accent)}
+.hb-link{background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:4px;width:100%}
+.hb-link:hover span,.hb-link:focus-visible span{color:var(--ink);text-decoration:underline}
+.hb-link:focus-visible{outline:2px solid var(--accent)}
+.outro{padding:6px 0;border-top:1px solid var(--line);cursor:pointer;font-size:13px}
+.outro:hover .mono,.outro:focus-visible .mono{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
