@@ -42,7 +42,15 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   Quando o nome não bate, mas há família com o mesmo sobrenome (da mesma técnica, ou com dois sobrenomes em comum), o caso aparece como **a conferir**. A coordenação confirma ("É esta família"), recusa ("Não é") ou recusa todas as sugestões de uma vez ("Nenhuma destas famílias"). Quando a família foi cadastrada com outro nome, **"Está no GESUAS com outro nome"** abre uma busca: digite parte do nome e a lista do relatório vai filtrando (famílias da mesma técnica aparecem primeiro); um clique vincula o caso àquela família. Se não achar, dá para confirmar sem vincular. A decisão fica salva no caso e pode ser desfeita.
 
   Um botão copia a mensagem pronta para cada técnica.
-- **Painel de pendências.** Mostra prazos de ofício, casos aguardando triagem ou repasse, avaliações paradas e pendências do GESUAS.
+- **Painel e lista de casos.** Há uma só lista de **Casos**, com filtros de etapa (triagem, avaliação, repasse, acompanhamento, encerrados), técnica, pendência e serviço (PAEFI ou MSE). Cada número do painel e da tabela por técnica é um atalho: abre essa lista já filtrada, e é contado por ela, então os números sempre batem. Em **Acompanhamento** aparecem também, só para consulta, as famílias que as técnicas incluíram direto no GESUAS.
+- **Situação no GESUAS de cada caso em acompanhamento**, sempre em relação à data do relatório importado:
+  - **registrado** (com PAF e último atendimento);
+  - **repassado depois do relatório**: ainda não dá para cobrar, aguarda o próximo relatório;
+  - **a conferir**: família com o mesmo sobrenome no relatório;
+  - **não registrado**: repasse até 90 dias antes do relatório e a família não aparece; vira cobrança para a técnica;
+  - **não consta no GESUAS**: em acompanhamento aqui há mais tempo e fora do relatório; provavelmente desligada lá. O caso mostra o botão para desligar, e a importação oferece desligar esses casos de uma vez (desmarcados por padrão).
+- **MSE (LA/PSC)** vem no mesmo relatório do GESUAS, mas fica fora das contas do PAEFI (painel, carga por técnica, territórios); aparece no filtro de serviço.
+- **Atendimentos do GESUAS em qualquer caso**, inclusive na avaliação social: a ficha do caso mostra quantos atendimentos há no GESUAS e o último, pelo CPF ou pelo nome.
 - **Indicadores.** Só usam o que já é registrado no trabalho do dia a dia e no relatório do GESUAS, sem campos extras. Com filtro de período (últimos 12 meses, ano atual, ano anterior, tudo):
   - encaminhamentos por mês, comparando com o mesmo mês do ano anterior;
   - caminho dos encaminhamentos: recebidos, avaliados, indicados para acompanhamento, em acompanhamento no GESUAS;
