@@ -47,6 +47,8 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - **Busca:** procura por palavras em qualquer ordem ("silva maria" acha "Maria da Silva") em nome, nº do caso, CPF (com ou sem pontos), bairro, endereço, remetente, ofício e técnica. Se o caso estiver em outra etapa, o número na aba mostra onde. A tecla **/** leva à busca de qualquer tela, e **Esc** limpa.
   - **Ordenar:** clique no título da coluna (uma vez sobe, outra desce, outra volta ao normal). Na fila de triagem, avaliação e repasse, a última coluna mostra a última movimentação e há quantos dias.
   - **Baixar lista (.csv):** baixa a lista filtrada, na ordem da tela, para abrir no Excel ou no Planilhas.
+  - **Menu lateral:** o número ao lado de **Casos** é o de famílias em acompanhamento. Ao entrar em Casos, abrem logo abaixo os atalhos **Avaliação social** e **Acompanhamentos**, cada um com seu número; Casos continua abrindo a lista geral.
+  - **Famílias que estão só no GESUAS** também abrem, para consulta: técnica, início, serviço, PAF, CPF, NIS, bairro, endereço, a lista de atendimentos importados e os casos deste sistema com o mesmo nome. Abrem pela lista de Acompanhamento e pelas tabelas da Conferência GESUAS.
   - Ao voltar de um caso, a lista abre no mesmo ponto em que estava. O caso mostra também os **outros casos da mesma família** (mesmo nome ou CPF).
 - **Situação no GESUAS de cada caso em acompanhamento**, sempre em relação à data do relatório importado:
   - **registrado** (com PAF e último atendimento);
