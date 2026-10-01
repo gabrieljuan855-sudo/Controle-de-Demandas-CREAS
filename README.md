@@ -43,6 +43,11 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
   Um botão copia a mensagem pronta para cada técnica.
 - **Painel e lista de casos.** Há uma só lista de **Casos**, com filtros de etapa (triagem, avaliação, repasse, acompanhamento, encerrados), técnica, pendência e serviço (PAEFI ou MSE). Cada número do painel e da tabela por técnica é um atalho: abre essa lista já filtrada, e é contado por ela, então os números sempre batem. Em **Acompanhamento** aparecem também, só para consulta, as famílias que as técnicas incluíram direto no GESUAS.
+  - **Filtros:** etapa (cada aba mostra quantos casos tem), técnica, pendência e serviço. Em **Mais filtros**: período de recebimento, remetente, bairro, violação (um item da ficha ou o grupo inteiro) e prioridade. O filtro ativo fica destacado, e **Limpar filtros** volta tudo ao normal.
+  - **Busca:** procura por palavras em qualquer ordem ("silva maria" acha "Maria da Silva") em nome, nº do caso, CPF (com ou sem pontos), bairro, endereço, remetente, ofício e técnica. Se o caso estiver em outra etapa, o número na aba mostra onde. A tecla **/** leva à busca de qualquer tela, e **Esc** limpa.
+  - **Ordenar:** clique no título da coluna (uma vez sobe, outra desce, outra volta ao normal). Na fila de triagem, avaliação e repasse, a última coluna mostra a última movimentação e há quantos dias.
+  - **Baixar lista (.csv):** baixa a lista filtrada, na ordem da tela, para abrir no Excel ou no Planilhas.
+  - Ao voltar de um caso, a lista abre no mesmo ponto em que estava. O caso mostra também os **outros casos da mesma família** (mesmo nome ou CPF).
 - **Situação no GESUAS de cada caso em acompanhamento**, sempre em relação à data do relatório importado:
   - **registrado** (com PAF e último atendimento);
   - **repassado depois do relatório**: ainda não dá para cobrar, aguarda o próximo relatório;
@@ -62,6 +67,8 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - atendimentos registrados no GESUAS por mês, produção por técnica e tempo do repasse até o primeiro atendimento;
   - encaminhamentos por território e território × violação (bairro do caso ou do GESUAS), e famílias em acompanhamento por território;
   - encaminhamentos de vítimas ou famílias que já tinham caso anterior.
+
+  Os números de recebidos, remetentes, violações, situações, territórios e da carga por técnica são clicáveis: abrem a lista de casos com o mesmo filtro e o mesmo período, e a contagem bate.
 
 ## Quem acessa
 
@@ -148,4 +155,4 @@ src/
 
 ## Privacidade
 
-Os dados das famílias ficam só na planilha base, no Google Drive de quem a criou. Este repositório contém apenas o código, sem nenhum dado de pessoas. O PDF do GESUAS é lido no navegador, e só a lista de famílias extraída dele é gravada na planilha.
+Os dados das famílias ficam só na planilha base, no Google Drive de quem a criou. Este repositório contém apenas o código, sem nenhum dado de pessoas. O PDF do GESUAS é lido no navegador, e só a lista de famílias extraída dele é gravada na planilha. A lista baixada em .csv tem dados pessoais: guarde e apague com o mesmo cuidado da planilha.
