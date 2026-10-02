@@ -11,7 +11,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 - **Salvamento em segundo plano.** Ao salvar (registro, diagnóstico, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar". Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
 - **Registros de atendimento** têm três botões:
   - **Copiar** copia o texto para colar no GESUAS.
-  - **Editar** corrige data, tipo e texto. Pode editar quem escreveu o registro ou a coordenação. O registro mostra "editado em", e o histórico do caso guarda a edição.
+  - **Editar** corrige data, tipo e texto. O registro mostra "editado em", e o histórico do caso guarda a edição.
   - **Marcar como lançado no GESUAS** confirma que o registro já foi lançado lá, com a data; dá para desfazer. Vale para os registros feitos a partir de 02/10/2026; a aba de registros avisa quantos deles ainda não foram marcados.
 - **Copiar nomes com um clique.** Um ícone ao lado dos nomes (vítimas, responsável, CPF e famílias do GESUAS) copia o texto para colar na busca do GESUAS, sem abrir o caso. Aparece nas listas, no painel, na tela do caso e na conferência do GESUAS.
 - **Modo de campo no celular.** No celular, o sistema abre só com a fila da avaliação social e o registro de atendimento: escolha o caso, toque no tipo (visita, tentativa de visita, atendimento, telefone), escreva ou dite pelo teclado e salve. Endereço e telefone (com um toque para ligar) aparecem no caso.
@@ -78,12 +78,12 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
 ## Quem acessa
 
-Há dois perfis, definidos por e-mail na aba **Config** da planilha base:
+Todos usam o mesmo sistema, com o mesmo acesso: entrada, triagem, avaliação, repasse, registros (inclusive editar), GESUAS e indicadores. O e-mail de cada pessoa vai na aba **Config** da planilha base, em uma das duas linhas, e a linha só muda a assinatura dos registros e do histórico:
 
-| Perfil | O que vê e faz |
+| Linha da Config | Assinatura |
 |---|---|
-| Coordenação (`emails_coordenacao`) | Tudo: entrada, triagem, avaliação, repasse, GESUAS e indicadores. |
-| Avaliação social (`emails_avaliacao`) | A fila de avaliação e os casos que passaram por ela: ficha, registros e desfecho. |
+| `emails_coordenacao` | Coordenação |
+| `emails_avaliacao` | Avaliação social |
 
 O site roda com a conta Google de quem acessa. Por isso, só entra quem tem acesso à planilha base e está listado na aba Config.
 
