@@ -12,7 +12,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 - **Registros de atendimento** têm três botões:
   - **Copiar** copia o texto para colar no GESUAS.
   - **Editar** corrige data, tipo e texto. Pode editar quem escreveu o registro ou a coordenação. O registro mostra "editado em", e o histórico do caso guarda a edição.
-  - **Marcar como lançado no GESUAS** confirma que o registro já foi lançado lá, com a data; dá para desfazer. A aba de registros avisa quantos ainda não foram marcados.
+  - **Marcar como lançado no GESUAS** confirma que o registro já foi lançado lá, com a data; dá para desfazer. Vale para os registros feitos a partir de 02/10/2026; a aba de registros avisa quantos deles ainda não foram marcados.
 - **Copiar nomes com um clique.** Um ícone ao lado dos nomes (vítimas, responsável, CPF e famílias do GESUAS) copia o texto para colar na busca do GESUAS, sem abrir o caso. Aparece nas listas, no painel, na tela do caso e na conferência do GESUAS.
 - **Modo de campo no celular.** No celular, o sistema abre só com a fila da avaliação social e o registro de atendimento: escolha o caso, toque no tipo (visita, tentativa de visita, atendimento, telefone), escreva ou dite pelo teclado e salve. Endereço e telefone (com um toque para ligar) aparecem no caso.
   - **Sem internet:** o registro fica guardado no celular e é enviado sozinho quando o sinal volta, sem duplicar. O que estava sendo escrito também fica guardado se a aba recarregar.

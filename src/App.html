@@ -994,10 +994,13 @@ function evHtml(r, c){
       <button type="button" class="btn small" data-copiar="${esc(r.texto)}" title="Copiar o texto para colar no GESUAS">Copiar</button>
       ${podeEditarReg(r)?`<button type="button" class="btn small" data-redit="${esc(r.id)}">Editar</button>`:''}
       ${r.gesuas_em ? `<span class="pill p-ok" title="${esc(r.gesuas_por||'')}">✓ Lançado no GESUAS em ${fmtC(r.gesuas_em)}</span><button type="button" class="lnk" data-rges="${esc(r.id)}" data-v="0">desfazer</button>`
-        : `<button type="button" class="btn small" data-rges="${esc(r.id)}" data-v="1">Marcar como lançado no GESUAS</button>`}
+        : cobraGes(r) ? `<button type="button" class="btn small" data-rges="${esc(r.id)}" data-v="1">Marcar como lançado no GESUAS</button>` : ''}
     </div>` : '';
   return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}${r.editado_em?` <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· editado em ${fmtC(r.editado_em)}</span>`:''}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div>${acoes}</div></div>`;
 }
+/* o lançamento no GESUAS só é cobrado dos registros feitos a partir de quando o recurso entrou no sistema */
+const GESUAS_REG_DESDE = '2026-10-02';
+const cobraGes = r => String(r.data||'').slice(0,10) >= GESUAS_REG_DESDE || String(r.criado_em||'').slice(0,10) >= GESUAS_REG_DESDE;
 const podeEditarReg = r => coord() || !r.criado_por || String(r.criado_por).toLowerCase()===String(DB.email||'').toLowerCase();
 function editarRegistro(c, r){
   modal(`<h2>Editar registro</h2>
@@ -1018,7 +1021,7 @@ function tabReg(c){
     <label class="field"><span>Tipo</span><select id="r_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], 'Atendimento')}</select></label></div>
     <label class="field"><span>Evolução</span><textarea id="r_txt" placeholder="O que aconteceu, combinações e próximos passos"></textarea></label>
     <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${coord()?'Coordenação':'Avaliação social'}</span></div></form>
-  ${(() => { const n = c.registros.filter(r => !r.gesuas_em).length; return n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não foi marcado como lançado':`${n} registros ainda não foram marcados como lançados`} no GESUAS.</div>` : ''; })()}
+  ${(() => { const n = c.registros.filter(r => !r.gesuas_em && cobraGes(r)).length; return n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não foi marcado como lançado':`${n} registros ainda não foram marcados como lançados`} no GESUAS.</div>` : ''; })()}
   <div class="timeline">${[...c.registros].reverse().map(r => evHtml(r, c)).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
 }
 function tabAcomp(c){
@@ -1534,7 +1537,7 @@ function bind(){
     salvar(c, 'Diagnóstico', 'api_diagnostico', [c.id, c.diagnostico.slice()], 'diag:'+c.id);
   });
   const fr = $('#fReg'); if (fr) fr.onsubmit = e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; }
-    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:coord()?'Coordenação':'Avaliação social', criado_por:DB.email};
+    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:coord()?'Coordenação':'Avaliação social', criado_por:DB.email, criado_em:iso(new Date())};
     c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
     $('#r_txt').value=''; salvar(c, `Registro: ${reg.tipo}`, 'api_registro', [c.id, reg], null, t); render(); };
   const fd = $('#fDisc'); if (fd) fd.onsubmit = e => { e.preventDefault(); const t=$('#disc_txt').value.trim(); if (!t) return;
