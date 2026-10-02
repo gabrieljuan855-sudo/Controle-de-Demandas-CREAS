@@ -78,15 +78,22 @@ function listaEmails(s) {
   return String(s || '').toLowerCase().split(/[,;\s]+/).filter(Boolean);
 }
 
-var PAPEL_CACHE = null;
+var PAPEL_CACHE = null, AUTOR_CACHE = null;
+/* Um sistema só: coordenação e técnicos da avaliação social têm o mesmo acesso.
+   A lista em que o e-mail está muda só a assinatura dos registros (autorAtual). */
 function papelAtual() {
   if (PAPEL_CACHE) return PAPEL_CACHE;
   var cfg = lerConfig();
   var e = emailAtual();
   if (!e) throw new Error('Não foi possível identificar sua conta Google. Entre com a conta autorizada e recarregue.');
-  if (listaEmails(cfg.emails_coordenacao).indexOf(e) >= 0) return PAPEL_CACHE = 'coordenacao';
-  if (listaEmails(cfg.emails_avaliacao).indexOf(e) >= 0) return PAPEL_CACHE = 'avaliacao';
-  throw new Error('A conta ' + e + ' não tem acesso a este sistema.');
+  if (listaEmails(cfg.emails_coordenacao).indexOf(e) >= 0) { AUTOR_CACHE = 'Coordenação'; return PAPEL_CACHE = 'coordenacao'; }
+  if (listaEmails(cfg.emails_avaliacao).indexOf(e) >= 0) { AUTOR_CACHE = 'Avaliação social'; return PAPEL_CACHE = 'coordenacao'; }
+  throw new Error('A conta ' + e + ' não tem acesso a este sistema. Peça à coordenação para incluir este e-mail na aba Config da planilha.');
+}
+
+function autorAtual() {
+  papelAtual();
+  return AUTOR_CACHE || emailAtual();
 }
 
 function exigir(papeis) {
@@ -94,8 +101,6 @@ function exigir(papeis) {
   if (papeis.indexOf(p) < 0) throw new Error('Esta ação é só da coordenação.');
   return p;
 }
-
-var AUTOR = { coordenacao: 'Coordenação', avaliacao: 'Avaliação social' };
 
 function sim(v) { return v === true || /^(SIM|TRUE|S|1)$/i.test(String(v).trim()); }
 
@@ -106,7 +111,7 @@ function comTrava(fn) {
 }
 
 function registrarHistorico(casoId, acao) {
-  inserirLinhas('Historico', [{ data_hora: new Date(), usuario: AUTOR[papelAtual()] || emailAtual(), caso_id: casoId, acao: acao }]);
+  inserirLinhas('Historico', [{ data_hora: new Date(), usuario: autorAtual(), caso_id: casoId, acao: acao }]);
 }
 
 /* ---------- montagem dos casos ---------- */
@@ -182,7 +187,7 @@ function api_iniciar() {
   var casos = montarCasos().filter(function (c) { return visivelPara(papel, c); });
   var ges = papel === 'coordenacao' ? lerGesuas(cfg) : null;
   var atend = papel === 'coordenacao' ? lerAtendimentos() : [];
-  return { papel: papel, email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, listas: lerListas() };
+  return { papel: papel, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, listas: lerListas() };
 }
 
 function api_novoCaso(d) {
@@ -314,7 +319,7 @@ function api_registro(id, r) {
     if (r.id && jaGravado('Registros', r.id)) return montarCasos([String(id)])[0];
     inserirLinhas('Registros', [{
       id: r.id || proximoIdSimples('R'), caso_id: id, data: isoParaData(r.data) || new Date(), tipo: r.tipo, texto: r.texto.trim(),
-      autor: AUTOR[papel], criado_em: new Date(), criado_por: emailAtual()
+      autor: autorAtual(), criado_em: new Date(), criado_por: emailAtual()
     }]);
     return montarCasos([String(id)])[0];
   });
@@ -456,7 +461,7 @@ function api_importarGesuas(p) {
   exigir(['coordenacao']);
   return comTrava(function () {
     var agora = new Date(), tocados = {}, novos = 0, hist = [], mudados = [];
-    var autor = AUTOR[papelAtual()] || emailAtual();
+    var autor = autorAtual();
     var anotar = function (id, acao) { hist.push({ data_hora: agora, usuario: autor, caso_id: id, acao: acao }); };
     if (p.ges) {
       var sh = aba('GESUAS');

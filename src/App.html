@@ -157,7 +157,8 @@ const DESFECHOS_AVAL = [
 let DB = { papel:'', email:'', casos:[], ges:null, listas:{} };
 const S = { view:'painel', caso:null, tab:'dados', f:{etapa:'ativos', tec:'', pend:'', serv:'paefi', per:'', rem:'', bairro:'', viol:'', prio:'', busca:''}, ordem:'', maisFiltros:false, draft:null, editando:null, gTec:'', gPrevia:null, prev:'painel' };
 const coord = () => DB.papel === 'coordenacao';
-const aval = () => DB.papel === 'avaliacao';
+/* assinatura de quem está usando: todos têm o mesmo acesso, muda só o nome nos registros */
+const autorTxt = () => DB.autor || 'Coordenação';
 const TECNICAS = () => (DB.listas.tecnicas || []);
 function substituir(c){ const i = DB.casos.findIndex(x => x.id === c.id); if (i >= 0) DB.casos[i] = c; else DB.casos.unshift(c); }
 function go(view, extra={}){ Object.assign(S, {view}, extra); render(); window.scrollTo(0,0); }
@@ -1020,7 +1021,7 @@ function tabReg(c){
     <div class="grid2"><label class="field"><span>Data</span><input id="r_data" type="date" value="${iso(HOJE)}"></label>
     <label class="field"><span>Tipo</span><select id="r_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], 'Atendimento')}</select></label></div>
     <label class="field"><span>Evolução</span><textarea id="r_txt" placeholder="O que aconteceu, combinações e próximos passos"></textarea></label>
-    <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${coord()?'Coordenação':'Avaliação social'}</span></div></form>
+    <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${esc(autorTxt())}</span></div></form>
   ${(() => { const n = c.registros.filter(r => !r.gesuas_em && cobraGes(r)).length; return n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não foi marcado como lançado':`${n} registros ainda não foram marcados como lançados`} no GESUAS.</div>` : ''; })()}
   <div class="timeline">${[...c.registros].reverse().map(r => evHtml(r, c)).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
 }
@@ -1448,7 +1449,7 @@ function bindCampo(m){
   const c = DB.casos.find(x => x.id===S.campoCaso), txt = $('#c_txt');
   txt.oninput = () => lsSet('creas:rascunho:'+c.id, txt.value || null);  // rascunho sobrevive se a aba recarregar
   f.onsubmit = e => { e.preventDefault(); const t = txt.value.trim(); if (!t){ toast('Escreva o que aconteceu antes de salvar.'); return; }
-    const reg = {id:idUnico(), data:$('#c_data').value || iso(new Date()), tipo:S.campoTipo, texto:t, autor:coord()?'Coordenação':'Avaliação social'};
+    const reg = {id:idUnico(), data:$('#c_data').value || iso(new Date()), tipo:S.campoTipo, texto:t, autor:autorTxt()};
     c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
     pendGravar([...pendLer(), {caso:c.id, email:DB.email, reg}]);
     lsSet('creas:rascunho:'+c.id, null);
@@ -1537,7 +1538,7 @@ function bind(){
     salvar(c, 'Diagnóstico', 'api_diagnostico', [c.id, c.diagnostico.slice()], 'diag:'+c.id);
   });
   const fr = $('#fReg'); if (fr) fr.onsubmit = e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; }
-    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:coord()?'Coordenação':'Avaliação social', criado_por:DB.email, criado_em:iso(new Date())};
+    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:autorTxt(), criado_por:DB.email, criado_em:iso(new Date())};
     c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
     $('#r_txt').value=''; salvar(c, `Registro: ${reg.tipo}`, 'api_registro', [c.id, reg], null, t); render(); };
   const fd = $('#fDisc'); if (fd) fd.onsubmit = e => { e.preventDefault(); const t=$('#disc_txt').value.trim(); if (!t) return;
@@ -1620,7 +1621,7 @@ function iniciar(){
     .withSuccessHandler(r => {
       DB = r; DB.atend = atendObj(r.atend); const h = D(r.hoje); if (h) HOJE = h;
       $('#carregando').remove(); $('#app').hidden = false;
-      $('#whoami').innerHTML = `<b>${coord()?'Coordenação':'Avaliação social'}</b>${esc(r.email)}`;
+      $('#whoami').innerHTML = `<b>${esc(autorTxt())}</b>${esc(r.email)}`;
       if (!coord()) S.f.etapa = 'avaliacao';
       if (querCampo()) S.view = 'campo';
       render(); enviarPendentes();
