@@ -320,6 +320,45 @@ function api_registro(id, r) {
   });
 }
 
+/** Registro de um caso, conferindo se quem pede pode mexer nele. */
+function registroDoCaso(casoId, regId, soAutor) {
+  var papel = papelAtual();
+  var c = buscarCaso(casoId);
+  if (!c || !visivelPara(papel, c)) throw new Error('Caso ' + casoId + ' não encontrado.');
+  var r = lerTabela('Registros').filter(function (x) { return String(x.id) === String(regId) && String(x.caso_id) === String(casoId); })[0];
+  if (!r) throw new Error('Registro não encontrado. Recarregue a página.');
+  if (soAutor && papel !== 'coordenacao' && String(r.criado_por || '').toLowerCase() !== emailAtual())
+    throw new Error('Só quem escreveu o registro ou a coordenação pode editá-lo.');
+  return r;
+}
+
+function api_editarRegistro(casoId, regId, campos) {
+  return comTrava(function () {
+    var r = registroDoCaso(casoId, regId, true);
+    var texto = String(campos.texto || '').trim();
+    if (!texto) throw new Error('O registro não pode ficar vazio.');
+    r.data = isoParaData(campos.data) || r.data;
+    r.tipo = campos.tipo || r.tipo;
+    r.texto = texto;
+    r.editado_em = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd HH:mm');
+    r.editado_por = emailAtual();
+    atualizarLinha('Registros', r._linha, r);
+    registrarHistorico(casoId, 'Registro de ' + Utilities.formatDate(r.data instanceof Date ? r.data : new Date(), FUSO, 'dd/MM/yyyy') + ' editado');
+    return montarCasos([String(casoId)])[0];
+  });
+}
+
+/** Marca (ou desmarca) que o registro já foi lançado no GESUAS. */
+function api_registroGesuas(casoId, regId, feito) {
+  return comTrava(function () {
+    var r = registroDoCaso(casoId, regId, false);
+    r.gesuas_em = feito ? Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd HH:mm') : '';
+    r.gesuas_por = feito ? emailAtual() : '';
+    atualizarLinha('Registros', r._linha, r);
+    return montarCasos([String(casoId)])[0];
+  });
+}
+
 function api_prazoRespondido(id) {
   exigir(['coordenacao']);
   return comTrava(function () {

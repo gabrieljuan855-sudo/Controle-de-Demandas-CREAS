@@ -505,7 +505,8 @@ function iniciarCopiar(){
     const b = e.target.closest && e.target.closest('[data-copiar]'); if (!b) return;
     e.preventDefault(); e.stopPropagation();
     copiarTexto(b.dataset.copiar).then(ok => {
-      toast(ok ? `Copiado: ${b.dataset.copiar}` : 'Não foi possível copiar. Selecione o nome e use Ctrl+C.');
+      const t = b.dataset.copiar;
+      toast(ok ? (t.length > 60 ? 'Texto copiado. Cole no GESUAS com Ctrl+V.' : `Copiado: ${t}`) : 'Não foi possível copiar. Selecione o texto e use Ctrl+C.');
       if (ok){ b.classList.add('ok'); setTimeout(() => b.classList.remove('ok'), 1200); }
     });
   }, true);
@@ -938,7 +939,7 @@ function tabDados(c){
   return `<div class="stack"><div><span class="label">Descrição breve</span><p style="margin:4px 0 0">${esc(c.descricao)}</p></div>
   <div><span class="label">Diagnóstico marcado</span><div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(DIAG_LABEL[k]||k)}</span>`).join(''):'<span class="muted">Ainda não marcado. Use a aba Ficha de avaliação.</span>'}</div></div>
   ${c.desfecho&&c.etapa!=='encerrado'?`<div><span class="label">Desfecho</span><div>${esc(c.desfecho)} em ${fmt(c.desfecho_data)}</div></div>`:''}
-  <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1]):'<div class="muted">Nenhum registro ainda.</div>'}</div>
+  <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1], c):'<div class="muted">Nenhum registro ainda.</div>'}</div>
   ${coord()&&c.etapa==='acompanhamento'?gesBox(c):''}</div>`;
 }
 function tabAval(c){
@@ -987,14 +988,38 @@ function imprimirFicha(c){
   if (!w){ toast('Permita pop-ups para imprimir a ficha.'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
-function evHtml(r){ return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div></div></div>`; }
+/* com o caso, o registro ganha copiar, editar e "lançado no GESUAS" */
+function evHtml(r, c){
+  const acoes = c && r.id ? `<div class="ev-acoes">
+      <button type="button" class="btn small" data-copiar="${esc(r.texto)}" title="Copiar o texto para colar no GESUAS">Copiar</button>
+      ${podeEditarReg(r)?`<button type="button" class="btn small" data-redit="${esc(r.id)}">Editar</button>`:''}
+      ${r.gesuas_em ? `<span class="pill p-ok" title="${esc(r.gesuas_por||'')}">✓ Lançado no GESUAS em ${fmtC(r.gesuas_em)}</span><button type="button" class="lnk" data-rges="${esc(r.id)}" data-v="0">desfazer</button>`
+        : `<button type="button" class="btn small" data-rges="${esc(r.id)}" data-v="1">Marcar como lançado no GESUAS</button>`}
+    </div>` : '';
+  return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}${r.editado_em?` <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· editado em ${fmtC(r.editado_em)}</span>`:''}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div>${acoes}</div></div>`;
+}
+const podeEditarReg = r => coord() || !r.criado_por || String(r.criado_por).toLowerCase()===String(DB.email||'').toLowerCase();
+function editarRegistro(c, r){
+  modal(`<h2>Editar registro</h2>
+    <div class="grid2"><label class="field"><span>Data</span><input id="er_data" type="date" value="${esc(String(r.data||'').slice(0,10))}"></label>
+    <label class="field"><span>Tipo</span><select id="er_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], r.tipo)}</select></label></div>
+    <label class="field"><span>Evolução</span><textarea id="er_txt" style="min-height:180px">${esc(r.texto)}</textarea></label>
+    ${r.gesuas_em?'<div class="dup">Este registro já foi lançado no GESUAS. Corrija lá também.</div>':''}`,
+    async () => {
+      const texto = $('#er_txt').value.trim(); if (!texto){ toast('O registro não pode ficar vazio.'); throw new Error('vazio'); }
+      const campos = {data:$('#er_data').value || String(r.data).slice(0,10), tipo:$('#er_tipo').value, texto};
+      Object.assign(r, campos, {editado_em: iso(HOJE)}); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
+      salvar(c, 'Registro editado', 'api_editarRegistro', [c.id, r.id, campos], null, texto); return c;
+    }, 'Salvar');
+}
 function tabReg(c){
   return `<form id="fReg" class="stack" style="margin-bottom:14px">
     <div class="grid2"><label class="field"><span>Data</span><input id="r_data" type="date" value="${iso(HOJE)}"></label>
     <label class="field"><span>Tipo</span><select id="r_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], 'Atendimento')}</select></label></div>
     <label class="field"><span>Evolução</span><textarea id="r_txt" placeholder="O que aconteceu, combinações e próximos passos"></textarea></label>
     <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${coord()?'Coordenação':'Avaliação social'}</span></div></form>
-  <div class="timeline">${[...c.registros].reverse().map(evHtml).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
+  ${(() => { const n = c.registros.filter(r => !r.gesuas_em).length; return n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não foi marcado como lançado':`${n} registros ainda não foram marcados como lançados`} no GESUAS.</div>` : ''; })()}
+  <div class="timeline">${[...c.registros].reverse().map(r => evHtml(r, c)).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
 }
 function tabAcomp(c){
   const s = statusGes(c), noGes = !!(s && s.tipo==='ok'), tec = tecnicaRef(c);
@@ -1499,13 +1524,17 @@ function bind(){
   m.querySelectorAll('[data-out]').forEach(el => el.onclick = () => acao(c, el.dataset.out));
   const rb = m.querySelector('[data-reabrir]'); if (rb) rb.onclick = () => modal(`<h2>Reabrir caso</h2><p style="margin:0">O caso volta para "Aguardando triagem".</p>`, async () => {
     Object.assign(c, {etapa:'triagem', desfecho:'', desfecho_data:'', desfecho_obs:'', desligamento:''}); salvar(c, 'Caso reaberto', 'api_reabrir', [c.id]); return c; });
+  m.querySelectorAll('[data-redit]').forEach(el => el.onclick = () => { const r = c.registros.find(x => x.id===el.dataset.redit); if (r) editarRegistro(c, r); });
+  m.querySelectorAll('[data-rges]').forEach(el => el.onclick = () => { const r = c.registros.find(x => x.id===el.dataset.rges); if (!r) return;
+    const feito = el.dataset.v==='1'; r.gesuas_em = feito ? iso(HOJE) : ''; r.gesuas_por = feito ? DB.email : '';
+    salvar(c, feito ? 'Registro lançado no GESUAS' : 'Registro: lançamento no GESUAS desfeito', 'api_registroGesuas', [c.id, r.id, feito], 'rges:'+r.id); render(); });
   const pk = m.querySelector('[data-prazook]'); if (pk) pk.onclick = () => { c.prazo_respondido = true; salvar(c, 'Prazo respondido', 'api_prazoRespondido', [c.id]); render(); };
   m.querySelectorAll('[data-diag]').forEach(el => el.onchange = () => {
     const k=el.dataset.diag; if (el.checked){ if (!c.diagnostico.includes(k)) c.diagnostico.push(k); } else c.diagnostico = c.diagnostico.filter(x => x!==k);
     salvar(c, 'Diagnóstico', 'api_diagnostico', [c.id, c.diagnostico.slice()], 'diag:'+c.id);
   });
   const fr = $('#fReg'); if (fr) fr.onsubmit = e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; }
-    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:coord()?'Coordenação':'Avaliação social'};
+    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:coord()?'Coordenação':'Avaliação social', criado_por:DB.email};
     c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
     $('#r_txt').value=''; salvar(c, `Registro: ${reg.tipo}`, 'api_registro', [c.id, reg], null, t); render(); };
   const fd = $('#fDisc'); if (fd) fd.onsubmit = e => { e.preventDefault(); const t=$('#disc_txt').value.trim(); if (!t) return;
