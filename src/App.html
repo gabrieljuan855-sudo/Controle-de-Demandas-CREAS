@@ -1491,6 +1491,7 @@ function render(){
   if (['avaliacao','acompanhamento'].includes(S.view)){ S.f.etapa = S.view; S.view = 'casos'; }
   if (!coord() && ['novo','gesuas','familia'].includes(S.view)) S.view='painel';
   document.body.classList.toggle('modo-campo', S.view==='campo');
+  document.documentElement.classList.toggle('modo-campo', S.view==='campo');
   m.innerHTML = S.view==='campo'?vCampo(): S.view==='painel'?vPainel(): S.view==='novo'?vNovo(): S.view==='casos'?vCasos(): S.view==='caso'?vCaso(): S.view==='gesuas'?vGesuas(): S.view==='familia'?vFamilia(): vInd();
   if (S.view==='campo') return bindCampo(m);
   bind();
