@@ -970,7 +970,7 @@ function imprimirFicha(c){
   const boxImp = ([k,l]) => `<div class="fi-item">${c.diagnostico.includes(k)?'☑':'☐'} ${esc(l)}</div>`;
   const diagHtml = DIAG.map(g => `<div class="fi-grupo"><div class="fi-titulo">${esc(g.g)}</div>${g.itens?g.itens.map(boxImp).join(''):g.subs.map(s => `<div class="fi-sub">${esc(s.s)}</div>${s.itens.map(boxImp).join('')}`).join('')}</div>`).join('');
   const vitimas = c.pessoas.map(p => esc(p.nome)).join(', ');
-  const registros = c.registros.map(r => `<div class="fi-reg"><b>${fmt(r.data)} — ${esc(r.tipo)} (${esc(r.autor)})</b><div style="white-space:pre-wrap">${esc(r.texto)}</div></div>`).join('');
+  const registros = c.registros.map(r => `<div class="fi-reg"><b>${fmt(r.data)} — ${esc(r.tipo)} (${esc(r.autor)})</b><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias?`<div style="white-space:pre-wrap;margin-top:3px"><b>Pendências:</b> ${esc(r.pendencias)}</div>`:''}</div>`).join('');
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Ficha de Avaliação Social — ${esc(c.id)}</title>
   <style>
     @page{ size:A4; margin:16mm 14mm; }
@@ -1009,28 +1009,32 @@ function imprimirFicha(c){
 /* com o caso, o registro ganha copiar, editar e "lançado no GESUAS" */
 function evHtml(r, c){
   const acoes = c && r.id ? `<div class="ev-acoes">
-      <button type="button" class="btn small" data-copiar="${esc(r.texto)}" title="Copiar o texto para colar no GESUAS">Copiar</button>
+      <button type="button" class="btn small" data-copiar="${esc(r.texto)}" title="Copiar a evolução para colar no GESUAS">Copiar</button>
+      ${r.pendencias?`<button type="button" class="btn small" data-copiar="${esc(r.pendencias)}" title="Copiar as pendências">Copiar pendências</button>`:''}
       ${podeEditarReg(r)?`<button type="button" class="btn small" data-redit="${esc(r.id)}">Editar</button>`:''}
       ${r.gesuas_em ? `<span class="pill p-ok" title="${esc(r.gesuas_por||'')}">✓ Lançado no GESUAS em ${fmtC(r.gesuas_em)}</span><button type="button" class="lnk" data-rges="${esc(r.id)}" data-v="0">desfazer</button>`
         : cobraGes(r) ? `<button type="button" class="btn small" data-rges="${esc(r.id)}" data-v="1">Marcar como lançado no GESUAS</button>` : ''}
     </div>` : '';
-  return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}${r.editado_em?` <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· editado em ${fmtC(r.editado_em)}</span>`:''}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div>${acoes}</div></div>`;
+  return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}${r.editado_em?` <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· editado em ${fmtC(r.editado_em)}</span>`:''}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias?`<div class="ev-pend"><span class="label">Pendências</span><div style="white-space:pre-wrap">${esc(r.pendencias)}</div></div>`:''}${acoes}</div></div>`;
 }
 /* o lançamento no GESUAS só é cobrado dos registros feitos a partir de quando o recurso entrou no sistema */
 const GESUAS_REG_DESDE = '2026-10-02';
 const cobraGes = r => String(r.data||'').slice(0,10) >= GESUAS_REG_DESDE || String(r.criado_em||'').slice(0,10) >= GESUAS_REG_DESDE;
+/* texto guardado na fila para o caso de a gravação falhar: nada do que foi digitado se perde */
+const textoComPend = (t, p) => p ? `${t}\n\nPendências: ${p}` : t;
 const podeEditarReg = r => coord() || !r.criado_por || String(r.criado_por).toLowerCase()===String(DB.email||'').toLowerCase();
 function editarRegistro(c, r){
   modal(`<h2>Editar registro</h2>
     <div class="grid2"><label class="field"><span>Data</span><input id="er_data" type="date" value="${esc(String(r.data||'').slice(0,10))}"></label>
     <label class="field"><span>Tipo</span><select id="er_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], r.tipo)}</select></label></div>
-    <label class="field"><span>Evolução</span><textarea id="er_txt" style="min-height:180px">${esc(r.texto)}</textarea></label>
+    <label class="field"><span>Evolução</span><textarea id="er_txt" style="min-height:150px">${esc(r.texto)}</textarea></label>
+    <label class="field"><span>Pendências</span><textarea id="er_pend" style="min-height:80px" placeholder="O que ficou pendente (opcional)">${esc(r.pendencias||'')}</textarea></label>
     ${r.gesuas_em?'<div class="dup">Este registro já foi lançado no GESUAS. Corrija lá também.</div>':''}`,
     async () => {
       const texto = $('#er_txt').value.trim(); if (!texto){ toast('O registro não pode ficar vazio.'); throw new Error('vazio'); }
-      const campos = {data:$('#er_data').value || String(r.data).slice(0,10), tipo:$('#er_tipo').value, texto};
+      const campos = {data:$('#er_data').value || String(r.data).slice(0,10), tipo:$('#er_tipo').value, texto, pendencias:$('#er_pend').value.trim()};
       Object.assign(r, campos, {editado_em: iso(HOJE)}); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
-      salvar(c, 'Registro editado', 'api_editarRegistro', [c.id, r.id, campos], null, texto); return c;
+      salvar(c, 'Registro editado', 'api_editarRegistro', [c.id, r.id, campos], null, textoComPend(texto, campos.pendencias)); return c;
     }, 'Salvar');
 }
 function tabReg(c){
@@ -1038,6 +1042,7 @@ function tabReg(c){
     <div class="grid2"><label class="field"><span>Data</span><input id="r_data" type="date" value="${iso(HOJE)}"></label>
     <label class="field"><span>Tipo</span><select id="r_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], 'Atendimento')}</select></label></div>
     <label class="field"><span>Evolução</span><textarea id="r_txt" placeholder="O que aconteceu, combinações e próximos passos"></textarea></label>
+    <label class="field"><span>Pendências</span><textarea id="r_pend" style="min-height:76px" placeholder="O que ficou pendente: documentos, retornos, providências (opcional)"></textarea></label>
     <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${esc(autorTxt())}</span></div></form>
   ${(() => { const n = c.registros.filter(r => !r.gesuas_em && cobraGes(r)).length; return n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não foi marcado como lançado':`${n} registros ainda não foram marcados como lançados`} no GESUAS.</div>` : ''; })()}
   <div class="timeline">${[...c.registros].reverse().map(r => evHtml(r, c)).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
@@ -1493,6 +1498,7 @@ function vCampoRegistro(c){
       <div class="campo-tipos">${tipos.map(t => `<button type="button" class="campo-tipo ${t===S.campoTipo?'on':''}" data-ctipo="${esc(t)}">${esc(ROT_TIPO[t]||t)}</button>`).join('')}</div>
       <label class="field"><span>Data</span><input id="c_data" type="date" value="${iso(new Date())}" max="${iso(new Date())}"></label>
       <label class="field"><span>O que aconteceu</span><textarea id="c_txt" placeholder="Pode usar o microfone do teclado para ditar">${esc(lsGet('creas:rascunho:'+c.id)||'')}</textarea></label>
+      <label class="field"><span>Pendências</span><textarea id="c_pend" class="campo-pend-txt" placeholder="O que ficou pendente (opcional)">${esc(lsGet('creas:rascunho-pend:'+c.id)||'')}</textarea></label>
       <button class="btn primary campo-salvar" type="submit">Salvar registro</button>
     </form>
     ${c.registros.length?`<div><span class="label">Últimos registros</span><div class="timeline">${[...c.registros].slice(-3).reverse().map(evHtml).join('')}</div></div>`:''}
@@ -1506,12 +1512,14 @@ function bindCampo(m){
   m.querySelectorAll('[data-ctipo]').forEach(el => el.onclick = () => { S.campoTipo = el.dataset.ctipo; m.querySelectorAll('[data-ctipo]').forEach(x => x.classList.toggle('on', x===el)); });
   const f = $('#fCampo'); if (!f) return;
   const c = DB.casos.find(x => x.id===S.campoCaso), txt = $('#c_txt');
+  const pendTxt = $('#c_pend');
   txt.oninput = () => lsSet('creas:rascunho:'+c.id, txt.value || null);  // rascunho sobrevive se a aba recarregar
+  pendTxt.oninput = () => lsSet('creas:rascunho-pend:'+c.id, pendTxt.value || null);
   f.onsubmit = e => { e.preventDefault(); const t = txt.value.trim(); if (!t){ toast('Escreva o que aconteceu antes de salvar.'); return; }
-    const reg = {id:idUnico(), data:$('#c_data').value || iso(new Date()), tipo:S.campoTipo, texto:t, autor:autorTxt()};
+    const reg = {id:idUnico(), data:$('#c_data').value || iso(new Date()), tipo:S.campoTipo, texto:t, pendencias:pendTxt.value.trim(), autor:autorTxt()};
     c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
     pendGravar([...pendLer(), {caso:c.id, email:DB.email, reg}]);
-    lsSet('creas:rascunho:'+c.id, null);
+    lsSet('creas:rascunho:'+c.id, null); lsSet('creas:rascunho-pend:'+c.id, null);
     S.campoCaso = null; render(); window.scrollTo(0,0);
     toast(navigator.onLine===false ? 'Guardado no celular. Será enviado quando houver internet.' : 'Registro salvo. Enviando…');
     enviarPendentes(); };
@@ -1595,9 +1603,10 @@ function bind(){
   const pk = m.querySelector('[data-prazook]'); if (pk) pk.onclick = () => { c.prazo_respondido = true; salvar(c, 'Prazo respondido', 'api_prazoRespondido', [c.id]); render(); };
   const ev = m.querySelector('[data-editviol]'); if (ev) ev.onclick = () => editarViolacao(c);
   const fr = $('#fReg'); if (fr) fr.onsubmit = e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; }
-    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:autorTxt(), criado_por:DB.email, criado_em:iso(new Date())};
+    const pend = $('#r_pend').value.trim();
+    const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, pendencias:pend, autor:autorTxt(), criado_por:DB.email, criado_em:iso(new Date())};
     c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);
-    $('#r_txt').value=''; salvar(c, `Registro: ${reg.tipo}`, 'api_registro', [c.id, reg], null, t); render(); };
+    $('#r_txt').value=''; $('#r_pend').value=''; salvar(c, `Registro: ${reg.tipo}`, 'api_registro', [c.id, reg], null, textoComPend(t, pend)); render(); };
   const fd = $('#fDisc'); if (fd) fd.onsubmit = e => { e.preventDefault(); const t=$('#disc_txt').value.trim(); if (!t) return;
     const d = {id:idUnico(), data:$('#disc_data').value||iso(HOJE), texto:t};
     c.discussoes.push(d); c.discussoes.sort((a,b) => a.data < b.data ? -1 : 1);

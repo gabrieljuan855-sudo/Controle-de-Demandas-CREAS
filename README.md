@@ -9,8 +9,9 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 - **Novo encaminhamento** (coordenação). A vítima é o dado principal e obrigatório; o responsável familiar é opcional. Remetente, documento e prazo vêm de listas. O sistema avisa quando a vítima ou a família já tem registro.
 - **Vítima como nome do caso.** Listas, painel e ficha mostram o nome da vítima. A conferência com o GESUAS continua cruzando pelo responsável familiar e pelas demais pessoas do caso.
 - **Salvamento em segundo plano.** Ao salvar (registro, violações, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar". Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
+- **Pendências no registro.** Além da evolução, o registro tem um quadro **Pendências** logo abaixo (documentos a buscar, retornos, providências). Fica opcional e é gravado junto com a evolução, no formulário completo e no modo de campo, inclusive sem internet. Aparece destacado no registro, na ficha impressa e pode ser corrigido em Editar.
 - **Registros de atendimento** têm três botões:
-  - **Copiar** copia o texto para colar no GESUAS.
+  - **Copiar** copia a evolução para colar no GESUAS; quando o registro tem pendências, **Copiar pendências** copia só elas.
   - **Editar** corrige data, tipo e texto. O registro mostra "editado em", e o histórico do caso guarda a edição.
   - **Marcar como lançado no GESUAS** confirma que o registro já foi lançado lá, com a data; dá para desfazer. Vale para os registros feitos a partir de 02/10/2026; a aba de registros avisa quantos deles ainda não foram marcados.
 - **Copiar nomes com um clique.** Um ícone ao lado dos nomes (vítimas, responsável, CPF e famílias do GESUAS) copia o texto para colar na busca do GESUAS, sem abrir o caso. Aparece nas listas, no painel, na tela do caso e na conferência do GESUAS.
@@ -152,7 +153,7 @@ src/
 |---|---|
 | Casos | Um caso por linha: identificação, origem, prazo, etapa, diagnóstico, desfecho, técnica, complexidade |
 | Pessoas | Pessoas da família e possíveis vítimas de cada caso |
-| Registros | Evoluções com data (visitas, atendimentos, contatos), quem editou e quando foi lançado no GESUAS |
+| Registros | Evoluções com data (visitas, atendimentos, contatos), pendências, quem editou e quando foi lançado no GESUAS |
 | Discussoes | Planos definidos nas discussões de caso |
 | Historico | Registro automático de cada mudança (quem e quando) |
 | GESUAS | Último relatório "Famílias Acompanhadas por Técnico" importado, com CPF, NIS, bairro e endereço do relatório Acompanhamentos |
