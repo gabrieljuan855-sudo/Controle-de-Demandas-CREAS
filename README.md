@@ -29,7 +29,10 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - outro serviço;
   - arquivar.
 - **Impressão da ficha.** O botão "Imprimir ficha", na tela do caso, gera a mesma Ficha de Avaliação Social em papel — identificação, endereço, descrição, checklist de violações (com o que já foi marcado) e os registros de atendimento — pronta para entregar à técnica ou anexar ao encaminhamento.
-- **Repasse.** A coordenação escolhe a técnica e a complexidade; a violação e a prioridade seguem como o técnico da avaliação indicou. Em "Dados do caso", o botão **Editar violações e prioridade** corrige as duas depois, sem mudar a etapa. A prioridade não é mais preenchida no novo encaminhamento: quem avalia a define. As discussões de caso ficam registradas por data.
+- **Prioridade (1 urgente, 2 alta, 3 regular).** Entra em dois momentos:
+  - no **cadastro do encaminhamento** (padrão 2, editável em Editar dados): serve para a fila da avaliação. As filas de triagem, avaliação e repasse aparecem por prioridade e, dentro dela, pelo caso mais antigo, e o mesmo vale para a fila do celular, que mostra o selo P1, P2 ou P3 no cartão. O painel mostra o cartão **Urgentes (prioridade 1) em avaliação**. Clicar no título de uma coluna volta a ordenar como você quiser;
+  - ao **indicar acompanhamento**: quem avaliou vê a prioridade de hoje e confirma ou altera. O valor final é o do acompanhamento.
+- **Repasse.** A coordenação escolhe a técnica e a complexidade; a violação e a prioridade seguem como o técnico da avaliação indicou. Em "Dados do caso", o botão **Editar violações e prioridade** corrige as duas depois, sem mudar a etapa. As discussões de caso ficam registradas por data.
 - **Conferência com o GESUAS.** Você importa os relatórios do GESUAS exportados em .xls, os três de uma vez:
   - **Famílias Acompanhadas por Técnico** (também aceito em PDF): quem está em acompanhamento, com técnica, início e PAF;
   - **Acompanhamentos**: CPF, NIS, endereço e bairro das famílias. Serve para cruzar pelo CPF e completar dados vazios dos casos (nunca sobrescreve o que foi digitado);
