@@ -207,6 +207,8 @@ function api_novoCaso(d) {
   exigir(['coordenacao']);
   return comTrava(function () {
     exigirVitima(d.pessoas);
+    // direto para acompanhamento não passa pela avaliação: a violação vivenciada é marcada aqui
+    var violacoes = d.destino === 'acompanhamento' ? exigirViolacoes(d.diagnostico) : [];
     var receb = isoParaData(d.recebido) || new Date();
     var id = proximoIdCaso(receb.getFullYear());
     var agora = new Date();
@@ -220,6 +222,7 @@ function api_novoCaso(d) {
     if (d.destino === 'avaliacao') { caso.etapa = 'avaliacao'; caso.passou_avaliacao = 'SIM'; }
     if (d.destino === 'acompanhamento') {
       caso.etapa = 'acompanhamento'; caso.tecnica = d.tecnica; caso.complexidade = Number(d.complexidade) || 1;
+      caso.diagnostico = violacoes.join(',');
       caso.inicio_acomp = agora; caso.desfecho = 'Passado para acompanhamento'; caso.desfecho_data = agora;
     }
     inserirLinhas('Casos', [caso]);
@@ -263,7 +266,7 @@ function api_editarCaso(id, campos, pessoas) {
 }
 
 /** Coordenação decide o destino de um caso em triagem ou aguardando repasse. */
-function api_encaminhar(id, destino, tecnica, complexidade) {
+function api_encaminhar(id, destino, tecnica, complexidade, codigos, prioridade) {
   exigir(['coordenacao']);
   return comTrava(function () {
     var c = buscarCaso(id);
@@ -272,6 +275,9 @@ function api_encaminhar(id, destino, tecnica, complexidade) {
       registrarHistorico(id, 'Enviado para avaliação social');
     } else if (destino === 'acompanhamento') {
       if (!tecnica) throw new Error('Escolha a técnica de referência.');
+      // sem violação marcada (caso que não passou pela avaliação), ela vem junto com o repasse
+      if (codigos && codigos.length) { var v = exigirViolacaoEPrioridade(codigos, prioridade); c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade; }
+      else if (!normalizarViolacoes(c.diagnostico).length) throw new Error('Marque ao menos uma violação vivenciada.');
       c.etapa = 'acompanhamento'; c.tecnica = tecnica; c.complexidade = Number(complexidade) || 1;
       c.inicio_acomp = new Date(); c.desfecho = 'Passado para acompanhamento'; c.desfecho_data = new Date();
       registrarHistorico(id, 'Repassado para acompanhamento com ' + tecnica);
@@ -296,9 +302,14 @@ function api_desfecho(id, tipo, obs) {
 }
 
 /** Códigos de violação válidos e prioridade 1 a 3: sem isso a indicação não é aceita. */
-function exigirViolacaoEPrioridade(codigos, prioridade) {
+function exigirViolacoes(codigos) {
   var lista = (codigos || []).map(String).filter(Boolean);
   if (!lista.length) throw new Error('Marque ao menos uma violação vivenciada.');
+  return lista;
+}
+
+function exigirViolacaoEPrioridade(codigos, prioridade) {
+  var lista = exigirViolacoes(codigos);
   var p = Number(prioridade);
   if (p !== 1 && p !== 2 && p !== 3) throw new Error('Escolha a prioridade.');
   return { codigos: lista, prioridade: p };
