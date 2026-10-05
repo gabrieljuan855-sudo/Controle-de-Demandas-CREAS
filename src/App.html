@@ -525,9 +525,9 @@ function iniciarCopiar(){
 function vPainel(){
   const al = alertas();
   const n = e => DB.casos.filter(c => c.etapa===e).length;
-  const conta = (etapa, pend='') => listaCasos({etapa, pend, serv:'paefi'}).length;
+  const conta = (etapa, pend='', extra={}) => listaCasos({etapa, pend, serv:'paefi', ...extra}).length;
   /* cartão que abre a lista de casos já filtrada; o número é contado pela própria lista */
-  const kpi = (rot, etapa, pend='', alerta=false) => { const v = conta(etapa, pend); return `<button class="kpi ${alerta&&v?'alert':''}" ${linkLista({etapa, pend})}><span>${rot}</span><b>${v}</b></button>`; };
+  const kpi = (rot, etapa, pend='', alerta=false, extra={}) => { const v = conta(etapa, pend, extra); return `<button class="kpi ${alerta&&v?'alert':''}" ${linkLista({etapa, pend, ...extra})}><span>${rot}</span><b>${v}</b></button>`; };
   const pd = pendDisponiveis();
   return `
   <div class="top"><div><h1>${coord()?'Painel da coordenação':'Painel da avaliação social'}</h1>
@@ -536,6 +536,7 @@ function vPainel(){
   <div class="kpis">
     ${coord()?kpi('Aguardando triagem','triagem'):''}
     ${kpi('Em avaliação social','avaliacao')}
+    ${kpi('Urgentes (prioridade 1) em avaliação','avaliacao','',true,{prio:'1'})}
     ${kpi('Avaliações paradas há 30+ dias','avaliacao','parada',true)}
     ${coord()?`${kpi('Aguardando repasse à técnica','repasse','',true)}
     ${kpi(temGes()?'Famílias em acompanhamento (PAEFI)':'Em acompanhamento','acompanhamento')}
@@ -630,8 +631,16 @@ const ORDENS = {
   inicio:  it => it.ges ? dataBr(it.ges.inicio) : String(it.inicio_acomp||''),
   cx:      it => it.ges ? '' : String(it.complexidade||''),
   ges:     it => it.ges ? 'ok' : ((statusGes(it)||{}).tipo||''),
+  prio:    it => it.ges || !it.prioridade ? '' : String(it.prioridade),
 };
+/* filas (triagem, avaliação, repasse): prioridade 1, 2, 3, depois sem prioridade; em cada uma, o mais antigo primeiro */
+const ETAPAS_FILA = ['triagem','avaliacao','repasse'];
+function ordenarFila(L){
+  const rank = c => c.ges ? 9 : (c.prioridade || 8);
+  return L.slice().sort((a,b) => rank(a)-rank(b) || String(a.recebido||'').localeCompare(String(b.recebido||'')));
+}
 function ordenar(L, ordem){
+  if (ordem==='fila') return ordenarFila(L);
   const k = String(ordem||'').replace(/^-/,''), fn = ORDENS[k]; if (!fn) return L;
   const dir = ordem.startsWith('-') ? -1 : 1;
   // vazios sempre no fim, nos dois sentidos
@@ -647,15 +656,16 @@ function opcoesLista(){
 }
 let LIM_LISTA = 300;
 function vCasos(){
-  const f = filtrosAtuais(), acomp = f.etapa==='acompanhamento', fila = ['triagem','avaliacao','repasse'].includes(f.etapa);
-  const L = ordenar(listaCasos(f), S.ordem);
+  const f = filtrosAtuais(), acomp = f.etapa==='acompanhamento';
+  const fila = ETAPAS_FILA.includes(f.etapa);
+  const L = ordenar(listaCasos(f), S.ordem || (fila ? 'fila' : ''));
   const segs = [['ativos','Ativos'],['triagem','Triagem'],['avaliacao','Avaliação'],['repasse','Repasse'],['acompanhamento','Acompanhamento'],['encerrado','Encerrados'],['todos','Todos']].filter(s => coord() || !['triagem','repasse'].includes(s[0]));
   const nSeg = k => k===f.etapa ? L.length : listaCasos({...f, etapa:k}).length;
   // textos curtos e do mesmo tamanho: trocar de aba não pode mudar a altura do cabeçalho
   const sub = {ativos:'Casos em andamento neste sistema. Famílias só do GESUAS ficam em Acompanhamento.',
-    triagem:'Encaminhamentos aguardando a decisão de destino.',
-    avaliacao:'Fila da avaliação social: registre visitas, marque o diagnóstico e defina o desfecho.',
-    repasse:'Avaliações que indicaram acompanhamento e aguardam a escolha da técnica.',
+    triagem:'Aguardando decisão de destino, por prioridade e depois pelo mais antigo.',
+    avaliacao:'Fila da avaliação social, por prioridade e depois pelo mais antigo.',
+    repasse:'Aguardando a escolha da técnica, por prioridade e depois pelo mais antigo.',
     acompanhamento:`Casos daqui e famílias incluídas direto no GESUAS, com a técnica de lá.${temGes()?` Relatório de ${fmt(refGes())}.`:''}`,
     encerrado:'Casos encerrados, com o desfecho registrado.'}[f.etapa] || 'Todos os encaminhamentos. Clique no título de uma coluna para ordenar.';
   const tecs = coord() ? tecnicasGes() : [];
@@ -669,7 +679,7 @@ function vCasos(){
     return `<th${on?' aria-sort="'+(on===' ↑'?'ascending':'descending')+'"':''}><button type="button" class="ord${on?' on':''}" data-ord="${k}" title="Ordenar">${l}${on}</button></th>`; };
   const head = acomp
     ? th('id','Nº')+th('nome','Vítima(s) / família')+th('tec','Técnica')+th('inicio','Início')+th('cx','Complexidade')+th('ges','No GESUAS')+'<th>PAF (GESUAS)</th>'
-    : th('id','Nº')+th('nome','Vítima(s)')+th('resp','Responsável familiar')+th('rem','Remetente')+th('recebido','Recebido')+th('prazo','Prazo')+(fila ? th('mov','Última movimentação') : th('etapa','Etapa'));
+    : th('id','Nº')+th('nome','Vítima(s)')+th('prio','Prior.')+th('resp','Responsável familiar')+th('rem','Remetente')+th('recebido','Recebido')+th('prazo','Prazo')+(fila ? th('mov','Última movimentação') : th('etapa','Etapa'));
   const total = L.length, V = L.slice(0, LIM_LISTA);
   const linhaGes = g => `<tr data-fam="${esc(g.responsavel)}" tabindex="0"><td class="muted" style="font-size:12px">GESUAS${ehMSE(g)?' · MSE':''}</td><td><div class="nm">${comCopiaComo(TIT(g.responsavel), g.responsavel)}</div><div class="muted" style="font-size:12px">Responsável no GESUAS${g.bairro?' · '+esc(TIT(g.bairro)):''}${temAtend()?(() => { const u = ultimoAtend(g); return ' · '+(u?'último atendimento '+fmt(u):'sem atendimento importado'); })():''}</div></td><td>${esc(nomeTecnica(g.tecnico))}</td><td class="mono">${esc(g.inicio)}</td><td class="muted">—</td><td><span class="pill p-ok">Registrado</span></td><td><span class="pill ${g.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(g.paf||'Em branco')}</span></td></tr>`;
   const ultimaCol = c => {
@@ -677,7 +687,7 @@ function vCasos(){
     return `<td>${pill(c)}${c.etapa==='acompanhamento'?`<div class="muted" style="font-size:12px">${esc(tecnicaRef(c))}</div>`:c.etapa==='encerrado'&&c.desfecho?`<div class="muted" style="font-size:12px">${esc(c.desfecho)}</div>`:''}</td>`; };
   const rows = V.map(c => c.ges ? linhaGes(c.ges) : acomp
     ? `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${c.responsavel?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(c.responsavel)}</div>`:''}</td><td>${esc(tecnicaRef(c))}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
-    : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${prio(c.prioridade)}</td><td>${c.responsavel?comCopia(c.responsavel):'—'}${bairroDe(c)?`<div class="muted" style="font-size:12px">${esc(bairroDe(c))}</div>`:''}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`).join('');
+    : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div></td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${c.responsavel?comCopia(c.responsavel):'—'}${bairroDe(c)?`<div class="muted" style="font-size:12px">${esc(bairroDe(c))}</div>`:''}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`).join('');
   const sel = (id, rot, vazio, ops, atual) => `<select id="${id}" aria-label="${rot}" class="${atual?'ativo':''}"><option value="">${vazio}</option>${ops.map(([v,l]) => `<option value="${esc(v)}" ${atual===v?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
   const violOps = DIAG.map(g => { const gr = g.g.replace(/^\d\.\s*/,''); const it = g.itens || g.subs.flatMap(s => s.itens);
     return `<optgroup label="${esc(gr)}"><option value="g:${esc(gr)}" ${f.viol==='g:'+gr?'selected':''}>${esc(gr)}: qualquer item</option>${it.map(([k,l]) => `<option value="${k}" ${f.viol===k?'selected':''}>${esc(l)}</option>`).join('')}</optgroup>`; }).join('');
@@ -705,7 +715,7 @@ function vCasos(){
     ${sel('fPrio','Prioridade','Qualquer prioridade', [['1','1 · Urgente'],['2','2 · Alta'],['3','3 · Regular'],['0','Sem prioridade definida']], f.prio)}
   </div>`:''}
   ${avisoGes?'<p class="muted" style="margin:-4px 0 10px;font-size:12.5px">Com período, remetente, violação ou prioridade, a lista mostra só os casos deste sistema: as famílias que estão só no GESUAS não têm esses dados.</p>':''}
-  <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div>
+  <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="8" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div>
   ${total>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${total}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, total-LIM_LISTA)}</button></div>`:''}`;
 }
 /* baixa a lista filtrada, na ordem da tela; ; e BOM para o Excel em português abrir certo */
@@ -742,10 +752,10 @@ function draft(){
   S.draft = c ? {
     responsavel:c.responsavel, cpf:c.cpf||'', pessoas:(c.pessoas.length?c.pessoas:[{nome:'',nascimento:'',sexo:''}]).map(p=>({...p})),
     endereco:c.endereco||'', bairro:c.bairro||'', contato:c.contato||'', remetente:c.remetente||'', remetente_detalhe:c.remetente_detalhe||'',
-    doc_tipo:c.doc_tipo||'Ofício', doc_num:c.doc_num||'', recebido:c.recebido||'', prazo:c.prazo||'', descricao:c.descricao||''
+    doc_tipo:c.doc_tipo||'Ofício', doc_num:c.doc_num||'', recebido:c.recebido||'', prazo:c.prazo||'', descricao:c.descricao||'', prioridade:c.prioridade ? String(c.prioridade) : ''
   } : {
     responsavel:'', cpf:'', pessoas:[{nome:'',nascimento:'',sexo:''}], endereco:'', bairro:'', contato:'', remetente:'', remetente_detalhe:'',
-    doc_tipo:'Ofício', doc_num:'', recebido:iso(HOJE), prazo:'', descricao:'', destino:'avaliacao', tecnica:TECNICAS()[0]||'', complexidade:'1'
+    doc_tipo:'Ofício', doc_num:'', recebido:iso(HOJE), prazo:'', descricao:'', prioridade:'2', destino:'avaliacao', tecnica:TECNICAS()[0]||'', complexidade:'1'
   };
   return S.draft;
 }
@@ -796,6 +806,7 @@ function vNovo(){
       <label class="field"><span>Número</span><input id="n_num" data-k="doc_num" value="${esc(Dd.doc_num)}" placeholder="Ex.: 145/2026"></label>
       <label class="field"><span>Data de recebimento *</span><input id="n_rec" type="date" data-k="recebido" value="${esc(Dd.recebido)}" required></label>
       <label class="field"><span>Prazo de resposta</span><input id="n_prazo" type="date" data-k="prazo" value="${esc(Dd.prazo)}"><small>Com data, o painel avisa quando estiver perto de vencer.</small></label>
+      <label class="field"><span>Prioridade</span><select id="n_prio" data-k="prioridade">${Dd.prioridade===''?'<option value="" selected>Sem prioridade definida</option>':''}${[1,2,3].map(v => `<option value="${v}" ${Dd.prioridade===String(v)?'selected':''}>${PRIO_ROT[v]}</option>`).join('')}</select><small>Ordena a fila da avaliação. Quem avalia confirma ou muda ao indicar acompanhamento.</small></label>
     </div>
     <label class="field"><span>Descrição breve *</span><textarea id="n_desc" data-k="descricao" required placeholder="O que o encaminhamento relata">${esc(Dd.descricao)}</textarea></label>
   </section>
@@ -815,7 +826,7 @@ function dupHtml(dup){
   if (!dup.length) return '';
   return `<div class="dup"><b>Já existe registro com esse nome.</b> Confira antes de abrir um caso novo:<ul style="margin:6px 0 0;padding-left:18px">${dup.map(c => `<li><a href="#" data-caso="${c.id}" style="color:inherit"><span class="mono">${c.id}</span> · ${esc(nomeCaso(c))}${c.responsavel&&c.responsavel!==nomeCaso(c)?' (resp.: '+esc(c.responsavel)+')':''}</a> · ${ETAPAS[c.etapa]}${c.etapa==='acompanhamento'?' com '+esc(tecnicaRef(c)):''}${c.desfecho?' · '+esc(c.desfecho):''}</li>`).join('')}</ul></div>`;
 }
-const CAMPOS_EDITAVEIS = ['responsavel','cpf','endereco','bairro','contato','remetente','remetente_detalhe','doc_tipo','doc_num','recebido','prazo','descricao'];
+const CAMPOS_EDITAVEIS = ['responsavel','cpf','endereco','bairro','contato','remetente','remetente_detalhe','doc_tipo','doc_num','recebido','prazo','descricao','prioridade'];
 async function salvarNovo(){
   const Dd = draft();
   if (!Dd.pessoas.some(p => String(p.nome||'').trim()) || !Dd.remetente || !Dd.descricao.trim() || !Dd.recebido){ toast('Preencha vítima, remetente, data de recebimento e descrição.'); return; }
@@ -825,6 +836,7 @@ async function salvarNovo(){
       const {pessoas, ...campos} = Dd;
       const c = DB.casos.find(x => x.id===S.editando);
       CAMPOS_EDITAVEIS.forEach(k => { if (k in campos) c[k] = campos[k]; });
+      c.prioridade = Number(campos.prioridade) || 0;
       c.pessoas = pessoas.filter(p => String(p.nome||'').trim()).map(p => ({...p, nome:p.nome.trim()}));
       salvar(c, 'Dados do caso', 'api_editarCaso', [c.id, campos, pessoas]);
       S.draft=null; S.editando=null; go('caso',{caso:c.id,tab:'dados'});
@@ -949,7 +961,7 @@ function violacaoHtml(c){
   const pr = [1,2,3].map(v => `<label class="chk"><input type="radio" name="m_prio" value="${v}" ${Number(c.prioridade)===v?'checked':''}><span>${PRIO_ROT[v]}</span></label>`).join('');
   return `<div class="diag"><div class="label" style="margin-bottom:6px">Violação vivenciada <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· marque ao menos uma</span></div>
     ${DIAG.map(g => `<fieldset><legend>${g.g}</legend>${g.itens?g.itens.map(box).join(''):g.subs.map(s => `<div class="sub">${s.s}</div>${s.itens.map(box).join('')}`).join('')}</fieldset>`).join('')}</div>
-    <fieldset class="diag" style="border:0;padding:0;margin:0"><legend>Prioridade</legend>${pr}</fieldset>`;
+    <fieldset class="diag" style="border:0;padding:0;margin:0"><legend>Prioridade do acompanhamento</legend>${c.prioridade?`<div class="muted" style="font-size:12.5px;margin-bottom:4px">Hoje: ${PRIO_ROT[c.prioridade]}. Confirme ou altere.</div>`:''}${pr}</fieldset>`;
 }
 /* lê o que foi marcado no modal; sem violação ou sem prioridade, avisa e devolve null */
 function lerViolacao(){
@@ -1466,7 +1478,7 @@ function pendLer(){ const v = lsGet(PEND_KEY); if (v===null) return MEM_PEND; tr
 function pendGravar(L){ MEM_PEND = L; lsSet(PEND_KEY, L.length ? JSON.stringify(L) : null); }
 const querCampo = () => CELULAR && lsGet(COMPLETO_KEY)!=='1';
 const ROT_TIPO = {'VD':'Visita domiciliar', 'Tentativa de VD':'Tentativa de visita', 'Contato telefônico / WhatsApp':'Telefone / WhatsApp'};
-const casosCampo = () => DB.casos.filter(c => c.etapa==='avaliacao').sort((a,b) => String(a.recebido).localeCompare(String(b.recebido)));
+const casosCampo = () => ordenarFila(DB.casos.filter(c => c.etapa==='avaliacao'));
 function statusCampoHtml(){
   const L = pendLer().filter(p => p.email===DB.email), on = navigator.onLine!==false;
   return `<span class="pill ${on?'p-ok':'p-avaliacao'}">${on?'Com internet':'Sem internet'}</span>${L.length?`<div class="campo-pend">${L.length} registro${L.length>1?'s':''} guardado${L.length>1?'s':''} no celular${on?(ENVIANDO?' · enviando…':''):' · envia quando houver internet'}</div>`:''}${ERRO_ENVIO&&L.length?`<div class="campo-erro">Não foi possível enviar: ${esc(ERRO_ENVIO)}. Tentando de novo.</div>`:''}`;
@@ -1481,7 +1493,7 @@ function vCampo(){
     <div class="campo-top"><div><h1>Avaliação social</h1><div class="muted">${casosCampo().length} casos na fila</div></div><div id="campoStatus" class="campo-status">${statusCampoHtml()}</div></div>
     <input id="campoBusca" type="search" placeholder="Buscar nome, bairro ou nº do caso" value="${esc(S.campoBusca||'')}">
     <div class="campo-lista">${L.map(c => { const np = pend.filter(p => p.caso===c.id).length;
-      return `<button type="button" class="campo-card" data-campo="${c.id}"><b>${esc(nomeCaso(c))}</b><span>${esc([c.endereco, c.bairro].filter(Boolean).join(' · ') || 'Sem endereço')}</span><span class="muted">Na fila há ${dias(c.recebido)} dias · ${c.registros.length} registro${c.registros.length===1?'':'s'}${np?` · <b class="pend">${np} a enviar</b>`:''}</span></button>`; }).join('') || '<div class="empty">Nenhum caso na fila da avaliação.</div>'}</div>
+      return `<button type="button" class="campo-card" data-campo="${c.id}"><span class="campo-nome"><b>${esc(nomeCaso(c))}</b>${prio(c.prioridade)}</span><span>${esc([c.endereco, c.bairro].filter(Boolean).join(' · ') || 'Sem endereço')}</span><span class="muted">Na fila há ${dias(c.recebido)} dias · ${c.registros.length} registro${c.registros.length===1?'':'s'}${np?` · <b class="pend">${np} a enviar</b>`:''}</span></button>`; }).join('') || '<div class="empty">Nenhum caso na fila da avaliação.</div>'}</div>
     <button type="button" class="btn campo-link" data-completo>Abrir a versão completa</button>
   </div>`;
 }

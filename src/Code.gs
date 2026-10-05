@@ -130,7 +130,7 @@ function montarCasos(filtroIds) {
     .map(function (c) {
       var o = paraCliente(c);
       o.id = String(o.id);
-      o.prioridade = Number(o.prioridade) || 0;  // 0 = ainda sem prioridade (quem avalia define ao indicar acompanhamento)
+      o.prioridade = Number(o.prioridade) || 0;  // 0 = sem prioridade definida (casos criados sem ela)
       o.complexidade = o.complexidade === '' ? '' : Number(o.complexidade);
       o.passou_avaliacao = sim(o.passou_avaliacao);
       o.prazo_respondido = sim(o.prazo_respondido);
@@ -201,7 +201,7 @@ function api_novoCaso(d) {
       id: id, criado_em: agora, criado_por: emailAtual(), responsavel: String(d.responsavel || '').trim(), cpf: d.cpf, endereco: d.endereco,
       bairro: d.bairro, contato: d.contato, remetente: d.remetente, remetente_detalhe: d.remetente_detalhe,
       doc_tipo: d.doc_tipo, doc_num: d.doc_num, recebido: receb, prazo: isoParaData(d.prazo), prazo_respondido: '',
-      descricao: d.descricao, prioridade: '', etapa: 'triagem', passou_avaliacao: '', diagnostico: '',
+      descricao: d.descricao, prioridade: Number(d.prioridade) || 2, etapa: 'triagem', passou_avaliacao: '', diagnostico: '',
       origem: 'sistema', atualizado_em: agora
     };
     if (d.destino === 'avaliacao') { caso.etapa = 'avaliacao'; caso.passou_avaliacao = 'SIM'; }
@@ -224,7 +224,7 @@ function exigirVitima(pessoas) {
 }
 
 var CAMPOS_EDITAVEIS = ['responsavel', 'cpf', 'endereco', 'bairro', 'contato', 'remetente', 'remetente_detalhe',
-  'doc_tipo', 'doc_num', 'recebido', 'prazo', 'descricao'];
+  'doc_tipo', 'doc_num', 'recebido', 'prazo', 'descricao', 'prioridade'];
 
 function api_editarCaso(id, campos, pessoas) {
   var papel = papelAtual();
@@ -233,7 +233,9 @@ function api_editarCaso(id, campos, pessoas) {
     if (!visivelPara(papel, paraCliente(c))) throw new Error('Sem acesso a este caso.');
     if (pessoas) exigirVitima(pessoas);
     CAMPOS_EDITAVEIS.forEach(function (k) {
-      if (k in campos) c[k] = (k === 'recebido' || k === 'prazo') ? isoParaData(campos[k]) : campos[k];
+      if (!(k in campos)) return;
+      if (k === 'prioridade') c[k] = Number(campos[k]) || '';
+      else c[k] = (k === 'recebido' || k === 'prazo') ? isoParaData(campos[k]) : campos[k];
     });
     if (pessoas) {
       var sh = aba('Pessoas');
