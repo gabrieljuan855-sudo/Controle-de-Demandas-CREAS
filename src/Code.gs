@@ -409,6 +409,18 @@ function api_registroGesuas(casoId, regId, feito) {
   });
 }
 
+/** Marca (ou desmarca) que a pendência anotada no registro foi resolvida. */
+function api_pendenciaResolvida(casoId, regId, feito) {
+  return comTrava(function () {
+    var r = registroDoCaso(casoId, regId, false);
+    if (!String(r.pendencias || '').trim()) throw new Error('Este registro não tem pendência.');
+    r.pendencia_ok = feito ? Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd HH:mm') : '';
+    r.pendencia_ok_por = feito ? emailAtual() : '';
+    atualizarLinha('Registros', r._linha, r);
+    return montarCasos([String(casoId)])[0];
+  });
+}
+
 function api_prazoRespondido(id) {
   exigir(['coordenacao']);
   return comTrava(function () {

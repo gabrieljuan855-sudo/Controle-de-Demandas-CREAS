@@ -209,6 +209,11 @@ td.calor{background:color-mix(in srgb,var(--accent) calc(var(--a,0)*55%),transpa
   .main{padding-inline:16px}
   .dash,.detail{grid-template-columns:minmax(0,1fr)}
   .dash > *{min-width:0}
+  /* no celular, um desfecho por linha e compacto: nome e explicação lado a lado */
+  .outcomes{grid-template-columns:minmax(0,1fr);gap:6px}
+  .outcomes button{padding:9px 12px;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px}
+  .outcomes button b{margin-bottom:0}
+  .outcomes button small{font-size:12px}
   .sub-fixo{min-height:4.5em}
   .vit{grid-template-columns:1fr 1fr}
   .hb{grid-template-columns:110px 1fr 30px}
@@ -293,6 +298,11 @@ body.modo-campo .main{padding:16px}
 details summary{padding:4px 0}
 .ev-pend{margin-top:8px;padding:8px 10px;border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:0 6px 6px 0;font-size:13.5px}
 .ev-pend .label{display:block;margin-bottom:2px}
+.ev-pend.ok{border-left-color:var(--ok);background:var(--surface-2);color:var(--ink-2)}
+.pend-tag{font-size:12px;font-weight:600;color:var(--warn);margin-top:2px}
+.pend-box{border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.pend-item{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;font-size:13.5px}
+.tablewrap td:first-child{white-space:nowrap}
 .ev-acoes{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
 .ev-acoes .btn.small{padding:4px 10px}
 .lnk{all:unset;cursor:pointer;font-size:12.5px;color:var(--ink-3);text-decoration:underline}
