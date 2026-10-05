@@ -8,7 +8,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
 - **Novo encaminhamento** (coordenação). A vítima é o dado principal e obrigatório; o responsável familiar é opcional. Remetente, documento e prazo vêm de listas. O sistema avisa quando a vítima ou a família já tem registro.
 - **Vítima como nome do caso.** Listas, painel e ficha mostram o nome da vítima. A conferência com o GESUAS continua cruzando pelo responsável familiar e pelas demais pessoas do caso.
-- **Salvamento em segundo plano.** Ao salvar (registro, diagnóstico, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar". Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
+- **Salvamento em segundo plano.** Ao salvar (registro, violações, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar". Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
 - **Registros de atendimento** têm três botões:
   - **Copiar** copia o texto para colar no GESUAS.
   - **Editar** corrige data, tipo e texto. O registro mostra "editado em", e o histórico do caso guarda a edição.
@@ -20,15 +20,15 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - No iPhone, o Safari pode apagar dados de sites pouco usados; prefira enviar os registros no mesmo dia.
   - "Abrir a versão completa" leva ao sistema inteiro; "Modo de campo", no menu, volta.
 - **Tema claro ou escuro.** No menu lateral, escolha Automático (segue o aparelho), Claro ou Escuro. A escolha fica salva no navegador.
-- **Ficha de avaliação digital.** Tem os mesmos itens do diagnóstico da ficha em papel, além dos registros de atendimento com data. O desfecho é escolhido entre as opções prontas:
-  - indicar acompanhamento;
+- **Avaliação social.** O técnico registra as visitas e atendimentos com data e, ao concluir, escolhe o desfecho entre as opções prontas:
+  - indicar acompanhamento: abre uma janela em que ele marca a **violação vivenciada** (a mesma lista do quadro da ficha em papel) e a **prioridade** (1 urgente, 2 alta, 3 regular), as duas obrigatórias, e pode deixar uma observação. O caso segue para a coordenação escolher a técnica;
   - contrarreferenciar ao CRAS;
   - não confirmado;
   - não localizado;
   - outro serviço;
   - arquivar.
-- **Impressão da ficha.** O botão "Imprimir ficha", na tela do caso, gera a mesma Ficha de Avaliação Social em papel — identificação, endereço, descrição, checklist de diagnóstico (com o que já foi marcado) e os registros de atendimento — pronta para entregar à técnica ou anexar ao encaminhamento.
-- **Repasse.** A coordenação escolhe a técnica e a complexidade. As discussões de caso ficam registradas por data.
+- **Impressão da ficha.** O botão "Imprimir ficha", na tela do caso, gera a mesma Ficha de Avaliação Social em papel — identificação, endereço, descrição, checklist de violações (com o que já foi marcado) e os registros de atendimento — pronta para entregar à técnica ou anexar ao encaminhamento.
+- **Repasse.** A coordenação escolhe a técnica e a complexidade; a violação e a prioridade seguem como o técnico da avaliação indicou. Em "Dados do caso", o botão **Editar violações e prioridade** corrige as duas depois, sem mudar a etapa. A prioridade não é mais preenchida no novo encaminhamento: quem avalia a define. As discussões de caso ficam registradas por data.
 - **Conferência com o GESUAS.** Você importa os relatórios do GESUAS exportados em .xls, os três de uma vez:
   - **Famílias Acompanhadas por Técnico** (também aceito em PDF): quem está em acompanhamento, com técnica, início e PAF;
   - **Acompanhamentos**: CPF, NIS, endereço e bairro das famílias. Serve para cruzar pelo CPF e completar dados vazios dos casos (nunca sobrescreve o que foi digitado);
