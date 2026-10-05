@@ -337,7 +337,7 @@ function api_registro(id, r) {
     if (r.id && jaGravado('Registros', r.id)) return montarCasos([String(id)])[0];
     inserirLinhas('Registros', [{
       id: r.id || proximoIdSimples('R'), caso_id: id, data: isoParaData(r.data) || new Date(), tipo: r.tipo, texto: r.texto.trim(),
-      autor: autorAtual(), criado_em: new Date(), criado_por: emailAtual()
+      pendencias: String(r.pendencias || '').trim(), autor: autorAtual(), criado_em: new Date(), criado_por: emailAtual()
     }]);
     return montarCasos([String(id)])[0];
   });
@@ -363,6 +363,7 @@ function api_editarRegistro(casoId, regId, campos) {
     r.data = isoParaData(campos.data) || r.data;
     r.tipo = campos.tipo || r.tipo;
     r.texto = texto;
+    if ('pendencias' in campos) r.pendencias = String(campos.pendencias || '').trim();
     r.editado_em = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd HH:mm');
     r.editado_por = emailAtual();
     atualizarLinha('Registros', r._linha, r);

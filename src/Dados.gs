@@ -10,7 +10,7 @@ var ESQUEMA = {
     'desfecho', 'desfecho_data', 'desfecho_obs', 'tecnica', 'inicio_acomp', 'complexidade',
     'desligamento', 'origem', 'atualizado_em', 'gesuas_vinculo', 'gesuas_rejeitados'],
   Pessoas: ['caso_id', 'nome', 'nascimento', 'sexo'],
-  Registros: ['id', 'caso_id', 'data', 'tipo', 'texto', 'autor', 'criado_em', 'criado_por', 'editado_em', 'editado_por', 'gesuas_em', 'gesuas_por'],
+  Registros: ['id', 'caso_id', 'data', 'tipo', 'texto', 'autor', 'criado_em', 'criado_por', 'editado_em', 'editado_por', 'gesuas_em', 'gesuas_por', 'pendencias'],
   Discussoes: ['id', 'caso_id', 'data', 'texto', 'criado_em', 'criado_por'],
   Historico: ['data_hora', 'usuario', 'caso_id', 'acao'],
   GESUAS: ['tecnico', 'responsavel', 'inicio', 'servico', 'paf', 'cpf', 'nis', 'bairro', 'endereco'],
