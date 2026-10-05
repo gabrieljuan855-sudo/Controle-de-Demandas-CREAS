@@ -433,21 +433,22 @@ function alertasCalc(){
   DB.casos.forEach(c => {
     if (coord() && c.prazo && !c.prazo_respondido && c.etapa!=='encerrado'){
       const r = -dias(c.prazo);
-      if (r<0) a.push({sev:'crit',c,t:`Prazo de resposta vencido há ${-r} dia${-r>1?'s':''}`,s:`${c.remetente} · ${c.doc_tipo} ${c.doc_num}`});
+      if (r<0) a.push({sev:'crit',c,u:-r,t:`Prazo de resposta vencido há ${-r} dia${-r>1?'s':''}`,s:`${c.remetente} · ${c.doc_tipo} ${c.doc_num}`});
       else if (r<=7) a.push({sev:'warn',c,t:`Prazo de resposta em ${r} dia${r!==1?'s':''} (${fmtC(c.prazo)})`,s:`${c.remetente} · ${c.doc_tipo} ${c.doc_num}`});
     }
     if (coord() && c.etapa==='triagem') a.push({sev:'info',c,t:'Aguardando triagem',s:`Recebido em ${fmt(c.recebido)}`});
     if (coord() && c.etapa==='repasse') a.push({sev:'warn',c,t:'Avaliação indicou acompanhamento: escolher a técnica',s:`Concluída em ${fmt(c.desfecho_data)}`});
-    if (c.etapa==='avaliacao' && dias(ultimaMov(c))>30) a.push({sev:'warn',c,t:`Avaliação sem movimentação há ${dias(ultimaMov(c))} dias`,s:`Recebido em ${fmt(c.recebido)}`});
+    if (c.etapa==='avaliacao' && dias(ultimaMov(c))>30) a.push({sev:'warn',c,u:dias(ultimaMov(c)),t:`Avaliação sem movimentação há ${dias(ultimaMov(c))} dias`,s:`Recebido em ${fmt(c.recebido)}`});
     if (coord() && c.etapa==='acompanhamento'){
       const g = statusGes(c);
       if (g && g.tipo==='possivel') a.push({sev:'info',c,t:'Possível família no GESUAS pelo sobrenome: conferir',s:`Técnica: ${c.tecnica}`});
-      if (g && g.tipo==='ausente') a.push({sev:g.dias>7?'crit':'warn',c,t:`Repassado há ${g.dias} dias e não está no GESUAS`,s:`Técnica: ${c.tecnica}`});
+      if (g && g.tipo==='ausente') a.push({sev:g.dias>7?'crit':'warn',c,u:g.dias,t:`Repassado há ${g.dias} dias e não está no GESUAS`,s:`Técnica: ${c.tecnica}`});
       if (g && g.tipo==='antigo') a.push({sev:'info',c,t:'Em acompanhamento aqui, mas não consta no GESUAS: desligar ou buscar a família',s:`Técnica: ${c.tecnica || '—'}${c.inicio_acomp?' · repasse em '+fmt(c.inicio_acomp):''}`});
       if (g && g.tipo==='ok' && g.paf!=='Preenchido') a.push({sev:'info',c,t:'PAF em branco no GESUAS',s:`Técnica: ${tecnicaRef(c)}`});
     }
   });
-  const ord={crit:0,warn:1,info:2}; return a.sort((x,y) => ord[x.sev]-ord[y.sev]);
+  // mais grave primeiro; dentro da mesma gravidade, o mais atrasado
+  const ord={crit:0,warn:1,info:2}; return a.sort((x,y) => ord[x.sev]-ord[y.sev] || (y.u||0)-(x.u||0));
 }
 
 /* ================= navegação ================= */
@@ -482,6 +483,11 @@ const PRIO_ROT = {1:'1 · Urgente (risco iminente)', 2:'2 · Alta', 3:'3 · Regu
 const prio = p => p ? `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>` : '';
 const pessoasTxt = c => c.pessoas.map(p => p.nome).join(', ') || '—';
 const nomeCaso = c => (c.pessoas[0] && c.pessoas[0].nome) || c.responsavel || '(sem nome)';
+/* responsável só quando é outra pessoa (evita o mesmo nome duas vezes na mesma linha) */
+const respDif = c => c.responsavel && !c.pessoas.some(p => norm(p.nome)===norm(c.responsavel)) ? c.responsavel : '';
+/* pendências anotadas nos registros e ainda não marcadas como resolvidas */
+const pendAbertas = c => c.registros.filter(r => String(r.pendencias||'').trim() && !r.pendencia_ok);
+const pendTag = c => { const n = pendAbertas(c).length; return n ? `<div class="pend-tag">⚑ ${n} pendência${n>1?'s':''} em aberto</div>` : ''; };
 const nomeFamilia = c => c.responsavel || nomeCaso(c);
 /* ícone de copiar ao lado de nomes, para colar na busca do GESUAS */
 const ICONE_COPIAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
@@ -535,6 +541,7 @@ function vPainel(){
     ${coord()?`${kpi('Aguardando repasse à técnica','repasse','',true)}
     ${kpi(temGes()?'Famílias em acompanhamento (PAEFI)':'Em acompanhamento','acompanhamento')}
     ${kpi('Prazos vencidos ou em 7 dias','ativos','prazo',true)}
+    ${kpi('Casos com pendência em aberto','ativos','pendreg')}
     ${pd.includes('nreg')?kpi('Repassados e não registrados no GESUAS','acompanhamento','nreg',true):''}
     ${pd.includes('conferir')&&conta('acompanhamento','conferir')?kpi('A conferir no GESUAS (sobrenome)','acompanhamento','conferir'):''}
     ${pd.includes('antigo')&&conta('acompanhamento','antigo')?kpi('Em acompanhamento aqui e fora do GESUAS','acompanhamento','antigo',true):''}
@@ -542,8 +549,8 @@ function vPainel(){
     ${pd.includes('sematend')?kpi('Sem atendimento há mais de 60 dias','acompanhamento','sematend',true):''}`:''}
   </div>
   <div class="${coord()?'dash':''}">
-    <section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>Pendências</h2><span class="muted">${al.length} itens</span></div>
-      <div class="alist">${al.length ? al.slice(0,80).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${comCopia(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>80?`<div class="empty">Mais ${al.length-80} itens. Use a lista de casos ou a conferência do GESUAS.</div>`:'') : '<div class="empty">Nenhuma pendência.</div>'}</div>
+    <section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>${S.painelTudo?'Todas as pendências':'Mais urgentes'}</h2><span class="muted">${S.painelTudo||al.length<=12?al.length:`12 de ${al.length}`}</span></div>
+      <div class="alist">${al.length ? al.slice(0, S.painelTudo ? 300 : 12).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${comCopia(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>12?`<div style="padding-top:10px"><button type="button" class="btn small" data-paineltudo>${S.painelTudo?'Mostrar só as mais urgentes':`Ver todas (${al.length})`}</button></div>`:'') : '<div class="empty">Nenhuma pendência.</div>'}</div>
     </section>
     ${coord()?`<section class="panel stack">
       <div><h2>Conferência com o GESUAS</h2><div class="muted" style="font-size:12.5px">${temGes()?`${esc(DB.ges.origem)}${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}`:'Nenhum relatório importado ainda.'}</div></div>
@@ -566,6 +573,7 @@ const PENDENCIAS = {
   antigo:   ['Não consta no GESUAS (desligado lá?)', c => (statusGes(c)||{}).tipo==='antigo', 'ges'],
   registrado:['Registrado no GESUAS', c => ['ok','manual'].includes((statusGes(c)||{}).tipo), 'ges', g => true],
   paf:      ['PAF em branco no GESUAS', c => { const x = statusGes(c); return !!x && x.tipo==='ok' && x.paf!=='Preenchido'; }, 'ges', g => g.paf!=='Preenchido'],
+  pendreg:  ['Com pendência em aberto (registros)', c => pendAbertas(c).length > 0],
   sematend: ['Sem atendimento no GESUAS há 60+ dias', c => { const x = statusGes(c); return !!x && x.tipo==='ok' && semAtendimento(x.g); }, 'atend', g => semAtendimento(g)],
 };
 const pendDisponiveis = () => Object.keys(PENDENCIAS).filter(k => { const t = PENDENCIAS[k][2];
@@ -615,7 +623,6 @@ function listaCasos(f){
 const ORDENS = {
   id:      it => it.ges ? '' : it.id,
   nome:    it => norm(it.ges ? it.ges.responsavel : nomeCaso(it)),
-  resp:    it => norm(it.ges ? it.ges.responsavel : it.responsavel),
   rem:     it => it.ges ? '' : norm(remDe(it)),
   recebido:it => it.ges ? '' : String(it.recebido||''),
   prazo:   it => it.ges || !it.prazo || it.prazo_respondido || it.etapa==='encerrado' ? '' : String(it.prazo),
@@ -673,15 +680,15 @@ function vCasos(){
     return `<th${on?' aria-sort="'+(on===' ↑'?'ascending':'descending')+'"':''}><button type="button" class="ord${on?' on':''}" data-ord="${k}" title="Ordenar">${l}${on}</button></th>`; };
   const head = acomp
     ? th('id','Nº')+th('nome','Vítima(s) / família')+th('tec','Técnica')+th('inicio','Início')+th('cx','Complexidade')+th('ges','No GESUAS')+'<th>PAF (GESUAS)</th>'
-    : th('id','Nº')+th('nome','Vítima(s)')+th('prio','Prior.')+th('resp','Responsável familiar')+th('rem','Remetente')+th('recebido','Recebido')+th('prazo','Prazo')+(fila ? th('mov','Última movimentação') : th('etapa','Etapa'));
+    : th('id','Nº')+th('nome','Vítima(s) / família')+th('prio','Prior.')+th('rem','Remetente')+th('recebido','Recebido')+th('prazo','Prazo')+(fila ? th('mov','Última movimentação') : th('etapa','Etapa'));
   const total = L.length, V = L.slice(0, LIM_LISTA);
   const linhaGes = g => `<tr data-fam="${esc(g.responsavel)}" tabindex="0"><td class="muted" style="font-size:12px">GESUAS${ehMSE(g)?' · MSE':''}</td><td><div class="nm">${comCopiaComo(TIT(g.responsavel), g.responsavel)}</div><div class="muted" style="font-size:12px">Responsável no GESUAS${g.bairro?' · '+esc(TIT(g.bairro)):''}${temAtend()?(() => { const u = ultimoAtend(g); return ' · '+(u?'último atendimento '+fmt(u):'sem atendimento importado'); })():''}</div></td><td>${esc(nomeTecnica(g.tecnico))}</td><td class="mono">${esc(g.inicio)}</td><td class="muted">—</td><td><span class="pill p-ok">Registrado</span></td><td><span class="pill ${g.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(g.paf||'Em branco')}</span></td></tr>`;
   const ultimaCol = c => {
     if (fila){ const u = ultimaMov(c), d = dias(u); return `<td class="mono"${c.etapa==='avaliacao'&&d>30?' style="color:var(--warn);font-weight:600"':''}>${fmt(u)}<div class="muted" style="font-size:12px;font-weight:400">há ${d} dia${d===1?'':'s'}</div></td>`; }
     return `<td>${pill(c)}${c.etapa==='acompanhamento'?`<div class="muted" style="font-size:12px">${esc(tecnicaRef(c))}</div>`:c.etapa==='encerrado'&&c.desfecho?`<div class="muted" style="font-size:12px">${esc(c.desfecho)}</div>`:''}</td>`; };
   const rows = V.map(c => c.ges ? linhaGes(c.ges) : acomp
-    ? `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${c.responsavel?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(c.responsavel)}</div>`:''}</td><td>${esc(tecnicaRef(c))}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
-    : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div></td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${c.responsavel?comCopia(c.responsavel):'—'}${bairroDe(c)?`<div class="muted" style="font-size:12px">${esc(bairroDe(c))}</div>`:''}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`).join('');
+    ? `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(respDif(c))}</div>`:''}${pendTag(c)}</td><td>${esc(tecnicaRef(c))}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
+    : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)||bairroDe(c)?`<div class="muted" style="font-size:12px">${respDif(c)?'Resp.: '+comCopia(respDif(c)):''}${respDif(c)&&bairroDe(c)?' · ':''}${esc(bairroDe(c))}</div>`:''}${pendTag(c)}</td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`).join('');
   const sel = (id, rot, vazio, ops, atual) => `<select id="${id}" aria-label="${rot}" class="${atual?'ativo':''}"><option value="">${vazio}</option>${ops.map(([v,l]) => `<option value="${esc(v)}" ${atual===v?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
   const violOps = VIOLACOES.map(([k,l]) => `<option value="${k}" ${f.viol===k?'selected':''}>${esc(l)}</option>`).join('');
   // em Acompanhamento, estes filtros deixam de fora as famílias que estão só no GESUAS
@@ -708,7 +715,7 @@ function vCasos(){
     ${sel('fPrio','Prioridade','Qualquer prioridade', [['1','1 · Urgente'],['2','2 · Alta'],['3','3 · Regular'],['0','Sem prioridade definida']], f.prio)}
   </div>`:''}
   ${avisoGes?'<p class="muted" style="margin:-4px 0 10px;font-size:12.5px">Com período, remetente, violação ou prioridade, a lista mostra só os casos deste sistema: as famílias que estão só no GESUAS não têm esses dados.</p>':''}
-  <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="8" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div>
+  <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div>
   ${total>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${total}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, total-LIM_LISTA)}</button></div>`:''}`;
 }
 /* baixa a lista filtrada, na ordem da tela; ; e BOM para o Excel em português abrir certo */
@@ -862,19 +869,16 @@ function vCaso(){
     <aside class="panel stack">
       <div><span class="label">Vítima(s)</span>
       ${c.pessoas.map(v => `<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${comCopia(v.nome)}</b><div class="muted" style="font-size:12.5px">${v.nascimento?idade(v.nascimento)+' anos · ':''}${v.sexo==='F'?'Feminino':v.sexo==='M'?'Masculino':''}</div></div>`).join('')||'<div class="muted">—</div>'}</div>
-      <dl>
-        <dt>Responsável</dt><dd>${c.responsavel?comCopia(c.responsavel):'—'}</dd>
-        <dt>CPF resp.</dt><dd>${c.cpf?comCopia(c.cpf):'—'}</dd>
-        ${temAtend()?(() => { const l = atendCaso(c); return `<dt>No GESUAS</dt><dd>${l.length?`${l.length} atendimento${l.length>1?'s':''} · último <span class="mono">${fmt(l[l.length-1].data)}</span>`:'<span class="muted">nenhum atendimento importado</span>'}</dd>`; })():''}
-        <dt>Endereço</dt><dd>${esc(c.endereco)||'—'}</dd>
-        <dt>Bairro</dt><dd>${esc(c.bairro)||'—'}</dd>
+      ${(() => { const sg = statusGes(c), atend = temAtend() ? atendCaso(c) : [], doc = [c.doc_tipo, c.doc_num].filter(Boolean).join(' ');
+        return `<dl>
+        <dt>Responsável</dt><dd>${c.responsavel?comCopia(c.responsavel):'—'}${c.cpf?`<div class="muted" style="font-size:12.5px">CPF ${comCopia(c.cpf)}</div>`:''}</dd>
+        <dt>Endereço</dt><dd>${esc([c.endereco, c.bairro].filter(Boolean).join(' — '))||'—'}</dd>
         <dt>Contato</dt><dd>${esc(c.contato)||'—'}</dd>
-        <dt>Remetente</dt><dd>${esc(c.remetente)||'—'}${c.remetente_detalhe&&c.remetente_detalhe!==c.remetente?`<div class="muted" style="font-size:12.5px">${esc(c.remetente_detalhe)}</div>`:''}</dd>
-        <dt>Documento</dt><dd>${esc(c.doc_tipo)} ${esc(c.doc_num)}</dd>
-        <dt>Recebido</dt><dd class="mono">${fmt(c.recebido)}</dd>
-        <dt>Prazo</dt><dd>${c.prazo?`${prazoCell(c)} ${coord()&&!c.prazo_respondido&&c.etapa!=='encerrado'?'<button class="btn small" data-prazook style="margin-left:6px">Marcar respondido</button>':''}`:'—'}</dd>
-        ${c.tecnica&&coord()?`<dt>Técnica ref.</dt><dd>${esc(tecnicaRef(c))}</dd>`:''}
-      </dl>
+        <dt>Origem</dt><dd>${esc(c.remetente)||'—'}${c.remetente_detalhe&&c.remetente_detalhe!==c.remetente?` · ${esc(c.remetente_detalhe)}`:''}<div class="muted" style="font-size:12.5px">${doc?esc(doc)+' · ':''}recebido <span class="mono">${fmt(c.recebido)}</span></div></dd>
+        ${c.prazo?`<dt>Prazo</dt><dd>${prazoCell(c)} ${coord()&&!c.prazo_respondido&&c.etapa!=='encerrado'?'<button class="btn small" data-prazook style="margin-left:6px">Marcar respondido</button>':''}</dd>`:''}
+        ${c.tecnica&&coord()?`<dt>Técnica ref.</dt><dd>${esc(tecnicaRef(c))}${sg&&sg.tipo==='ok'?' <span class="muted">· conforme o GESUAS</span>':''}${c.inicio_acomp?`<div class="muted" style="font-size:12.5px">desde <span class="mono">${fmt(c.inicio_acomp)}</span>${c.desligamento?` · desligado em <span class="mono">${fmt(c.desligamento)}</span>`:''}</div>`:''}</dd>`:''}
+        ${atend.length&&!(sg&&sg.tipo==='ok')?`<dt>No GESUAS</dt><dd>${atend.length} atendimento${atend.length>1?'s':''} · último <span class="mono">${fmt(atend[atend.length-1].data)}</span></dd>`:''}
+      </dl>`; })()}
       ${(() => { const o = outrosCasos(c); return o.length ? `<div><span class="label">Outros casos desta família</span>${o.map(x => `<div class="outro" data-caso="${x.id}" tabindex="0"><span class="mono">${x.id}</span> · ${esc(nomeCaso(x))}<div class="muted" style="font-size:12px">${fmt(x.recebido)} · ${esc(x.etapa==='encerrado' ? (x.desfecho||'Encerrado') : ETAPAS[x.etapa]||x.etapa)}</div></div>`).join('')}</div>` : ''; })()}
     </aside>
     <section class="panel">
@@ -937,18 +941,20 @@ function acaoEtapa(c){
   if (c.etapa==='repasse' && coord()) return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Avaliação indicou acompanhamento</h2><div class="muted" style="font-size:12.5px">${c.desfecho_obs?esc(c.desfecho_obs):'Escolha a técnica de referência.'}</div></div>
     <div class="outcomes"><button class="main-o" data-out="p_acomp"><b>Repassar à técnica</b><small>Técnica e complexidade</small></button>
     <button data-out="Arquivado"><b>Arquivar</b><small>Registra o motivo</small></button></div></section>`;
-  if (c.etapa==='avaliacao') return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Desfecho da avaliação</h2><div class="muted" style="font-size:12.5px">Ao indicar acompanhamento, marque a violação vivenciada e a prioridade; o caso segue para a coordenação escolher a técnica.</div></div>
+  if (c.etapa==='avaliacao') return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Desfecho da avaliação</h2></div>
     <div class="outcomes">${DESFECHOS_AVAL.map(([k,t,s],i) => `<button class="${i===0?'main-o':''}" data-out="${esc(k)}"><b>${t}</b><small>${s}</small></button>`).join('')}</div></section>`;
   if (c.etapa==='acompanhamento' && coord()) return `<div class="row" style="margin-bottom:16px;justify-content:flex-end"><button class="btn" data-out="deslig">Desligar do acompanhamento</button></div>`;
   if (c.etapa==='encerrado') return `<div class="panel row" style="margin-bottom:16px;justify-content:space-between"><div><span class="label">Desfecho</span><div style="font-weight:600;margin-top:4px">${esc(c.desfecho||'—')}${c.desfecho_data?' em '+fmt(c.desfecho_data):''}</div>${c.desfecho_obs?`<div class="muted">${esc(c.desfecho_obs)}</div>`:''}</div>${coord()?'<button class="btn small" data-reabrir>Reabrir caso</button>':''}</div>`;
   return '';
 }
 function tabDados(c){
-  return `<div class="stack"><div><span class="label">Descrição breve</span><p style="margin:4px 0 0">${esc(c.descricao)}</p></div>
-  <div><div class="row" style="justify-content:space-between"><span class="label">Violação vivenciada${c.prioridade?` · prioridade ${c.prioridade}`:''}</span>${['repasse','acompanhamento','encerrado'].includes(c.etapa)?'<button type="button" class="btn small" data-editviol>Editar violações e prioridade</button>':''}</div>
+  const pa = pendAbertas(c);
+  return `<div class="stack">
+  ${pa.length?`<div class="pend-box"><span class="label">Pendências em aberto (${pa.length})</span>${pa.slice().reverse().map(r => `<div class="pend-item"><div><span class="mono muted">${fmtC(r.data)}</span> <span style="white-space:pre-wrap">${esc(r.pendencias)}</span></div><button type="button" class="btn small" data-rpend="${esc(r.id)}" data-v="1">Resolvida</button></div>`).join('')}</div>`:''}
+  <div><div class="row" style="justify-content:space-between"><span class="label">Violação vivenciada</span>${['repasse','acompanhamento','encerrado'].includes(c.etapa)?'<button type="button" class="btn small" data-editviol>Editar violações e prioridade</button>':''}</div>
     <div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(DIAG_LABEL[k]||k)}</span>`).join(''):'<span class="muted">Marcada por quem avalia, ao indicar acompanhamento.</span>'}</div></div>
   ${c.desfecho&&c.etapa!=='encerrado'?`<div><span class="label">Desfecho</span><div>${esc(c.desfecho)} em ${fmt(c.desfecho_data)}</div></div>`:''}
-  <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1], c):'<div class="muted">Nenhum registro ainda.</div>'}</div>
+  <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1], c, {semPend:true}):'<div class="muted">Nenhum registro ainda.</div>'}</div>
   ${coord()&&c.etapa==='acompanhamento'?gesBox(c):''}</div>`;
 }
 /* violação vivenciada (a lista do quadro de avaliação) e prioridade: abrem no modal de indicar acompanhamento */
@@ -1017,15 +1023,17 @@ function imprimirFicha(c){
   w.document.open(); w.document.write(html); w.document.close();
 }
 /* com o caso, o registro ganha copiar, editar e "lançado no GESUAS" */
-function evHtml(r, c){
+/* op.semPend: prévia que não repete a pendência (ela já está na caixa de pendências em aberto) */
+function evHtml(r, c, op={}){
   const acoes = c && r.id ? `<div class="ev-acoes">
       <button type="button" class="btn small" data-copiar="${esc(r.texto)}" title="Copiar a evolução para colar no GESUAS">Copiar</button>
-      ${r.pendencias?`<button type="button" class="btn small" data-copiar="${esc(r.pendencias)}" title="Copiar as pendências">Copiar pendências</button>`:''}
+      ${r.pendencias&&!op.semPend?`<button type="button" class="btn small" data-copiar="${esc(r.pendencias)}" title="Copiar as pendências">Copiar pendências</button>`:''}
       ${podeEditarReg(r)?`<button type="button" class="btn small" data-redit="${esc(r.id)}">Editar</button>`:''}
+      ${r.pendencias && !op.semPend ? (r.pendencia_ok ? `<button type="button" class="lnk" data-rpend="${esc(r.id)}" data-v="0">reabrir pendência</button>` : `<button type="button" class="btn small" data-rpend="${esc(r.id)}" data-v="1">Pendência resolvida</button>`) : ''}
       ${r.gesuas_em ? `<span class="pill p-ok" title="${esc(r.gesuas_por||'')}">✓ Lançado no GESUAS em ${fmtC(r.gesuas_em)}</span><button type="button" class="lnk" data-rges="${esc(r.id)}" data-v="0">desfazer</button>`
         : cobraGes(r) ? `<button type="button" class="btn small" data-rges="${esc(r.id)}" data-v="1">Marcar como lançado no GESUAS</button>` : ''}
     </div>` : '';
-  return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}${r.editado_em?` <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· editado em ${fmtC(r.editado_em)}</span>`:''}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias?`<div class="ev-pend"><span class="label">Pendências</span><div style="white-space:pre-wrap">${esc(r.pendencias)}</div></div>`:''}${acoes}</div></div>`;
+  return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}${r.editado_em?` <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· editado em ${fmtC(r.editado_em)}</span>`:''}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias&&!op.semPend?`<div class="ev-pend${r.pendencia_ok?' ok':''}"><span class="label">Pendências${r.pendencia_ok?` · resolvida em ${fmtC(r.pendencia_ok)}`:''}</span><div style="white-space:pre-wrap">${esc(r.pendencias)}</div></div>`:''}${acoes}</div></div>`;
 }
 /* o lançamento no GESUAS só é cobrado dos registros feitos a partir de quando o recurso entrou no sistema */
 const GESUAS_REG_DESDE = '2026-10-02';
@@ -1059,14 +1067,13 @@ function tabReg(c){
 }
 function tabAcomp(c){
   const s = statusGes(c), noGes = !!(s && s.tipo==='ok'), tec = tecnicaRef(c);
+  // técnica, início e situação no GESUAS ficam no resumo do caso e na aba Dados: aqui só o que se edita
   return `<div class="stack">
     ${c.etapa==='acompanhamento'?`<div class="grid2">
-      ${noGes?`<div class="field"><span>Técnica de referência</span><div style="padding:8px 0;font-weight:600">${esc(tec)} <span class="muted" style="font-weight:400">· conforme o GESUAS</span></div></div>`
-        :`<label class="field"><span>Técnica de referência</span><select id="a_tec">${opcoes(TECNICAS(), c.tecnica)}</select></label>`}
+      ${noGes?'':`<label class="field"><span>Técnica de referência</span><select id="a_tec">${opcoes(TECNICAS(), c.tecnica)}</select></label>`}
       <label class="field"><span>Complexidade</span><select id="a_cx">${[0.5,1,1.5].map(v => `<option value="${v}" ${c.complexidade===v?'selected':''}>${COMPLEX[v]}</option>`).join('')}</select></label>
     </div>`:''}
-    <dl><dt>Técnica</dt><dd>${esc(tec||'—')}</dd>${noGes&&c.tecnica&&primeiroNome(c.tecnica)!==primeiroNome(tec)?`<dt>Indicada no repasse</dt><dd>${esc(c.tecnica)}</dd>`:''}<dt>Repasse</dt><dd class="mono">${fmt(c.inicio_acomp)}</dd>${c.desligamento?`<dt>Desligamento</dt><dd class="mono">${fmt(c.desligamento)}</dd>`:''}</dl>
-    ${gesBox(c)}
+    ${noGes&&c.tecnica&&primeiroNome(c.tecnica)!==primeiroNome(tec)?`<div class="muted" style="font-size:12.5px">Indicada no repasse: ${esc(c.tecnica)}. No GESUAS a família está com ${esc(tec)}.</div>`:''}
     <div><h3 style="margin-bottom:6px">Discussões de caso</h3><div class="muted" style="font-size:12.5px;margin-bottom:8px">Cada reunião vira um registro com data.</div>
     <form id="fDisc" class="row" style="align-items:flex-end"><label class="field" style="width:150px"><span>Data</span><input id="disc_data" type="date" value="${iso(HOJE)}"></label><label class="field" style="flex:1;min-width:220px"><span>Plano definido na reunião</span><input id="disc_txt" placeholder="Ex.: Reavaliar em 3 meses; contato com escola"></label><button class="btn" type="submit">Registrar discussão</button></form>
     <div class="timeline" style="margin-top:8px">${[...c.discussoes].reverse().map(x => evHtml({data:x.data,tipo:'Discussão de caso',autor:'Equipe',texto:x.texto})).join('')||'<div class="empty">Nenhuma discussão registrada.</div>'}</div></div>
@@ -1200,7 +1207,7 @@ function gesBox(c){
     <div class="row" style="gap:6px"><button type="button" class="btn small primary" data-out="deslig">Desligar do acompanhamento</button>${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
   if (s.tipo==='ausente') return `<div class="dup stack" style="gap:8px;border-color:var(--crit);background:var(--crit-soft)"><div><b style="color:var(--crit)">Não encontrado no GESUAS.</b> Repassado a ${esc(c.tecnica)} há ${s.dias} dias. Conferido no relatório ${esc(DB.ges.origem)}.</div>
     <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
-  return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><div class="row" style="justify-content:space-between;gap:6px"><span class="label">No GESUAS${s.confirmado?' · confirmado':''}</span><div class="row" style="gap:6px">${s.confirmado?'':gvBtn(c,'rejeitar','Não é esta família',s.g.responsavel)}${desfazer}</div></div><dl style="margin-top:6px"><dt>Responsável</dt><dd>${comCopiaComo(TIT(s.g.responsavel), s.g.responsavel)}</dd><dt>Técnica</dt><dd>${esc(TIT(s.g.tecnico))}</dd><dt>Início</dt><dd class="mono">${esc(s.g.inicio)}</dd>${temAtend()?(() => { const l = atendimentosDaFamilia(s.g), u = l.length ? l[l.length-1].data : ''; return `<dt>Último atendimento</dt><dd>${u?`<span class="mono">${fmt(u)}</span> · ${l.length} atendimento${l.length>1?'s':''} importado${l.length>1?'s':''}`:'nenhum nos atendimentos importados'}</dd>`; })():''}<dt>Serviço</dt><dd>${esc(s.g.servico)}</dd><dt>PAF</dt><dd><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></dd></dl></div>`;
+  return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><div class="row" style="justify-content:space-between;gap:6px"><span class="label">No GESUAS${s.confirmado?' · confirmado':''}</span><div class="row" style="gap:6px">${s.confirmado?'':gvBtn(c,'rejeitar','Não é esta família',s.g.responsavel)}${desfazer}</div></div><dl style="margin-top:6px"><dt>Responsável</dt><dd>${comCopiaComo(TIT(s.g.responsavel), s.g.responsavel)}</dd><dt>Início</dt><dd class="mono">${esc(s.g.inicio)}</dd>${temAtend()?(() => { const l = atendimentosDaFamilia(s.g), u = l.length ? l[l.length-1].data : ''; return `<dt>Último atendimento</dt><dd>${u?`<span class="mono">${fmt(u)}</span> · ${l.length} atendimento${l.length>1?'s':''} importado${l.length>1?'s':''}`:'nenhum nos atendimentos importados'}</dd>`; })():''}<dt>Serviço</dt><dd>${esc(s.g.servico)}</dd><dt>PAF</dt><dd><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></dd></dl></div>`;
 }
 function mensagem(t){
   const p = pendencias(t.k); const nome = t.nome.split(' ')[0];
@@ -1219,7 +1226,7 @@ function vGesuas(){
   <section class="panel stack" style="margin-bottom:16px">
     <div class="row" style="justify-content:space-between">
       <div><span class="label">Relatório em uso</span><div style="font-weight:600">${temGes()?esc(DB.ges.origem):'Nenhum relatório importado'}</div>${temGes()?`<div class="muted" style="font-size:12.5px">${DB.ges.linhas.length} famílias${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}</div>`:''}
-        ${temAtend()?`<div class="muted" style="font-size:12.5px">${DB.atend.length} atendimentos do GESUAS de ${fmt(atendIdx().min)} até hoje</div>`:''}</div>
+        ${temAtend()?`<div class="muted" style="font-size:12.5px">${DB.atend.length} atendimento${DB.atend.length===1?'':'s'} do GESUAS de ${fmt(atendIdx().min)} até hoje</div>`:''}</div>
       <div class="row"><label class="btn primary" for="gFile" style="cursor:pointer">Importar relatórios do GESUAS</label><input id="gFile" type="file" accept=".xls,.html,.htm,.pdf,application/pdf" multiple hidden></div>
     </div>
     <div id="gStatus" class="muted" style="font-size:12.5px">Os arquivos são lidos neste navegador. Na planilha ficam só técnico, responsável, CPF/NIS, bairro, endereço e datas; telefone não é guardado.</div>
@@ -1245,7 +1252,7 @@ function vGesuas(){
   <div class="stack">${R.map(t => `<section class="panel stack">
     <div class="row" style="justify-content:space-between"><div><h2>${esc(t.nome)}</h2><div class="muted" style="font-size:12.5px">${t.doGes.length} famílias no GESUAS · ${t.pafBranco.length} com PAF em branco · ${t.ausentes.length} repassadas sem registro</div></div>
     <button class="btn small" data-copy="${t.k}">Copiar mensagem para ${esc(t.nome.split(' ')[0])}</button></div>
-    ${t.possiveis.length?`<div><h3 style="color:var(--warn)">Conferir: possível família pelo sobrenome</h3><div class="alist">${t.possiveis.map(x => `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="aitem" data-caso="${x.c.id}" tabindex="0" style="border-top:0;padding:0 0 4px"><div class="sev warn"></div><div><div class="nm">${comCopia(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">${x.c.responsavel?'Resp.: '+comCopia(x.c.responsavel)+' · ':''}Repasse em ${fmt(x.c.inicio_acomp)}</div></div><span></span></div>${conferirHtml(x.c, x.s)}<div class="row" style="margin-top:6px">${gvBtn(x.c,'manual','Está no GESUAS com outro nome')}</div></div>`).join('')}</div></div>`:''}
+    ${t.possiveis.length?`<div><h3 style="color:var(--warn)">Conferir: possível família pelo sobrenome</h3><div class="alist">${t.possiveis.map(x => `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="aitem" data-caso="${x.c.id}" tabindex="0" style="border-top:0;padding:0 0 4px"><div class="sev warn"></div><div><div class="nm">${comCopia(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">${respDif(x.c)?'Resp.: '+comCopia(respDif(x.c))+' · ':''}Repasse em ${fmt(x.c.inicio_acomp)}</div></div><span></span></div>${conferirHtml(x.c, x.s)}<div class="row" style="margin-top:6px">${gvBtn(x.c,'manual','Está no GESUAS com outro nome')}</div></div>`).join('')}</div></div>`:''}
     ${t.ausentes.length?`<div><h3 style="color:var(--crit)">Repassadas e ainda não registradas no GESUAS</h3><div class="alist">${t.ausentes.map(c => `<div class="aitem" data-caso="${c.id}" tabindex="0"><div class="sev crit"></div><div><div class="nm">${comCopia(nomeFamilia(c))} <span class="mono muted">${c.id}</span></div><div class="muted" style="font-size:12.5px">Repasse em ${fmt(c.inicio_acomp)}${c.inicio_acomp?' · há '+dias(c.inicio_acomp)+' dias':''}</div></div><span></span></div>`).join('')}</div></div>`:''}
     ${t.semAtend.length?`<details><summary style="cursor:pointer;font-weight:600;color:var(--warn)">Sem atendimento no GESUAS há mais de 60 dias (${t.semAtend.length})</summary><div style="overflow-x:auto;margin-top:8px"><table style="min-width:0"><thead><tr><th>Responsável familiar</th><th>Último atendimento</th><th>Início</th></tr></thead><tbody>${t.semAtend.map(g => { const u = ultimoAtend(g); return `<tr data-fam="${esc(g.responsavel)}" tabindex="0"><td>${comCopiaComo(TIT(g.responsavel), g.responsavel)}</td><td class="mono">${u?fmt(u)+' · há '+dias(u)+' dias':'nenhum'}</td><td class="mono">${esc(g.inicio)}</td></tr>`; }).join('')}</tbody></table></div></details>`:''}
     ${t.pafBranco.length?`<details><summary style="cursor:pointer;font-weight:600">PAF em branco (${t.pafBranco.length})</summary><div style="overflow-x:auto;margin-top:8px"><table style="min-width:0"><thead><tr><th>Responsável familiar</th><th>Início</th><th>Serviço</th></tr></thead><tbody>${t.pafBranco.map(g => `<tr data-fam="${esc(g.responsavel)}" tabindex="0"><td>${comCopiaComo(TIT(g.responsavel), g.responsavel)}</td><td class="mono">${esc(g.inicio)}</td><td>${/MSE/.test(g.servico)?'MSE (LA/PSC)':esc(g.servico)}</td></tr>`).join('')}</tbody></table></div></details>`:''}
@@ -1498,7 +1505,7 @@ function vCampo(){
     <div class="campo-top"><div><h1>Avaliação social</h1><div class="muted">${casosCampo().length} casos na fila</div></div><div id="campoStatus" class="campo-status">${statusCampoHtml()}</div></div>
     <input id="campoBusca" type="search" placeholder="Buscar nome, bairro ou nº do caso" value="${esc(S.campoBusca||'')}">
     <div class="campo-lista">${L.map(c => { const np = pend.filter(p => p.caso===c.id).length;
-      return `<button type="button" class="campo-card" data-campo="${c.id}"><span class="campo-nome"><b>${esc(nomeCaso(c))}</b>${prio(c.prioridade)}</span><span>${esc([c.endereco, c.bairro].filter(Boolean).join(' · ') || 'Sem endereço')}</span><span class="muted">Na fila há ${dias(c.recebido)} dias · ${c.registros.length} registro${c.registros.length===1?'':'s'}${np?` · <b class="pend">${np} a enviar</b>`:''}</span></button>`; }).join('') || '<div class="empty">Nenhum caso na fila da avaliação.</div>'}</div>
+      return `<button type="button" class="campo-card" data-campo="${c.id}"><span class="campo-nome"><b>${esc(nomeCaso(c))}</b>${prio(c.prioridade)}</span><span>${esc([c.endereco, c.bairro].filter(Boolean).join(' · ') || 'Sem endereço')}</span>${pendTag(c)}<span class="muted">Na fila há ${dias(c.recebido)} dias · ${c.registros.length} registro${c.registros.length===1?'':'s'}${np?` · <b class="pend">${np} a enviar</b>`:''}</span></button>`; }).join('') || '<div class="empty">Nenhum caso na fila da avaliação.</div>'}</div>
     <button type="button" class="btn campo-link" data-completo>Abrir a versão completa</button>
   </div>`;
 }
@@ -1509,8 +1516,13 @@ function vCampoRegistro(c){
   return `<div class="campo">
     <div class="campo-top"><button type="button" class="btn small" data-campovolta>← Fila</button><div id="campoStatus" class="campo-status">${statusCampoHtml()}</div></div>
     <div><h1>${esc(nomeCaso(c))}</h1><div class="campo-info">
-      ${onde?`<div>${esc(onde)}</div>`:''}${c.contato?`<a href="tel:${soDig(c.contato)}">Ligar: ${esc(c.contato)}</a>`:''}${c.responsavel?`<div class="muted">Responsável: ${esc(c.responsavel)}</div>`:''}
+      ${c.pessoas.length>1 ? `<div class="muted">${c.pessoas.map(p => esc(p.nome)+(p.nascimento?` (${idade(p.nascimento)} anos)`:'')).join(', ')}</div>`
+        : c.pessoas[0] && c.pessoas[0].nascimento ? `<div class="muted">${idade(c.pessoas[0].nascimento)} anos</div>` : ''}
+      ${onde?`<div>${esc(onde)}</div>`:''}
+      ${c.endereco?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([c.endereco, c.bairro, 'Taquara - RS'].filter(Boolean).join(', '))}" target="_blank" rel="noopener">Abrir no mapa</a>`:''}
+      ${c.contato?`<a href="tel:${soDig(c.contato)}">Ligar: ${esc(c.contato)}</a>`:''}${respDif(c)?`<div class="muted">Responsável: ${esc(respDif(c))}</div>`:''}
       ${c.descricao?`<details><summary>Descrição do encaminhamento</summary><p style="margin:6px 0 0">${esc(c.descricao)}</p></details>`:''}</div></div>
+    ${(() => { const pa = pendAbertas(c); return pa.length ? `<div class="pend-box"><span class="label">Pendências em aberto</span>${pa.slice().reverse().map(r => `<div class="pend-item"><div><span class="mono muted">${fmtC(r.data)}</span> <span style="white-space:pre-wrap">${esc(r.pendencias)}</span></div></div>`).join('')}</div>` : ''; })()}
     <form id="fCampo" class="stack">
       <div class="campo-tipos">${tipos.map(t => `<button type="button" class="campo-tipo ${t===S.campoTipo?'on':''}" data-ctipo="${esc(t)}">${esc(ROT_TIPO[t]||t)}</button>`).join('')}</div>
       <label class="field"><span>Data</span><input id="c_data" type="date" value="${iso(new Date())}" max="${iso(new Date())}"></label>
@@ -1518,7 +1530,7 @@ function vCampoRegistro(c){
       <label class="field"><span>Pendências</span><textarea id="c_pend" class="campo-pend-txt" placeholder="O que ficou pendente (opcional)">${esc(lsGet('creas:rascunho-pend:'+c.id)||'')}</textarea></label>
       <button class="btn primary campo-salvar" type="submit">Salvar registro</button>
     </form>
-    ${c.registros.length?`<div><span class="label">Últimos registros</span><div class="timeline">${[...c.registros].slice(-3).reverse().map(evHtml).join('')}</div></div>`:''}
+    ${c.registros.length?`<div><span class="label">Últimos registros</span><div class="timeline">${[...c.registros].slice(-3).reverse().map(r => evHtml(r, null, {semPend:true})).join('')}</div></div>`:''}
   </div>`;
 }
 function bindCampo(m){
@@ -1598,6 +1610,7 @@ function bind(){
   const ml = m.querySelector('[data-maislinhas]'); if (ml) ml.onclick = () => { LIM_LISTA += 300; render(); };
   const csv = m.querySelector('[data-csv]'); if (csv) csv.onclick = baixarCsv;
   m.querySelectorAll('[data-ord]').forEach(el => el.onclick = () => { const k = el.dataset.ord; S.ordem = S.ordem===k ? '-'+k : S.ordem==='-'+k ? '' : k; render(); });
+  const pt = m.querySelector('[data-paineltudo]'); if (pt) pt.onclick = () => { S.painelTudo = !S.painelTudo; render(); };
   m.querySelectorAll('[data-go2]').forEach(el => el.onclick = () => go(el.dataset.go2));
   m.querySelectorAll('[data-act="novo"]').forEach(el => el.onclick = () => { S.draft=null; S.editando=null; go('novo'); });
   m.querySelectorAll('[data-seg]').forEach(el => el.onclick = () => { S.f.etapa = el.dataset.seg; LIM_LISTA = 300; render(); });
@@ -1614,6 +1627,9 @@ function bind(){
   const rb = m.querySelector('[data-reabrir]'); if (rb) rb.onclick = () => modal(`<h2>Reabrir caso</h2><p style="margin:0">O caso volta para "Aguardando triagem".</p>`, async () => {
     Object.assign(c, {etapa:'triagem', desfecho:'', desfecho_data:'', desfecho_obs:'', desligamento:''}); salvar(c, 'Caso reaberto', 'api_reabrir', [c.id]); return c; });
   m.querySelectorAll('[data-redit]').forEach(el => el.onclick = () => { const r = c.registros.find(x => x.id===el.dataset.redit); if (r) editarRegistro(c, r); });
+  m.querySelectorAll('[data-rpend]').forEach(el => el.onclick = () => { const r = c.registros.find(x => x.id===el.dataset.rpend); if (!r) return;
+    const feito = el.dataset.v==='1'; r.pendencia_ok = feito ? iso(HOJE) : ''; r.pendencia_ok_por = feito ? DB.email : '';
+    salvar(c, feito ? 'Pendência resolvida' : 'Pendência reaberta', 'api_pendenciaResolvida', [c.id, r.id, feito], 'rpend:'+r.id); render(); });
   m.querySelectorAll('[data-rges]').forEach(el => el.onclick = () => { const r = c.registros.find(x => x.id===el.dataset.rges); if (!r) return;
     const feito = el.dataset.v==='1'; r.gesuas_em = feito ? iso(HOJE) : ''; r.gesuas_por = feito ? DB.email : '';
     salvar(c, feito ? 'Registro lançado no GESUAS' : 'Registro: lançamento no GESUAS desfeito', 'api_registroGesuas', [c.id, r.id, feito], 'rges:'+r.id); render(); });
