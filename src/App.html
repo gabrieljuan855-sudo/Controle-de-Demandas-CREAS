@@ -1252,6 +1252,46 @@ function reincidentes(C){
     } });
   return out;
 }
+/* evolução mês a mês de duas pendências do GESUAS, refeita a cada abertura com o que há no sistema:
+   - aguardando inclusão: do repasse até o dia em que a família entra no GESUAS (ou até hoje, se ainda não entrou)
+   - sem atendimento há mais de 60 dias: famílias já no GESUAS naquele dia, sem atendimento nos 60 dias antes
+   O último ponto (mês atual, até hoje) é o mesmo número do painel. */
+function evolucaoGesuas(P){
+  const out = {aguard:null, sem60:null};
+  if (!temGes() || !P.meses.length) return out;
+  const fimMes = m => { const f = new Date(m.getFullYear(), m.getMonth()+1, 0); return f > HOJE ? HOJE : f; };
+  const meses = P.meses.map(m => ({l:m.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''), ano:m.getFullYear(), futuro: m > HOJE, d: iso(fimMes(m))}));
+  // quem esperou, e entre quais datas (ate vazio = ainda espera)
+  const esperas = [];
+  DB.casos.forEach(c => { const s = statusGes(c), ini = String(c.inicio_acomp||'').slice(0,10); if (!s || !ini) return;
+    if (s.tipo==='ausente') esperas.push({ini, ate:''});
+    else if (s.tipo==='ok'){ const g = dataBr(s.g.inicio); if (g && g > ini) esperas.push({ini, ate:g}); } });
+  const aguardEm = d => esperas.filter(e => e.ini <= d && (!e.ate || d < e.ate)).length;
+  // mesmo universo do painel: casos em acompanhamento achados no GESUAS + famílias PAEFI que estão só no GESUAS
+  const linhas = []; DB.casos.forEach(c => { const s = statusGes(c); if (s && s.tipo==='ok') linhas.push(s.g); });
+  linhasSoGesuas().forEach(g => { if (!ehMSE(g)) linhas.push(g); });
+  const paefi = linhas.filter(g => dataBr(g.inicio)).map(g => ({g, ini:dataBr(g.inicio), at:atendimentosDaFamilia(g)}));
+  const min = temAtend() ? atendIdx().min : '';
+  const semEm = d => { if (!min || diasEntre(min, d) < 60) return null;
+    const no = paefi.filter(x => x.ini <= d); let sem = 0;
+    no.forEach(x => { let u = ''; for (const a of x.at){ if (a.data <= d) u = a.data; else break; } if (diasEntre(u || x.ini, d) > 60) sem++; });
+    return {n:sem, base:no.length}; };
+  out.aguard = meses.map(m => m.futuro ? {...m, n:null} : {...m, n:aguardEm(m.d)});
+  out.sem60 = temAtend() ? meses.map(m => { if (m.futuro) return {...m, n:null}; const r = semEm(m.d); return r ? {...m, n:r.n, base:r.base} : {...m, n:null}; }) : null;
+  if (out.sem60 && !out.sem60.some(m => m.n!==null)) out.sem60 = null;
+  return out;
+}
+/* painel com colunas por mês; mês sem dado fica vazio; o botão abre a lista de hoje */
+function evoPainel(titulo, serie, link, nota, aviso){
+  const mx = Math.max(1, ...serie.map(x => x.n || 0)), ult = [...serie].reverse().find(x => x.n!==null);
+  return `<section class="panel stack"><h2>${titulo}</h2>
+    <div class="row" style="gap:10px;align-items:baseline"><b style="font-size:26px;font-variant-numeric:tabular-nums">${ult ? ult.n : '—'}</b>
+      <span class="muted" style="font-size:12.5px">${ult ? 'em '+ult.l+'/'+String(ult.ano).slice(2)+(ult.base?` · ${pct(ult.n, ult.base)}% de ${ult.base} famílias`:'') : ''}</span>
+      <button type="button" class="btn small" ${link} style="margin-left:auto">Ver a lista de hoje</button></div>
+    <div><div class="vbars">${serie.map(x => `<div class="vbar" title="${x.l}/${String(x.ano).slice(2)}: ${x.n===null ? 'sem dados' : x.n+(x.base?` de ${x.base} famílias (${pct(x.n, x.base)}%)`:'')}">${x.n===null ? '<em>—</em>' : `<em>${x.n}</em><i style="height:${x.n/mx*100}%"></i>`}</div>`).join('')}</div>
+      <div class="xl">${serie.map(x => `<span>${x.l}</span>`).join('')}</div></div>
+    <div class="muted" style="font-size:12px">${nota}<br>${aviso}</div></section>`;
+}
 function vInd(){
   const P = periodoInd();
   const C = DB.casos.filter(c => noPeriodo(c.recebido, P));
@@ -1318,6 +1358,7 @@ function vInd(){
   const atP = temAtend() ? DB.atend.filter(a => noPeriodo(a.data, P)) : [];
   const atMes = P.meses.map(m => ({l:m.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''), ano:m.getFullYear(), n:atP.filter(a => { const d = D(a.data); return d.getFullYear()===m.getFullYear() && d.getMonth()===m.getMonth(); }).length}));
   const maxA = Math.max(1, ...atMes.map(x => x.n));
+  const evo = evolucaoGesuas(P);
   const prod = cont(atP.map(a => nomeTecnica(a.tecnico))).map(([t,n]) => { const fams = new Set(atP.filter(a => nomeTecnica(a.tecnico)===t).map(a => a.cpf || norm(a.responsavel))).size; return {t, n, fams}; });
   const t1Atend = temAtend() && temGes() ? DB.casos.filter(c => !migrado(c) && c.origem!=='GESUAS' && noPeriodo(c.inicio_acomp, P)).map(c => {
     const s = statusGes(c); if (!s || s.tipo!=='ok') return null; const a = atendimentosDaFamilia(s.g).find(a => a.data >= c.inicio_acomp); return a ? diasEntre(c.inicio_acomp, a.data) : null; }) : [];
@@ -1371,6 +1412,8 @@ function vInd(){
       ${prod.length?`<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">Atend.</th><th style="text-align:right">Famílias</th></tr></thead><tbody>
       ${prod.map(x => `<tr style="cursor:default" title="${(x.n/x.fams).toFixed(1).replace('.',',')} atendimentos por família"><td>${esc(x.t)}</td><td class="mono" style="text-align:right">${x.n}</td><td class="mono" style="text-align:right">${x.fams}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem atendimentos no período.</div>'}
       <div class="muted" style="font-size:12px">Atendimentos registrados no GESUAS no período, e famílias diferentes atendidas. Passe o mouse na linha para ver a média por família.</div></section>`:''}
+    ${evo.aguard ? evoPainel('Famílias aguardando inclusão no GESUAS', evo.aguard, linkLista({etapa:'acompanhamento', pend:'nreg'}), 'Repassadas para a técnica e ainda não registradas no GESUAS, no último dia de cada mês (no mês atual, hoje).', 'Os meses antigos só consideram quem ainda está em acompanhamento ou na lista do GESUAS; quem já saiu não entra na conta.') : ''}
+    ${evo.sem60 ? evoPainel('Famílias sem atendimento há mais de 60 dias', evo.sem60, linkLista({etapa:'acompanhamento', pend:'sematend'}), 'Famílias PAEFI no GESUAS sem atendimento registrado nos 60 dias anteriores ao último dia do mês. A % é sobre as famílias PAEFI do GESUAS naquele mês.', `Só aparecem os meses com 60 dias de atendimentos importados (desde ${fmt(atendIdx().min)}). Famílias que já saíram do GESUAS não entram nos meses antigos.`) : ''}
     <section class="panel stack"><h2>Por território</h2>${hb(terr.filter(x => x[0]).slice(0,10), 0, b => lk({bairro:b}))}
       <div class="muted" style="font-size:12px">Encaminhamentos recebidos no período, pelo bairro do caso ou, se vazio, pelo do GESUAS.${semBairro?` ${semBairro} sem bairro.`:''}</div></section>
     ${terrViol.some(x => x.b)?`<section class="panel stack" style="grid-column:1/-1"><h2>Território × violação</h2>

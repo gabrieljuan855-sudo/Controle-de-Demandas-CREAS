@@ -71,6 +71,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - registros de atendimento por tipo, registros por avaliação e avaliações com visita domiciliar;
   - carga por técnica (famílias no GESUAS ponderadas pela complexidade), PAF preenchido e famílias aguardando inclusão;
   - atendimentos registrados no GESUAS por mês, produção por técnica e tempo do repasse até o primeiro atendimento;
+  - **mês a mês, duas pendências do GESUAS:** famílias aguardando inclusão no GESUAS (repassadas e ainda não registradas, no último dia de cada mês) e famílias sem atendimento há mais de 60 dias (com a % sobre as famílias em acompanhamento naquele mês). Os meses são refeitos a cada abertura, sem nada a registrar: a espera conta do repasse até a data de início da família no GESUAS, e a falta de atendimento usa os atendimentos importados. O último ponto é o mesmo número do painel, e o botão "Ver a lista de hoje" abre essa lista. Só aparecem os meses com 60 dias de atendimentos importados, e quem já saiu do GESUAS não entra nos meses antigos;
   - encaminhamentos por território e território × violação (bairro do caso ou do GESUAS), e famílias em acompanhamento por território;
   - encaminhamentos de vítimas ou famílias que já tinham caso anterior.
 
