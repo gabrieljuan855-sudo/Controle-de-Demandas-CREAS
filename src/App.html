@@ -126,24 +126,18 @@ function iniciarFila(){
 /* ================= constantes ================= */
 const ETAPAS = {triagem:'Aguardando triagem', avaliacao:'Em avaliação social', repasse:'Aguardando repasse', acompanhamento:'Em acompanhamento', encerrado:'Encerrado'};
 const COMPLEX = {0.5:'Baixa (0,5)', 1:'Média (1)', 1.5:'Alta (1,5)'};
-const DIAG = [
-  {g:'1. Violências físicas, psicológicas e morais', itens:[['fis','Violência física'],['psi','Violência psicológica'],['mor','Violência moral'],['pat','Violência patrimonial'],['ins','Violência institucional']]},
-  {g:'2. Violências sexuais e exploração', itens:[['sex','Abuso/violência sexual'],['exp','Exploração sexual, de imagem ou relacionados']]},
-  {g:'3. Negligência', itens:[
-    ['ng1','Negligência severa e persistente, com prejuízo grave ao desenvolvimento da criança ou idoso'],
-    ['ng2','Recusa deliberada ou omissão grave nos cuidados (saúde, alimentação, higiene, proteção)'],
-    ['ng3','Infrequência ou evasão escolar associada a negligência familiar grave'],
-    ['ng4','Negligência associada a outras violações de direitos'],
-    ['pbf','Descumprimento de condicionalidades do PBF e do PETI com violação de direitos']]},
-  {g:'4. Abandono ou ausência de cuidado', subs:[
-    {s:'Crianças e adolescentes', itens:[['ca1','Deixado sem supervisão ou cuidados adequados'],['ca2','Abandono pelos responsáveis legais'],['ca3','Desaparecimento intencional dos responsáveis'],['ca4','Rompimento de vínculos por negligência ou violência'],['ti','Trabalho infantil']]},
-    {s:'Pessoas idosas', itens:[['id1','Idoso abandonado em hospital, residência, instituição ou espaço público']]},
-    {s:'Pessoas com deficiência, transtornos ou dependência química', itens:[['pd1','Pessoa com deficiência em abandono ou desassistência familiar'],['pd2','Pessoa com transtorno mental ou dependência química abandonada pela família']]},
-    {s:'Situações gerais', itens:[['sg1','Abandono de criança, adolescente, PcD ou idoso, mesmo que eventual'],['sg2','Desvinculação familiar reiterada, com acompanhamentos anteriores sem mudança']]}]},
-  {g:'5. Discriminações e violações de direitos', itens:[['dso','Discriminação por orientação sexual'],['dre','Discriminação por raça/etnia']]}
-];
-const DIAG_LABEL = {}, DIAG_GRUPO = {};
-DIAG.forEach(g => (g.itens || g.subs.flatMap(s => s.itens)).forEach(([k,l]) => { DIAG_LABEL[k]=l; DIAG_GRUPO[k]=g.g.replace(/^\d\.\s*/,''); }));
+/* violações possíveis: as mesmas do GESUAS, na ordem de lá (o servidor converte os códigos do quadro antigo) */
+const VIOLACOES = [
+  ['fis','Violência Física'],['psi','Violência Psicológica'],['exp','Exploração Sexual'],['sex','Abuso/Violência Sexual'],
+  ['neg','Negligência ou Abandono'],['ti','Trabalho Infantil'],['rua','Trajetória de Rua'],['tra','Tráfico de Pessoas'],
+  ['dso','Discriminação por orientação sexual'],['pat','Violência Patrimonial'],
+  ['ase','Afastamento do convívio familiar devido a aplicação de Medida Socioeducativa'],
+  ['apr','Afastamento do convívio familiar devido a aplicação de medida de proteção'],
+  ['dre','Discriminação em decorrência de raça/etnia'],
+  ['pbf','Descumprimento de condicionalidades do PBF e do PETI em ocorrência de violações de direito'],
+  ['img','Exploração da imagem'],['des','Membro em situação de desaparecimento'],['mor','Violência Moral'],
+  ['ins','Violência Institucional'],['bul','Bullying'],['out','Outra']];
+const DIAG_LABEL = Object.fromEntries(VIOLACOES);
 const DESFECHOS_AVAL = [
   ['indicar_acompanhamento','Indicar acompanhamento','Violação, prioridade e coordenação escolhe a técnica'],
   ['Contrarreferenciado ao CRAS','Contrarreferenciar ao CRAS','Sem violação que justifique PAEFI'],
@@ -582,7 +576,7 @@ const tecItem = it => primeiroNome(it.ges ? it.ges.tecnico : tecnicaRef(it));
 const bairroDe = c => { if (c.bairro) return TIT(c.bairro); const s = temGes() ? statusGes(c) : null; return s && s.tipo==='ok' && s.g.bairro ? TIT(s.g.bairro) : ''; };
 const bairroItem = it => it.ges ? (it.ges.bairro ? TIT(it.ges.bairro) : '') : bairroDe(it);
 /* violação: "g:<grupo>" vale para qualquer item do grupo; senão, o item da ficha */
-const temViol = (c, v) => v.startsWith('g:') ? c.diagnostico.some(k => DIAG_GRUPO[k]===v.slice(2)) : c.diagnostico.includes(v);
+const temViol = (c, v) => c.diagnostico.includes(v);
 const remDe = c => c.remetente || 'Sem remetente';
 const PERIODOS = () => [['30d','Últimos 30 dias'],['12m','Últimos 12 meses'],['ano',`${HOJE.getFullYear()}`],['anoAnt',`${HOJE.getFullYear()-1}`]];
 /* texto em que a busca procura, calculado uma vez por versão */
@@ -689,8 +683,7 @@ function vCasos(){
     ? `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${c.responsavel?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(c.responsavel)}</div>`:''}</td><td>${esc(tecnicaRef(c))}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
     : `<tr data-caso="${c.id}"><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div></td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${c.responsavel?comCopia(c.responsavel):'—'}${bairroDe(c)?`<div class="muted" style="font-size:12px">${esc(bairroDe(c))}</div>`:''}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`).join('');
   const sel = (id, rot, vazio, ops, atual) => `<select id="${id}" aria-label="${rot}" class="${atual?'ativo':''}"><option value="">${vazio}</option>${ops.map(([v,l]) => `<option value="${esc(v)}" ${atual===v?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
-  const violOps = DIAG.map(g => { const gr = g.g.replace(/^\d\.\s*/,''); const it = g.itens || g.subs.flatMap(s => s.itens);
-    return `<optgroup label="${esc(gr)}"><option value="g:${esc(gr)}" ${f.viol==='g:'+gr?'selected':''}>${esc(gr)}: qualquer item</option>${it.map(([k,l]) => `<option value="${k}" ${f.viol===k?'selected':''}>${esc(l)}</option>`).join('')}</optgroup>`; }).join('');
+  const violOps = VIOLACOES.map(([k,l]) => `<option value="${k}" ${f.viol===k?'selected':''}>${esc(l)}</option>`).join('');
   // em Acompanhamento, estes filtros deixam de fora as famílias que estão só no GESUAS
   const avisoGes = acomp && coord() && temGes() && (f.per || f.rem || f.viol || f.prio);
   return `<div class="top"><div><h1>Casos</h1><p class="sub-fixo">${sub}</p></div></div>
@@ -959,8 +952,8 @@ function tabDados(c){
 function violacaoHtml(c){
   const box = ([k,l]) => `<label class="chk"><input type="checkbox" data-dg="${k}" ${c.diagnostico.includes(k)?'checked':''}><span>${esc(l)}</span></label>`;
   const pr = [1,2,3].map(v => `<label class="chk"><input type="radio" name="m_prio" value="${v}" ${Number(c.prioridade)===v?'checked':''}><span>${PRIO_ROT[v]}</span></label>`).join('');
-  return `<div class="diag"><div class="label" style="margin-bottom:6px">Violação vivenciada <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· marque ao menos uma</span></div>
-    ${DIAG.map(g => `<fieldset><legend>${g.g}</legend>${g.itens?g.itens.map(box).join(''):g.subs.map(s => `<div class="sub">${s.s}</div>${s.itens.map(box).join('')}`).join('')}</fieldset>`).join('')}</div>
+  return `<div class="diag"><div class="label" style="margin-bottom:6px">Violação vivenciada <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· mesma lista do GESUAS · marque ao menos uma</span></div>
+    <div class="viol-lista">${VIOLACOES.map(box).join('')}</div></div>
     <fieldset class="diag" style="border:0;padding:0;margin:0"><legend>Prioridade do acompanhamento</legend>${c.prioridade?`<div class="muted" style="font-size:12.5px;margin-bottom:4px">Hoje: ${PRIO_ROT[c.prioridade]}. Confirme ou altere.</div>`:''}${pr}</fieldset>`;
 }
 /* lê o que foi marcado no modal; sem violação ou sem prioridade, avisa e devolve null */
@@ -980,7 +973,7 @@ function editarViolacao(c){
 function imprimirFicha(c){
   if (!c) return;
   const boxImp = ([k,l]) => `<div class="fi-item">${c.diagnostico.includes(k)?'☑':'☐'} ${esc(l)}</div>`;
-  const diagHtml = DIAG.map(g => `<div class="fi-grupo"><div class="fi-titulo">${esc(g.g)}</div>${g.itens?g.itens.map(boxImp).join(''):g.subs.map(s => `<div class="fi-sub">${esc(s.s)}</div>${s.itens.map(boxImp).join('')}`).join('')}</div>`).join('');
+  const diagHtml = `<div class="fi-lista">${VIOLACOES.map(boxImp).join('')}</div>`;
   const vitimas = c.pessoas.map(p => esc(p.nome)).join(', ');
   const registros = c.registros.map(r => `<div class="fi-reg"><b>${fmt(r.data)} — ${esc(r.tipo)} (${esc(r.autor)})</b><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias?`<div style="white-space:pre-wrap;margin-top:3px"><b>Pendências:</b> ${esc(r.pendencias)}</div>`:''}</div>`).join('');
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Ficha de Avaliação Social — ${esc(c.id)}</title>
@@ -994,7 +987,8 @@ function imprimirFicha(c){
     h2{ font-size:13px; margin:16px 0 6px; }
     .fi-titulo{ font-weight:700; margin:10px 0 2px; font-size:11.5px; }
     .fi-sub{ font-weight:600; margin:5px 0 2px; font-size:11px; }
-    .fi-item{ margin:2px 0 2px 10px; }
+    .fi-lista{ column-count:2; column-gap:18px; }
+    .fi-item{ margin:3px 0 3px 4px; break-inside:avoid; }
     .fi-reg{ margin:6px 0; border-bottom:1px dashed #ccc; padding-bottom:5px; }
     .fi-linha{ border-bottom:1px solid #999; height:22px; }
     .noprint{ text-align:right; margin-bottom:10px; }
@@ -1008,7 +1002,7 @@ function imprimirFicha(c){
   <div class="campo"><b>Endereço:</b> ${esc(c.endereco)}${c.bairro?' — '+esc(c.bairro):''}</div>
   <div class="campo"><b>Contato:</b> ${esc(c.contato)}</div>
   <div class="campo"><b>Descrição breve:</b> ${esc(c.descricao)}</div>
-  <h2>Diagnóstico Socioassistencial</h2>
+  <h2>Violação vivenciada (lista do GESUAS)</h2>
   ${diagHtml}
   <h2>Registros de Atendimento</h2>
   ${registros}
@@ -1368,8 +1362,8 @@ function vInd(){
 
   // violações, registros, reincidência
   // um caso conta uma vez em cada grupo, mesmo com vários itens marcados no mesmo grupo
-  const grp = cont(C.flatMap(c => [...new Set(c.diagnostico.map(k => DIAG_GRUPO[k]).filter(Boolean))]));
-  const tip = cont(C.flatMap(c => [...new Set(c.diagnostico.filter(k => DIAG_LABEL[k]))])).slice(0,8).map(([k,n]) => [DIAG_LABEL[k], n, k]);
+  // um caso conta uma vez em cada violação marcada
+  const viol = cont(C.flatMap(c => [...new Set(c.diagnostico.filter(k => DIAG_LABEL[k]))])).map(([k,n]) => [DIAG_LABEL[k], n, k]);
   const regs = DB.casos.flatMap(c => c.registros.filter(r => noPeriodo(r.data, P)));
   const regTipo = cont(regs.map(r => r.tipo));
   const ehVD = r => /(^|\W)VD(\W|$)|visita/i.test(r.tipo) && !/tentativa/i.test(r.tipo);
@@ -1397,8 +1391,8 @@ function vInd(){
     const s = statusGes(c); if (!s || s.tipo!=='ok') return null; const a = atendimentosDaFamilia(s.g).find(a => a.data >= c.inicio_acomp); return a ? diasEntre(c.inicio_acomp, a.data) : null; }) : [];
   // território: bairro digitado no caso ou, se vazio, o do GESUAS
   const terr = cont(C.map(bairroDe)), semBairro = C.filter(c => !bairroDe(c)).length;
-  const grupos = DIAG.map(g => g.g.replace(/^\d\.\s*/,''));
-  const terrViol = terr.slice(0,6).map(([b]) => ({b, n:grupos.map(gr => C.filter(c => bairroDe(c)===b && c.diagnostico.some(k => DIAG_GRUPO[k]===gr)).length)}));
+  const topViol = viol.slice(0,6);  // as 6 violações mais frequentes viram as colunas
+  const terrViol = terr.slice(0,6).map(([b]) => ({b, n:topViol.map(([,,k]) => C.filter(c => bairroDe(c)===b && c.diagnostico.includes(k)).length)}));
   const maxTV = Math.max(1, ...terrViol.flatMap(x => x.n));
   const terrGes = temGes() ? cont(DB.ges.linhas.filter(g => !ehMSE(g)).map(g => g.bairro ? TIT(g.bairro) : '')).slice(0,10) : [];
   const famAcomp = temGes() ? listaCasos({etapa:'acompanhamento', serv:'paefi'}).length : null;
@@ -1432,8 +1426,7 @@ function vInd(){
       ${rems.length?`<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Remetente</th><th style="text-align:right">Recebidos</th><th style="text-align:right">Avaliações concluídas</th><th style="text-align:right">Indicaram acompanhamento</th><th style="text-align:right">Não confirmados</th></tr></thead><tbody>
       ${rems.map(x => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))} title="Abrir a lista">${esc(x.r)}</button></td><td class="mono" style="text-align:right"><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))}>${x.n}</button></td><td class="mono" style="text-align:right">${x.av}</td><td class="mono" style="text-align:right">${x.acomp===null?'—':x.acomp+'%'}</td><td class="mono" style="text-align:right">${x.nc===null?'—':x.nc+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem dados no período.</div>'}
       <div class="muted" style="font-size:12px">Mostra quanto do que cada órgão encaminha se confirma como violação que justifica acompanhamento.</div></section>
-    <section class="panel stack"><h2>Por grupo de violação</h2>${hb(grp, 0, g => lk({viol:'g:'+g}))}<div class="muted" style="font-size:12px">Casos recebidos no período com algum item do grupo marcado ao indicar acompanhamento. Clique numa barra para ver os casos.</div></section>
-    <section class="panel stack"><h2>Situações mais frequentes</h2>${hb(tip, 0, k => lk({viol:k}))}</section>
+    <section class="panel stack"><h2>Por violação</h2>${hb(viol, 0, k => lk({viol:k}))}<div class="muted" style="font-size:12px">Casos recebidos no período, pela violação marcada ao indicar acompanhamento (a mesma lista do GESUAS). Um caso pode ter mais de uma. Clique numa barra para ver os casos.</div></section>
     <section class="panel stack"><h2>Registros de atendimento</h2>
       <div class="row" style="gap:18px"><div><span class="label">Por avaliação concluída</span><div style="font-size:20px;font-weight:700">${mediaReg===null?'—':mediaReg}</div></div><div><span class="label">Avaliações com visita domiciliar</span><div style="font-size:20px;font-weight:700">${comVD===null?'—':comVD+'%'}</div></div></div>
       ${hb(regTipo)}</section>
@@ -1449,10 +1442,10 @@ function vInd(){
     ${evo.sem60 ? evoPainel('Famílias sem atendimento há mais de 60 dias', evo.sem60, linkLista({etapa:'acompanhamento', pend:'sematend'}), 'Famílias PAEFI no GESUAS sem atendimento registrado nos 60 dias anteriores ao último dia do mês. A % é sobre as famílias PAEFI do GESUAS naquele mês.', `Só aparecem os meses com 60 dias de atendimentos importados (desde ${fmt(atendIdx().min)}). Famílias que já saíram do GESUAS não entram nos meses antigos.`) : ''}
     <section class="panel stack"><h2>Por território</h2>${hb(terr.filter(x => x[0]).slice(0,10), 0, b => lk({bairro:b}))}
       <div class="muted" style="font-size:12px">Encaminhamentos recebidos no período, pelo bairro do caso ou, se vazio, pelo do GESUAS.${semBairro?` ${semBairro} sem bairro.`:''}</div></section>
-    ${terrViol.some(x => x.b)?`<section class="panel stack" style="grid-column:1/-1"><h2>Território × violação</h2>
-      <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Bairro</th>${grupos.map(g => `<th style="text-align:right">${esc(g)}</th>`).join('')}</tr></thead><tbody>
-      ${terrViol.filter(x => x.b).map(x => `<tr style="cursor:default"><td>${esc(x.b)}</td>${x.n.map((n,i) => `<td class="mono calor" style="text-align:right;--a:${n/maxTV}" title="${esc(x.b)} · ${esc(grupos[i])}: ${n}">${n?`<button type="button" class="num-link" ${linkLista(lk({bairro:x.b, viol:'g:'+grupos[i]}))}>${n}</button>`:''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-      <div class="muted" style="font-size:12px">Casos recebidos no período, nos bairros com mais encaminhamentos. Um caso pode ter mais de um grupo de violação. Cor mais forte, mais casos.</div></section>`:''}
+    ${topViol.length && terrViol.some(x => x.b)?`<section class="panel stack" style="grid-column:1/-1"><h2>Território × violação</h2>
+      <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Bairro</th>${topViol.map(([l]) => `<th style="text-align:right">${esc(l)}</th>`).join('')}</tr></thead><tbody>
+      ${terrViol.filter(x => x.b).map(x => `<tr style="cursor:default"><td>${esc(x.b)}</td>${x.n.map((n,i) => `<td class="mono calor" style="text-align:right;--a:${n/maxTV}" title="${esc(x.b)} · ${esc(topViol[i][0])}: ${n}">${n?`<button type="button" class="num-link" ${linkLista(lk({bairro:x.b, viol:topViol[i][2]}))}>${n}</button>`:''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <div class="muted" style="font-size:12px">Casos recebidos no período, nos bairros com mais encaminhamentos. As 6 violações mais frequentes do período; um caso pode ter mais de uma. Cor mais forte, mais casos.</div></section>`:''}
     ${terrGes.some(x => x[0])?`<section class="panel stack"><h2>Famílias em acompanhamento por território</h2>${hb(terrGes.filter(x => x[0]))}<div class="muted" style="font-size:12px">Do relatório Acompanhamentos do GESUAS. Situação atual.</div></section>`:''}
     ${carga.length?`<section class="panel stack" style="grid-column:1/-1"><h2>Carga por técnica</h2>
       <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">Famílias</th><th style="text-align:right">Carga</th><th style="text-align:right">PAF ok</th><th style="text-align:right">Aguardando</th></tr></thead><tbody>

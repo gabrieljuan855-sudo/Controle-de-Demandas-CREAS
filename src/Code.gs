@@ -116,6 +116,19 @@ function registrarHistorico(casoId, acao) {
 
 /* ---------- montagem dos casos ---------- */
 
+/** Violações seguem a lista do GESUAS. Códigos do antigo quadro de papel viram o equivalente (negligência e abandono, todos em um). */
+var VIOLACAO_LEGADA = { ng1: 'neg', ng2: 'neg', ng3: 'neg', ng4: 'neg', ca1: 'neg', ca2: 'neg', ca3: 'neg', ca4: 'neg',
+  id1: 'neg', pd1: 'neg', pd2: 'neg', sg1: 'neg', sg2: 'neg' };
+
+function normalizarViolacoes(texto) {
+  var vistos = {}, out = [];
+  String(texto || '').split(',').forEach(function (k) {
+    k = String(k).trim(); k = VIOLACAO_LEGADA[k] || k;
+    if (k && !vistos[k]) { vistos[k] = true; out.push(k); }
+  });
+  return out;
+}
+
 function montarCasos(filtroIds) {
   var casos = lerTabela('Casos');
   var pessoas = lerTabela('Pessoas'), regs = lerTabela('Registros'), discs = lerTabela('Discussoes'), hist = lerTabela('Historico');
@@ -134,7 +147,7 @@ function montarCasos(filtroIds) {
       o.complexidade = o.complexidade === '' ? '' : Number(o.complexidade);
       o.passou_avaliacao = sim(o.passou_avaliacao);
       o.prazo_respondido = sim(o.prazo_respondido);
-      o.diagnostico = String(o.diagnostico || '').split(',').filter(Boolean);
+      o.diagnostico = normalizarViolacoes(o.diagnostico);
       o.pessoas = mp[o.id] || [];
       o.registros = (mr[o.id] || []).sort(function (a, b) { return a.data < b.data ? -1 : 1; });
       o.discussoes = (md[o.id] || []).sort(function (a, b) { return a.data < b.data ? -1 : 1; });
