@@ -9,6 +9,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 - **Novo encaminhamento** (coordenação). A vítima é o dado principal e obrigatório; o responsável familiar é opcional. Remetente, documento e prazo vêm de listas. O sistema avisa quando a vítima ou a família já tem registro.
 - **Vítima como nome do caso.** Listas, painel e ficha mostram o nome da vítima. A conferência com o GESUAS continua cruzando pelo responsável familiar e pelas demais pessoas do caso.
 - **Salvamento em segundo plano.** Ao salvar (registro, violações, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar". Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
+- **Violações iguais às do GESUAS.** A lista de violações do sistema é a mesma do GESUAS: Violência Física, Psicológica, Exploração Sexual, Abuso/Violência Sexual, Negligência ou Abandono, Trabalho Infantil, Trajetória de Rua, Tráfico de Pessoas, Discriminação por orientação sexual, Violência Patrimonial, Afastamento do convívio familiar (medida socioeducativa e medida de proteção), Discriminação em decorrência de raça/etnia, Descumprimento de condicionalidades do PBF e do PETI, Exploração da imagem, Membro em situação de desaparecimento, Violência Moral, Violência Institucional, Bullying e Outra. Os casos já marcados com o quadro antigo são convertidos sozinhos ao abrir (todos os itens de negligência e abandono viram "Negligência ou Abandono"; a antiga "Exploração sexual, de imagem ou relacionados" vira "Exploração Sexual", e vale conferir em "Editar violações" os que eram de imagem). A planilha só passa a guardar os códigos novos quando o caso é editado.
 - **Pendências no registro.** Além da evolução, o registro tem um quadro **Pendências** logo abaixo (documentos a buscar, retornos, providências). Fica opcional e é gravado junto com a evolução, no formulário completo e no modo de campo, inclusive sem internet. Aparece destacado no registro, na ficha impressa e pode ser corrigido em Editar.
 - **Registros de atendimento** têm três botões:
   - **Copiar** copia a evolução para colar no GESUAS; quando o registro tem pendências, **Copiar pendências** copia só elas.
@@ -22,13 +23,13 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - "Abrir a versão completa" leva ao sistema inteiro; "Modo de campo", no menu, volta.
 - **Tema claro ou escuro.** No menu lateral, escolha Automático (segue o aparelho), Claro ou Escuro. A escolha fica salva no navegador.
 - **Avaliação social.** O técnico registra as visitas e atendimentos com data e, ao concluir, escolhe o desfecho entre as opções prontas:
-  - indicar acompanhamento: abre uma janela em que ele marca a **violação vivenciada** (a mesma lista do quadro da ficha em papel) e a **prioridade** (1 urgente, 2 alta, 3 regular), as duas obrigatórias, e pode deixar uma observação. O caso segue para a coordenação escolher a técnica;
+  - indicar acompanhamento: abre uma janela em que ele marca a **violação vivenciada** (as 20 opções do GESUAS, na mesma ordem; dá para marcar mais de uma) e a **prioridade** (1 urgente, 2 alta, 3 regular), as duas obrigatórias, e pode deixar uma observação. O caso segue para a coordenação escolher a técnica;
   - contrarreferenciar ao CRAS;
   - não confirmado;
   - não localizado;
   - outro serviço;
   - arquivar.
-- **Impressão da ficha.** O botão "Imprimir ficha", na tela do caso, gera a mesma Ficha de Avaliação Social em papel — identificação, endereço, descrição, checklist de violações (com o que já foi marcado) e os registros de atendimento — pronta para entregar à técnica ou anexar ao encaminhamento.
+- **Impressão da ficha.** O botão "Imprimir ficha", na tela do caso, gera a mesma Ficha de Avaliação Social em papel — identificação, endereço, descrição, lista de violações do GESUAS (com o que já foi marcado) e os registros de atendimento — pronta para entregar à técnica ou anexar ao encaminhamento.
 - **Prioridade (1 urgente, 2 alta, 3 regular).** Entra em dois momentos:
   - no **cadastro do encaminhamento** (padrão 2, editável em Editar dados): serve para a fila da avaliação. As filas de triagem, avaliação e repasse aparecem por prioridade e, dentro dela, pelo caso mais antigo, e o mesmo vale para a fila do celular, que mostra o selo P1, P2 ou P3 no cartão. O painel mostra o cartão **Urgentes (prioridade 1) em avaliação**. Clicar no título de uma coluna volta a ordenar como você quiser;
   - ao **indicar acompanhamento**: quem avaliou vê a prioridade de hoje e confirma ou altera. O valor final é o do acompanhamento.
@@ -51,7 +52,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
   Um botão copia a mensagem pronta para cada técnica.
 - **Painel e lista de casos.** Há uma só lista de **Casos**, com filtros de etapa (triagem, avaliação, repasse, acompanhamento, encerrados), técnica, pendência e serviço (PAEFI ou MSE). Cada número do painel e da tabela por técnica é um atalho: abre essa lista já filtrada, e é contado por ela, então os números sempre batem. Em **Acompanhamento** aparecem também, só para consulta, as famílias que as técnicas incluíram direto no GESUAS.
-  - **Filtros:** etapa (cada aba mostra quantos casos tem), técnica, pendência e serviço. Em **Mais filtros**: período de recebimento, remetente, bairro, violação (um item da ficha ou o grupo inteiro) e prioridade. O filtro ativo fica destacado, e **Limpar filtros** volta tudo ao normal.
+  - **Filtros:** etapa (cada aba mostra quantos casos tem), técnica, pendência e serviço. Em **Mais filtros**: período de recebimento, remetente, bairro, violação (as do GESUAS) e prioridade. O filtro ativo fica destacado, e **Limpar filtros** volta tudo ao normal.
   - **Busca:** procura por palavras em qualquer ordem ("silva maria" acha "Maria da Silva") em nome, nº do caso, CPF (com ou sem pontos), bairro, endereço, remetente, ofício e técnica. Se o caso estiver em outra etapa, o número na aba mostra onde. A tecla **/** leva à busca de qualquer tela, e **Esc** limpa.
   - **Ordenar:** clique no título da coluna (uma vez sobe, outra desce, outra volta ao normal). Na fila de triagem, avaliação e repasse, a última coluna mostra a última movimentação e há quantos dias.
   - **Baixar lista (.csv):** baixa a lista filtrada, na ordem da tela, para abrir no Excel ou no Planilhas.
@@ -71,7 +72,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - caminho dos encaminhamentos: recebidos, avaliados, indicados para acompanhamento, em acompanhamento no GESUAS;
   - tempo (mediana) de cada etapa: recebimento até a conclusão da avaliação, conclusão até o repasse, repasse até a inclusão no GESUAS;
   - desfecho das avaliações e, por remetente, quanto se confirma como acompanhamento ou não se confirma;
-  - violações por grupo e situações mais frequentes;
+  - violações do GESUAS mais frequentes, e o cruzamento com o bairro (as 6 mais frequentes como colunas);
   - registros de atendimento por tipo, registros por avaliação e avaliações com visita domiciliar;
   - carga por técnica (famílias no GESUAS ponderadas pela complexidade), PAF preenchido e famílias aguardando inclusão;
   - atendimentos registrados no GESUAS por mês, produção por técnica e tempo do repasse até o primeiro atendimento;
