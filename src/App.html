@@ -145,7 +145,7 @@ const DIAG = [
 const DIAG_LABEL = {}, DIAG_GRUPO = {};
 DIAG.forEach(g => (g.itens || g.subs.flatMap(s => s.itens)).forEach(([k,l]) => { DIAG_LABEL[k]=l; DIAG_GRUPO[k]=g.g.replace(/^\d\.\s*/,''); }));
 const DESFECHOS_AVAL = [
-  ['indicar_acompanhamento','Indicar acompanhamento','Coordenação escolhe a técnica'],
+  ['indicar_acompanhamento','Indicar acompanhamento','Violação, prioridade e coordenação escolhe a técnica'],
   ['Contrarreferenciado ao CRAS','Contrarreferenciar ao CRAS','Sem violação que justifique PAEFI'],
   ['Denúncia não confirmada — respondido ao órgão','Não confirmado','Responder ao órgão e encerrar'],
   ['Não localizado','Não localizado','Após tentativas registradas'],
@@ -484,7 +484,8 @@ function renderNav(){
   });
 }
 const pill = c => `<span class="pill p-${c.etapa}">${ETAPAS[c.etapa]||c.etapa}</span>`;
-const prio = p => `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>`;
+const PRIO_ROT = {1:'1 · Urgente (risco iminente)', 2:'2 · Alta', 3:'3 · Regular'};
+const prio = p => p ? `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>` : '';
 const pessoasTxt = c => c.pessoas.map(p => p.nome).join(', ') || '—';
 const nomeCaso = c => (c.pessoas[0] && c.pessoas[0].nome) || c.responsavel || '(sem nome)';
 const nomeFamilia = c => c.responsavel || nomeCaso(c);
@@ -701,7 +702,7 @@ function vCasos(){
     ${sel('fRem','Remetente','Todos os remetentes', rems.map(r => [r,r]), f.rem)}
     ${sel('fBairro','Bairro','Todos os bairros', bairros.map(b => [b,b]), f.bairro)}
     <select id="fViol" aria-label="Violação" class="${f.viol?'ativo':''}"><option value="">Qualquer violação</option>${violOps}</select>
-    ${sel('fPrio','Prioridade','Qualquer prioridade', [['1','1 · Urgente'],['2','2 · Alta'],['3','3 · Regular']], f.prio)}
+    ${sel('fPrio','Prioridade','Qualquer prioridade', [['1','1 · Urgente'],['2','2 · Alta'],['3','3 · Regular'],['0','Sem prioridade definida']], f.prio)}
   </div>`:''}
   ${avisoGes?'<p class="muted" style="margin:-4px 0 10px;font-size:12.5px">Com período, remetente, violação ou prioridade, a lista mostra só os casos deste sistema: as famílias que estão só no GESUAS não têm esses dados.</p>':''}
   <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div>
@@ -716,7 +717,7 @@ function baixarCsv(){
       return ['GESUAS'+(ehMSE(g)?' (MSE)':''), '', TIT(g.responsavel), fmtCpf(g.cpf), g.bairro?TIT(g.bairro):'', g.endereco||'', '', '', '', '', '', '', ETAPAS.acompanhamento, '', nomeTecnica(g.tecnico), g.inicio, 'Só no GESUAS', g.paf||'Em branco']; }
     const c = it, s = statusGes(c);
     return [c.id, pessoasTxt(c), c.responsavel, c.cpf, bairroDe(c), c.endereco, c.contato, remDe(c), `${c.doc_tipo||''} ${c.doc_num||''}`.trim(), fmt(c.recebido), c.prazo?fmt(c.prazo)+(c.prazo_respondido?' (respondido)':''):'',
-      c.prioridade, ETAPAS[c.etapa]||c.etapa, c.desfecho, c.etapa==='acompanhamento'?tecnicaRef(c):c.tecnica, c.inicio_acomp?fmt(c.inicio_acomp):'', s?SIT[s.tipo]:'', s&&s.tipo==='ok'?(s.paf||'Em branco'):'']; });
+      c.prioridade||'', ETAPAS[c.etapa]||c.etapa, c.desfecho, c.etapa==='acompanhamento'?tecnicaRef(c):c.tecnica, c.inicio_acomp?fmt(c.inicio_acomp):'', s?SIT[s.tipo]:'', s&&s.tipo==='ok'?(s.paf||'Em branco'):'']; });
   const cel = v => { v = String(v ?? '').replace(/"/g,'""'); return /^[=+\-@]/.test(v) ? `"'${v}"` : `"${v}"`; };
   const csv = '﻿' + [cab, ...linhas].map(l => l.map(cel).join(';')).join('\r\n');
   try {
@@ -741,10 +742,10 @@ function draft(){
   S.draft = c ? {
     responsavel:c.responsavel, cpf:c.cpf||'', pessoas:(c.pessoas.length?c.pessoas:[{nome:'',nascimento:'',sexo:''}]).map(p=>({...p})),
     endereco:c.endereco||'', bairro:c.bairro||'', contato:c.contato||'', remetente:c.remetente||'', remetente_detalhe:c.remetente_detalhe||'',
-    doc_tipo:c.doc_tipo||'Ofício', doc_num:c.doc_num||'', recebido:c.recebido||'', prazo:c.prazo||'', descricao:c.descricao||'', prioridade:String(c.prioridade||2)
+    doc_tipo:c.doc_tipo||'Ofício', doc_num:c.doc_num||'', recebido:c.recebido||'', prazo:c.prazo||'', descricao:c.descricao||''
   } : {
     responsavel:'', cpf:'', pessoas:[{nome:'',nascimento:'',sexo:''}], endereco:'', bairro:'', contato:'', remetente:'', remetente_detalhe:'',
-    doc_tipo:'Ofício', doc_num:'', recebido:iso(HOJE), prazo:'', descricao:'', prioridade:'2', destino:'avaliacao', tecnica:TECNICAS()[0]||'', complexidade:'1'
+    doc_tipo:'Ofício', doc_num:'', recebido:iso(HOJE), prazo:'', descricao:'', destino:'avaliacao', tecnica:TECNICAS()[0]||'', complexidade:'1'
   };
   return S.draft;
 }
@@ -795,7 +796,6 @@ function vNovo(){
       <label class="field"><span>Número</span><input id="n_num" data-k="doc_num" value="${esc(Dd.doc_num)}" placeholder="Ex.: 145/2026"></label>
       <label class="field"><span>Data de recebimento *</span><input id="n_rec" type="date" data-k="recebido" value="${esc(Dd.recebido)}" required></label>
       <label class="field"><span>Prazo de resposta</span><input id="n_prazo" type="date" data-k="prazo" value="${esc(Dd.prazo)}"><small>Com data, o painel avisa quando estiver perto de vencer.</small></label>
-      <label class="field"><span>Prioridade</span><select id="n_prio" data-k="prioridade"><option value="1" ${Dd.prioridade==='1'?'selected':''}>1 · Urgente (risco iminente)</option><option value="2" ${Dd.prioridade==='2'?'selected':''}>2 · Alta</option><option value="3" ${Dd.prioridade==='3'?'selected':''}>3 · Regular</option></select></label>
     </div>
     <label class="field"><span>Descrição breve *</span><textarea id="n_desc" data-k="descricao" required placeholder="O que o encaminhamento relata">${esc(Dd.descricao)}</textarea></label>
   </section>
@@ -815,7 +815,7 @@ function dupHtml(dup){
   if (!dup.length) return '';
   return `<div class="dup"><b>Já existe registro com esse nome.</b> Confira antes de abrir um caso novo:<ul style="margin:6px 0 0;padding-left:18px">${dup.map(c => `<li><a href="#" data-caso="${c.id}" style="color:inherit"><span class="mono">${c.id}</span> · ${esc(nomeCaso(c))}${c.responsavel&&c.responsavel!==nomeCaso(c)?' (resp.: '+esc(c.responsavel)+')':''}</a> · ${ETAPAS[c.etapa]}${c.etapa==='acompanhamento'?' com '+esc(tecnicaRef(c)):''}${c.desfecho?' · '+esc(c.desfecho):''}</li>`).join('')}</ul></div>`;
 }
-const CAMPOS_EDITAVEIS = ['responsavel','cpf','endereco','bairro','contato','remetente','remetente_detalhe','doc_tipo','doc_num','recebido','prazo','descricao','prioridade'];
+const CAMPOS_EDITAVEIS = ['responsavel','cpf','endereco','bairro','contato','remetente','remetente_detalhe','doc_tipo','doc_num','recebido','prazo','descricao'];
 async function salvarNovo(){
   const Dd = draft();
   if (!Dd.pessoas.some(p => String(p.nome||'').trim()) || !Dd.remetente || !Dd.descricao.trim() || !Dd.recebido){ toast('Preencha vítima, remetente, data de recebimento e descrição.'); return; }
@@ -825,7 +825,6 @@ async function salvarNovo(){
       const {pessoas, ...campos} = Dd;
       const c = DB.casos.find(x => x.id===S.editando);
       CAMPOS_EDITAVEIS.forEach(k => { if (k in campos) c[k] = campos[k]; });
-      c.prioridade = Number(campos.prioridade) || 2;
       c.pessoas = pessoas.filter(p => String(p.nome||'').trim()).map(p => ({...p, nome:p.nome.trim()}));
       salvar(c, 'Dados do caso', 'api_editarCaso', [c.id, campos, pessoas]);
       S.draft=null; S.editando=null; go('caso',{caso:c.id,tab:'dados'});
@@ -842,7 +841,7 @@ function vCaso(){
   const pulouAval = !['triagem','avaliacao'].includes(c.etapa) && !c.passou_avaliacao;
   const stepsArr = [['Entrada',true],['Triagem',c.etapa!=='triagem'],['Avaliação social', c.passou_avaliacao],['Desfecho',!!c.desfecho],['Acompanhamento',c.etapa==='acompanhamento'||!!c.inicio_acomp],['Desligamento',!!c.desligamento]];
   const nowIdx = {triagem:1,avaliacao:2,repasse:3,acompanhamento:4,encerrado:-1}[c.etapa];
-  const tabs=[['dados','Dados do caso'],['avaliacao','Ficha de avaliação'],['registros',`Registros (${c.registros.length})`]];
+  const tabs=[['dados','Dados do caso'],['registros',`Registros (${c.registros.length})`]];
   if (c.inicio_acomp && coord()) tabs.push(['acomp','Acompanhamento']);
   tabs.push(['hist','Histórico']);
   if (!tabs.find(t => t[0]===S.tab)) S.tab='dados';
@@ -872,7 +871,7 @@ function vCaso(){
     </aside>
     <section class="panel">
       <div class="tabs">${tabs.map(([k,l]) => `<button class="${S.tab===k?'on':''}" data-tab="${k}">${l}</button>`).join('')}</div>
-      ${S.tab==='dados'?tabDados(c): S.tab==='avaliacao'?tabAval(c): S.tab==='registros'?tabReg(c): S.tab==='acomp'?tabAcomp(c): tabHist(c)}
+      ${S.tab==='dados'?tabDados(c): S.tab==='registros'?tabReg(c): S.tab==='acomp'?tabAcomp(c): tabHist(c)}
     </section>
   </div>`;
 }
@@ -930,7 +929,7 @@ function acaoEtapa(c){
   if (c.etapa==='repasse' && coord()) return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Avaliação indicou acompanhamento</h2><div class="muted" style="font-size:12.5px">${c.desfecho_obs?esc(c.desfecho_obs):'Escolha a técnica de referência.'}</div></div>
     <div class="outcomes"><button class="main-o" data-out="p_acomp"><b>Repassar à técnica</b><small>Técnica e complexidade</small></button>
     <button data-out="Arquivado"><b>Arquivar</b><small>Registra o motivo</small></button></div></section>`;
-  if (c.etapa==='avaliacao') return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Desfecho da avaliação</h2><div class="muted" style="font-size:12.5px">${coord()?'Ao indicar acompanhamento, você já escolhe a técnica.':'Ao indicar acompanhamento, o caso vai para a coordenação escolher a técnica.'}</div></div>
+  if (c.etapa==='avaliacao') return `<section class="panel stack" style="margin-bottom:16px"><div><h2>Desfecho da avaliação</h2><div class="muted" style="font-size:12.5px">Ao indicar acompanhamento, marque a violação vivenciada e a prioridade; o caso segue para a coordenação escolher a técnica.</div></div>
     <div class="outcomes">${DESFECHOS_AVAL.map(([k,t,s],i) => `<button class="${i===0?'main-o':''}" data-out="${esc(k)}"><b>${t}</b><small>${s}</small></button>`).join('')}</div></section>`;
   if (c.etapa==='acompanhamento' && coord()) return `<div class="row" style="margin-bottom:16px;justify-content:flex-end"><button class="btn" data-out="deslig">Desligar do acompanhamento</button></div>`;
   if (c.etapa==='encerrado') return `<div class="panel row" style="margin-bottom:16px;justify-content:space-between"><div><span class="label">Desfecho</span><div style="font-weight:600;margin-top:4px">${esc(c.desfecho||'—')}${c.desfecho_data?' em '+fmt(c.desfecho_data):''}</div>${c.desfecho_obs?`<div class="muted">${esc(c.desfecho_obs)}</div>`:''}</div>${coord()?'<button class="btn small" data-reabrir>Reabrir caso</button>':''}</div>`;
@@ -938,15 +937,33 @@ function acaoEtapa(c){
 }
 function tabDados(c){
   return `<div class="stack"><div><span class="label">Descrição breve</span><p style="margin:4px 0 0">${esc(c.descricao)}</p></div>
-  <div><span class="label">Diagnóstico marcado</span><div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(DIAG_LABEL[k]||k)}</span>`).join(''):'<span class="muted">Ainda não marcado. Use a aba Ficha de avaliação.</span>'}</div></div>
+  <div><div class="row" style="justify-content:space-between"><span class="label">Violação vivenciada${c.prioridade?` · prioridade ${c.prioridade}`:''}</span>${['repasse','acompanhamento','encerrado'].includes(c.etapa)?'<button type="button" class="btn small" data-editviol>Editar violações e prioridade</button>':''}</div>
+    <div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(DIAG_LABEL[k]||k)}</span>`).join(''):'<span class="muted">Marcada por quem avalia, ao indicar acompanhamento.</span>'}</div></div>
   ${c.desfecho&&c.etapa!=='encerrado'?`<div><span class="label">Desfecho</span><div>${esc(c.desfecho)} em ${fmt(c.desfecho_data)}</div></div>`:''}
   <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1], c):'<div class="muted">Nenhum registro ainda.</div>'}</div>
   ${coord()&&c.etapa==='acompanhamento'?gesBox(c):''}</div>`;
 }
-function tabAval(c){
-  const box = ([k,l]) => `<label class="chk"><input type="checkbox" id="dg_${k}" data-diag="${k}" ${c.diagnostico.includes(k)?'checked':''}><span>${esc(l)}</span></label>`;
-  return `<div class="diag"><p class="muted" style="margin-top:0">Mesmos itens da ficha em papel. Identificação, endereço e descrição já vêm do encaminhamento. As marcações são salvas na hora.</p>
-  ${DIAG.map(g => `<fieldset><legend>${g.g}</legend>${g.itens?g.itens.map(box).join(''):g.subs.map(s => `<div class="sub">${s.s}</div>${s.itens.map(box).join('')}`).join('')}</fieldset>`).join('')}</div>`;
+/* violação vivenciada (a lista do quadro de avaliação) e prioridade: abrem no modal de indicar acompanhamento */
+function violacaoHtml(c){
+  const box = ([k,l]) => `<label class="chk"><input type="checkbox" data-dg="${k}" ${c.diagnostico.includes(k)?'checked':''}><span>${esc(l)}</span></label>`;
+  const pr = [1,2,3].map(v => `<label class="chk"><input type="radio" name="m_prio" value="${v}" ${Number(c.prioridade)===v?'checked':''}><span>${PRIO_ROT[v]}</span></label>`).join('');
+  return `<div class="diag"><div class="label" style="margin-bottom:6px">Violação vivenciada <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· marque ao menos uma</span></div>
+    ${DIAG.map(g => `<fieldset><legend>${g.g}</legend>${g.itens?g.itens.map(box).join(''):g.subs.map(s => `<div class="sub">${s.s}</div>${s.itens.map(box).join('')}`).join('')}</fieldset>`).join('')}</div>
+    <fieldset class="diag" style="border:0;padding:0;margin:0"><legend>Prioridade</legend>${pr}</fieldset>`;
+}
+/* lê o que foi marcado no modal; sem violação ou sem prioridade, avisa e devolve null */
+function lerViolacao(){
+  const codigos = [...document.querySelectorAll('#layer [data-dg]:checked')].map(e => e.dataset.dg);
+  const r = document.querySelector('#layer [name=m_prio]:checked');
+  if (!codigos.length){ toast('Marque ao menos uma violação vivenciada.'); return null; }
+  if (!r){ toast('Escolha a prioridade.'); return null; }
+  return {codigos, prioridade:Number(r.value)};
+}
+function editarViolacao(c){
+  modal(`<h2>Violações e prioridade</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))}</p>${violacaoHtml(c)}`,
+    async () => { const v = lerViolacao(); if (!v) return null;
+      Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade});
+      salvar(c, 'Violações e prioridade', 'api_violacao', [c.id, v.codigos, v.prioridade]); return c; }, 'Salvar', 'primary', 'larga');
 }
 function imprimirFicha(c){
   if (!c) return;
@@ -1046,8 +1063,8 @@ function tabHist(c){
 }
 
 /* ================= modais ================= */
-function modal(html, onOk, rotuloOk='Confirmar', classeOk='primary'){
-  $('#layer').innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true">${html}<div class="row" style="justify-content:flex-end"><button class="btn" data-mx>Cancelar</button><button class="btn ${classeOk}" data-mok>${rotuloOk}</button></div></div></div>`;
+function modal(html, onOk, rotuloOk='Confirmar', classeOk='primary', classeModal=''){
+  $('#layer').innerHTML = `<div class="modal-bg"><div class="modal ${classeModal}" role="dialog" aria-modal="true">${html}<div class="row" style="justify-content:flex-end"><button class="btn" data-mx>Cancelar</button><button class="btn ${classeOk}" data-mok>${rotuloOk}</button></div></div></div>`;
   const fechar = () => $('#layer').innerHTML='';
   $('#layer [data-mx]').onclick = fechar;
   $('#layer .modal-bg').onclick = e => { if (e.target.classList.contains('modal-bg')) fechar(); };
@@ -1067,12 +1084,11 @@ function acao(c, tipo){
     async () => { Object.assign(c, {etapa:'avaliacao', passou_avaliacao:true}); salvar(c, 'Enviado para avaliação social', 'api_encaminhar', [c.id, 'avaliacao']); return c; });
   if (tipo==='p_acomp') return modal(`<h2>Repassar para acompanhamento</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))} · registros e diagnóstico seguem junto.</p>${campoTecnica()}`,
     async () => { const t=$('#m_tec').value, cx=$('#m_cx').value; repassarLocal(c, t, cx); S.tab='acomp'; salvar(c, `Repasse a ${t}`, 'api_encaminhar', [c.id, 'acompanhamento', t, cx]); return c; });
-  if (tipo==='indicar_acompanhamento'){
-    if (coord()) return modal(`<h2>Concluir avaliação e repassar</h2>${campoTecnica()}<label class="field"><span>Observação</span><textarea id="m_obs"></textarea></label>`,
-      async () => { const t=$('#m_tec').value, cx=$('#m_cx').value, obs=$('#m_obs').value; repassarLocal(c, t, cx); c.desfecho_obs=obs; salvar(c, `Avaliação concluída · repasse a ${t}`, 'api_desfecho', [c.id, 'indicar_acompanhamento', obs, t, cx], null, obs); return c; });
-    return modal(`<h2>Indicar acompanhamento</h2><p style="margin:0">A coordenação vai escolher a técnica de referência.</p><label class="field"><span>Observação para a coordenação</span><textarea id="m_obs" placeholder="Ex.: situação de risco, sugestão de técnica pelo território"></textarea></label>`,
-      async () => { const obs=$('#m_obs').value; Object.assign(c, {etapa:'repasse', desfecho:'Indicado acompanhamento', desfecho_data:iso(HOJE), desfecho_obs:obs}); salvar(c, 'Indicado acompanhamento', 'api_desfecho', [c.id, 'indicar_acompanhamento', obs], null, obs); return c; });
-  }
+  if (tipo==='indicar_acompanhamento') return modal(`<h2>Indicar acompanhamento</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))} · a coordenação escolhe a técnica de referência.</p>${violacaoHtml(c)}
+      <label class="field"><span>Observação para a coordenação</span><textarea id="m_obs" placeholder="Ex.: situação de risco, sugestão de técnica pelo território"></textarea></label>`,
+    async () => { const v = lerViolacao(); if (!v) return null; const obs = $('#m_obs').value;
+      Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade, etapa:'repasse', desfecho:'Indicado acompanhamento', desfecho_data:iso(HOJE), desfecho_obs:obs});
+      salvar(c, 'Indicado acompanhamento', 'api_indicarAcompanhamento', [c.id, obs, v.codigos, v.prioridade], null, obs); return c; }, 'Indicar acompanhamento', 'primary', 'larga');
   if (tipo==='deslig') return modal(`<h2>Desligar do acompanhamento</h2><label class="field"><span>Motivo</span><select id="m_mot"><option>Superação da situação de violação</option><option>Contrarreferenciado ao CRAS</option><option>Mudança de município</option><option>Recusa / não adesão</option><option>Óbito</option><option>Outro</option></select></label><label class="field"><span>Observação</span><textarea id="m_obs"></textarea></label>`,
     async () => { const mot=$('#m_mot').value, obs=$('#m_obs').value; encerrarLocal(c, 'Desligado: '+mot, obs); c.desligamento=iso(HOJE); salvar(c, 'Desligamento', 'api_desligar', [c.id, mot, obs], null, obs); return c; });
   return modal(`<h2>${esc(tipo)}</h2><label class="field"><span>Observação</span><textarea id="m_obs" placeholder="Ex.: respondido ofício nº…"></textarea></label>`,
@@ -1399,7 +1415,7 @@ function vInd(){
       ${rems.length?`<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Remetente</th><th style="text-align:right">Recebidos</th><th style="text-align:right">Avaliações concluídas</th><th style="text-align:right">Indicaram acompanhamento</th><th style="text-align:right">Não confirmados</th></tr></thead><tbody>
       ${rems.map(x => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))} title="Abrir a lista">${esc(x.r)}</button></td><td class="mono" style="text-align:right"><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))}>${x.n}</button></td><td class="mono" style="text-align:right">${x.av}</td><td class="mono" style="text-align:right">${x.acomp===null?'—':x.acomp+'%'}</td><td class="mono" style="text-align:right">${x.nc===null?'—':x.nc+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem dados no período.</div>'}
       <div class="muted" style="font-size:12px">Mostra quanto do que cada órgão encaminha se confirma como violação que justifica acompanhamento.</div></section>
-    <section class="panel stack"><h2>Por grupo de violação</h2>${hb(grp, 0, g => lk({viol:'g:'+g}))}<div class="muted" style="font-size:12px">Casos recebidos no período com algum item do grupo marcado na ficha de avaliação. Clique numa barra para ver os casos.</div></section>
+    <section class="panel stack"><h2>Por grupo de violação</h2>${hb(grp, 0, g => lk({viol:'g:'+g}))}<div class="muted" style="font-size:12px">Casos recebidos no período com algum item do grupo marcado ao indicar acompanhamento. Clique numa barra para ver os casos.</div></section>
     <section class="panel stack"><h2>Situações mais frequentes</h2>${hb(tip, 0, k => lk({viol:k}))}</section>
     <section class="panel stack"><h2>Registros de atendimento</h2>
       <div class="row" style="gap:18px"><div><span class="label">Por avaliação concluída</span><div style="font-size:20px;font-weight:700">${mediaReg===null?'—':mediaReg}</div></div><div><span class="label">Avaliações com visita domiciliar</span><div style="font-size:20px;font-weight:700">${comVD===null?'—':comVD+'%'}</div></div></div>
@@ -1577,10 +1593,7 @@ function bind(){
     const feito = el.dataset.v==='1'; r.gesuas_em = feito ? iso(HOJE) : ''; r.gesuas_por = feito ? DB.email : '';
     salvar(c, feito ? 'Registro lançado no GESUAS' : 'Registro: lançamento no GESUAS desfeito', 'api_registroGesuas', [c.id, r.id, feito], 'rges:'+r.id); render(); });
   const pk = m.querySelector('[data-prazook]'); if (pk) pk.onclick = () => { c.prazo_respondido = true; salvar(c, 'Prazo respondido', 'api_prazoRespondido', [c.id]); render(); };
-  m.querySelectorAll('[data-diag]').forEach(el => el.onchange = () => {
-    const k=el.dataset.diag; if (el.checked){ if (!c.diagnostico.includes(k)) c.diagnostico.push(k); } else c.diagnostico = c.diagnostico.filter(x => x!==k);
-    salvar(c, 'Diagnóstico', 'api_diagnostico', [c.id, c.diagnostico.slice()], 'diag:'+c.id);
-  });
+  const ev = m.querySelector('[data-editviol]'); if (ev) ev.onclick = () => editarViolacao(c);
   const fr = $('#fReg'); if (fr) fr.onsubmit = e => { e.preventDefault(); const t=$('#r_txt').value.trim(); if (!t){ toast('Escreva a evolução antes de adicionar.'); return; }
     const reg = {id:idUnico(), data:$('#r_data').value||iso(HOJE), tipo:$('#r_tipo').value, texto:t, autor:autorTxt(), criado_por:DB.email, criado_em:iso(new Date())};
     c.registros.push(reg); c.registros.sort((a,b) => a.data < b.data ? -1 : 1);

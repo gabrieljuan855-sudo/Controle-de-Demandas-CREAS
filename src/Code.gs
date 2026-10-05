@@ -130,7 +130,7 @@ function montarCasos(filtroIds) {
     .map(function (c) {
       var o = paraCliente(c);
       o.id = String(o.id);
-      o.prioridade = Number(o.prioridade) || 2;
+      o.prioridade = Number(o.prioridade) || 0;  // 0 = ainda sem prioridade (quem avalia define ao indicar acompanhamento)
       o.complexidade = o.complexidade === '' ? '' : Number(o.complexidade);
       o.passou_avaliacao = sim(o.passou_avaliacao);
       o.prazo_respondido = sim(o.prazo_respondido);
@@ -201,7 +201,7 @@ function api_novoCaso(d) {
       id: id, criado_em: agora, criado_por: emailAtual(), responsavel: String(d.responsavel || '').trim(), cpf: d.cpf, endereco: d.endereco,
       bairro: d.bairro, contato: d.contato, remetente: d.remetente, remetente_detalhe: d.remetente_detalhe,
       doc_tipo: d.doc_tipo, doc_num: d.doc_num, recebido: receb, prazo: isoParaData(d.prazo), prazo_respondido: '',
-      descricao: d.descricao, prioridade: Number(d.prioridade) || 2, etapa: 'triagem', passou_avaliacao: '', diagnostico: '',
+      descricao: d.descricao, prioridade: '', etapa: 'triagem', passou_avaliacao: '', diagnostico: '',
       origem: 'sistema', atualizado_em: agora
     };
     if (d.destino === 'avaliacao') { caso.etapa = 'avaliacao'; caso.passou_avaliacao = 'SIM'; }
@@ -224,7 +224,7 @@ function exigirVitima(pessoas) {
 }
 
 var CAMPOS_EDITAVEIS = ['responsavel', 'cpf', 'endereco', 'bairro', 'contato', 'remetente', 'remetente_detalhe',
-  'doc_tipo', 'doc_num', 'recebido', 'prazo', 'descricao', 'prioridade'];
+  'doc_tipo', 'doc_num', 'recebido', 'prazo', 'descricao'];
 
 function api_editarCaso(id, campos, pessoas) {
   var papel = papelAtual();
@@ -266,35 +266,53 @@ function api_encaminhar(id, destino, tecnica, complexidade) {
 }
 
 /**
- * Desfecho da avaliação social.
- * tipo 'indicar_acompanhamento' deixa o caso aguardando a coordenação escolher a técnica.
+ * Desfecho da avaliação social que não é indicar acompanhamento (arquivar, contrarreferenciar...).
+ * Indicar acompanhamento tem função própria: exige violação e prioridade.
  */
-function api_desfecho(id, tipo, obs, tecnica, complexidade) {
-  var papel = papelAtual();
+function api_desfecho(id, tipo, obs) {
+  papelAtual();
   return comTrava(function () {
+    if (tipo === 'indicar_acompanhamento') throw new Error('Atualize a página (Ctrl+F5) e indique o acompanhamento de novo.');
     var c = buscarCaso(id);
-    if (tipo === 'indicar_acompanhamento') {
-      if (papel === 'coordenacao' && tecnica) {
-        c.etapa = 'acompanhamento'; c.tecnica = tecnica; c.complexidade = Number(complexidade) || 1; c.inicio_acomp = new Date();
-        c.desfecho = 'Passado para acompanhamento'; c.desfecho_data = new Date(); c.desfecho_obs = obs || '';
-        registrarHistorico(id, 'Avaliação concluída; repassado para acompanhamento com ' + tecnica);
-      } else {
-        c.etapa = 'repasse'; c.desfecho = 'Indicado acompanhamento'; c.desfecho_data = new Date(); c.desfecho_obs = obs || '';
-        registrarHistorico(id, 'Avaliação concluída com indicação de acompanhamento');
-      }
-    } else {
-      c.etapa = 'encerrado'; c.desfecho = tipo; c.desfecho_data = new Date(); c.desfecho_obs = obs || '';
-      registrarHistorico(id, 'Desfecho: ' + tipo);
-    }
+    c.etapa = 'encerrado'; c.desfecho = tipo; c.desfecho_data = new Date(); c.desfecho_obs = obs || '';
+    registrarHistorico(id, 'Desfecho: ' + tipo);
     return salvarCasoLinha(c);
   });
 }
 
-function api_diagnostico(id, codigos) {
+/** Códigos de violação válidos e prioridade 1 a 3: sem isso a indicação não é aceita. */
+function exigirViolacaoEPrioridade(codigos, prioridade) {
+  var lista = (codigos || []).map(String).filter(Boolean);
+  if (!lista.length) throw new Error('Marque ao menos uma violação vivenciada.');
+  var p = Number(prioridade);
+  if (p !== 1 && p !== 2 && p !== 3) throw new Error('Escolha a prioridade.');
+  return { codigos: lista, prioridade: p };
+}
+
+/**
+ * Quem avaliou indica o acompanhamento: marca a violação vivenciada e a prioridade.
+ * O caso fica aguardando a coordenação escolher a técnica (etapa "repasse").
+ */
+function api_indicarAcompanhamento(id, obs, codigos, prioridade) {
   papelAtual();
   return comTrava(function () {
+    var v = exigirViolacaoEPrioridade(codigos, prioridade);
     var c = buscarCaso(id);
-    c.diagnostico = (codigos || []).join(',');
+    c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade;
+    c.etapa = 'repasse'; c.desfecho = 'Indicado acompanhamento'; c.desfecho_data = new Date(); c.desfecho_obs = obs || '';
+    registrarHistorico(id, 'Avaliação concluída com indicação de acompanhamento');
+    return salvarCasoLinha(c);
+  });
+}
+
+/** Corrige as violações e a prioridade de um caso sem mudar a etapa. */
+function api_violacao(id, codigos, prioridade) {
+  papelAtual();
+  return comTrava(function () {
+    var v = exigirViolacaoEPrioridade(codigos, prioridade);
+    var c = buscarCaso(id);
+    c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade;
+    registrarHistorico(id, 'Violações e prioridade atualizadas');
     return salvarCasoLinha(c);
   });
 }
