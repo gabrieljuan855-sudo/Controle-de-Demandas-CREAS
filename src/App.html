@@ -138,6 +138,13 @@ const VIOLACOES = [
   ['img','Exploração da imagem'],['des','Membro em situação de desaparecimento'],['mor','Violência Moral'],
   ['ins','Violência Institucional'],['bul','Bullying'],['out','Outra']];
 const DIAG_LABEL = Object.fromEntries(VIOLACOES);
+/* "Outra" pede qual: sugestões das normativas do SUAS que não têm opção própria no GESUAS, mais o que já foi digitado */
+const OUTRAS_SUGESTOES = ['Mendicância','Discriminação por deficiência','Discriminação por identidade de gênero','Discriminação por idade','Discriminação religiosa','Autonegligência da pessoa idosa','Trabalho análogo ao de escravo'];
+const outrasOpcoes = () => [...new Set([...OUTRAS_SUGESTOES, ...DB.casos.map(c => String(c.violacao_outra||'').trim()).filter(Boolean)])].sort((a,b) => a.localeCompare(b,'pt-BR'));
+const violRot = (c, k) => k==='out' && c.violacao_outra ? `Outra: ${c.violacao_outra}` : (DIAG_LABEL[k]||k);
+/* campo "Qual?" que aparece ao marcar Outra; attr liga ao rascunho do formulário quando há um */
+const outraHtml = (marcada, valor, attr='') => `<label class="field outra-box"${marcada?'':' hidden'}><span>Qual é a outra violação? *</span><input class="outra-txt" ${attr} list="outras_viol" autocomplete="off" value="${esc(valor||'')}" placeholder="Escolha uma sugestão ou escreva"></label>
+  <datalist id="outras_viol">${outrasOpcoes().map(o => `<option value="${esc(o)}">`).join('')}</datalist>`;
 const DESFECHOS_AVAL = [
   ['indicar_acompanhamento','Indicar acompanhamento','Violação, prioridade e coordenação escolhe a técnica'],
   ['Contrarreferenciado ao CRAS','Contrarreferenciar ao CRAS','Sem violação que justifique PAEFI'],
@@ -755,7 +762,7 @@ function draft(){
     doc_tipo:c.doc_tipo||'Ofício', doc_num:c.doc_num||'', recebido:c.recebido||'', prazo:c.prazo||'', descricao:c.descricao||'', prioridade:c.prioridade ? String(c.prioridade) : ''
   } : {
     responsavel:'', cpf:'', pessoas:[{nome:'',nascimento:'',sexo:''}], endereco:'', bairro:'', contato:'', remetente:'', remetente_detalhe:'',
-    doc_tipo:'Ofício', doc_num:'', recebido:iso(HOJE), prazo:'', descricao:'', prioridade:'2', diagnostico:[], destino:'avaliacao', tecnica:TECNICAS()[0]||'', complexidade:'1'
+    doc_tipo:'Ofício', doc_num:'', recebido:iso(HOJE), prazo:'', descricao:'', prioridade:'2', diagnostico:[], violacao_outra:'', destino:'avaliacao', tecnica:TECNICAS()[0]||'', complexidade:'1'
   };
   return S.draft;
 }
@@ -819,7 +826,7 @@ function vNovo(){
     ${Dd.destino==='acompanhamento'?`<div class="grid2"><label class="field"><span>Técnica de referência</span><select id="n_tec" data-k="tecnica">${opcoes(TECNICAS(), Dd.tecnica)}</select></label>
     <label class="field"><span>Complexidade</span><select id="n_cx" data-k="complexidade">${[0.5,1,1.5].map(v => `<option value="${v}" ${String(v)===String(Dd.complexidade)?'selected':''}>${COMPLEX[v]}</option>`).join('')}</select></label></div>
     <div class="diag"><div class="label" style="margin-bottom:6px">Violação vivenciada <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· mesma lista do GESUAS · marque ao menos uma</span></div>
-      <div class="viol-lista">${listaViolacoes(Dd.diagnostico||[], 'data-dgform')}</div></div>`:''}
+      <div class="viol-lista">${listaViolacoes(Dd.diagnostico||[], 'data-dgform')}</div>${outraHtml((Dd.diagnostico||[]).includes('out'), Dd.violacao_outra, 'data-k="violacao_outra"')}</div>`:''}
   </section>`}
   <div class="row"><button class="btn primary" type="submit">${edit?'Salvar alterações':'Registrar encaminhamento'}</button><button class="btn" type="button" id="cancelar">${edit?'Cancelar':'Limpar'}</button></div>
   </form>`;
@@ -833,6 +840,7 @@ async function salvarNovo(){
   const Dd = draft();
   if (!Dd.pessoas.some(p => String(p.nome||'').trim()) || !Dd.remetente || !Dd.descricao.trim() || !Dd.recebido){ toast('Preencha vítima, remetente, data de recebimento e descrição.'); return; }
   if (!S.editando && Dd.destino==='acompanhamento' && !(Dd.diagnostico||[]).length){ toast('Marque ao menos uma violação vivenciada.'); return; }
+  if (!S.editando && Dd.destino==='acompanhamento' && (Dd.diagnostico||[]).includes('out') && !String(Dd.violacao_outra||'').trim()){ toast('Diga qual é a outra violação.'); return; }
   const btn = $('#fNovo button[type=submit]'); btn.disabled = true;
   try {
     if (S.editando){
@@ -952,7 +960,7 @@ function tabDados(c){
   return `<div class="stack">
   ${pa.length?`<div class="pend-box"><span class="label">Pendências em aberto (${pa.length})</span>${pa.slice().reverse().map(r => `<div class="pend-item"><div><span class="mono muted">${fmtC(r.data)}</span> <span style="white-space:pre-wrap">${esc(r.pendencias)}</span></div><button type="button" class="btn small" data-rpend="${esc(r.id)}" data-v="1">Resolvida</button></div>`).join('')}</div>`:''}
   <div><div class="row" style="justify-content:space-between"><span class="label">Violação vivenciada</span>${['repasse','acompanhamento','encerrado'].includes(c.etapa)?'<button type="button" class="btn small" data-editviol>Editar violações e prioridade</button>':''}</div>
-    <div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(DIAG_LABEL[k]||k)}</span>`).join(''):'<span class="muted">Marcada por quem avalia, ao indicar acompanhamento.</span>'}</div></div>
+    <div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(violRot(c, k))}</span>`).join(''):'<span class="muted">Marcada por quem avalia, ao indicar acompanhamento.</span>'}</div></div>
   ${c.desfecho&&c.etapa!=='encerrado'?`<div><span class="label">Desfecho</span><div>${esc(c.desfecho)} em ${fmt(c.desfecho_data)}</div></div>`:''}
   <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1], c, {semPend:true}):'<div class="muted">Nenhum registro ainda.</div>'}</div>
   ${coord()&&c.etapa==='acompanhamento'?gesBox(c):''}</div>`;
@@ -963,26 +971,28 @@ const listaViolacoes = (marcadas, attr) => VIOLACOES.map(([k,l]) => `<label clas
 function violacaoHtml(c){
   const pr = [1,2,3].map(v => `<label class="chk"><input type="radio" name="m_prio" value="${v}" ${Number(c.prioridade)===v?'checked':''}><span>${PRIO_ROT[v]}</span></label>`).join('');
   return `<div class="diag"><div class="label" style="margin-bottom:6px">Violação vivenciada <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· mesma lista do GESUAS · marque ao menos uma</span></div>
-    <div class="viol-lista">${listaViolacoes(c.diagnostico, 'data-dg')}</div></div>
+    <div class="viol-lista">${listaViolacoes(c.diagnostico, 'data-dg')}</div>${outraHtml(c.diagnostico.includes('out'), c.violacao_outra)}</div>
     <fieldset class="diag" style="border:0;padding:0;margin:0"><legend>Prioridade do acompanhamento</legend>${c.prioridade?`<div class="muted" style="font-size:12.5px;margin-bottom:4px">Hoje: ${PRIO_ROT[c.prioridade]}. Confirme ou altere.</div>`:''}${pr}</fieldset>`;
 }
 /* lê o que foi marcado no modal; sem violação ou sem prioridade, avisa e devolve null */
 function lerViolacao(){
   const codigos = [...document.querySelectorAll('#layer [data-dg]:checked')].map(e => e.dataset.dg);
   const r = document.querySelector('#layer [name=m_prio]:checked');
+  const outra = codigos.includes('out') ? ($('#layer .outra-txt')||{value:''}).value.trim() : '';
   if (!codigos.length){ toast('Marque ao menos uma violação vivenciada.'); return null; }
+  if (codigos.includes('out') && !outra){ toast('Diga qual é a outra violação.'); return null; }
   if (!r){ toast('Escolha a prioridade.'); return null; }
-  return {codigos, prioridade:Number(r.value)};
+  return {codigos, prioridade:Number(r.value), outra};
 }
 function editarViolacao(c){
   modal(`<h2>Violações e prioridade</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))}</p>${violacaoHtml(c)}`,
     async () => { const v = lerViolacao(); if (!v) return null;
-      Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade});
-      salvar(c, 'Violações e prioridade', 'api_violacao', [c.id, v.codigos, v.prioridade]); return c; }, 'Salvar', 'primary', 'larga');
+      Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade, violacao_outra:v.outra});
+      salvar(c, 'Violações e prioridade', 'api_violacao', [c.id, v.codigos, v.prioridade, v.outra]); return c; }, 'Salvar', 'primary', 'larga');
 }
 function imprimirFicha(c){
   if (!c) return;
-  const boxImp = ([k,l]) => `<div class="fi-item">${c.diagnostico.includes(k)?'☑':'☐'} ${esc(l)}</div>`;
+  const boxImp = ([k,l]) => `<div class="fi-item">${c.diagnostico.includes(k)?'☑':'☐'} ${k==='out' ? (c.diagnostico.includes('out')&&c.violacao_outra ? esc(violRot(c, k)) : 'Outra: ______________________') : esc(l)}</div>`;
   const diagHtml = `<div class="fi-lista">${VIOLACOES.map(boxImp).join('')}</div>`;
   const vitimas = c.pessoas.map(p => esc(p.nome)).join(', ');
   const registros = c.registros.map(r => `<div class="fi-reg"><b>${fmt(r.data)} — ${esc(r.tipo)} (${esc(r.autor)})</b><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias?`<div style="white-space:pre-wrap;margin-top:3px"><b>Pendências:</b> ${esc(r.pendencias)}</div>`:''}</div>`).join('');
@@ -1109,16 +1119,16 @@ function acao(c, tipo){
     const faltaViol = !c.diagnostico.length;
     return modal(`<h2>Repassar para acompanhamento</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))} · ${faltaViol?'marque a violação vivenciada, escolha a técnica e a complexidade.':'registros e violações seguem junto.'}</p>${campoTecnica()}${faltaViol?violacaoHtml(c):''}`,
       async () => { const t=$('#m_tec').value, cx=$('#m_cx').value; let v = null;
-        if (faltaViol){ v = lerViolacao(); if (!v) return null; Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade}); }
+        if (faltaViol){ v = lerViolacao(); if (!v) return null; Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade, violacao_outra:v.outra}); }
         repassarLocal(c, t, cx); S.tab='acomp';
-        salvar(c, `Repasse a ${t}`, 'api_encaminhar', v ? [c.id, 'acompanhamento', t, cx, v.codigos, v.prioridade] : [c.id, 'acompanhamento', t, cx]); return c; },
+        salvar(c, `Repasse a ${t}`, 'api_encaminhar', v ? [c.id, 'acompanhamento', t, cx, v.codigos, v.prioridade, v.outra] : [c.id, 'acompanhamento', t, cx]); return c; },
       'Confirmar', 'primary', faltaViol ? 'larga' : '');
   }
   if (tipo==='indicar_acompanhamento') return modal(`<h2>Indicar acompanhamento</h2><p class="muted" style="margin:0">${esc(nomeCaso(c))} · a coordenação escolhe a técnica de referência.</p>${violacaoHtml(c)}
       <label class="field"><span>Observação para a coordenação</span><textarea id="m_obs" placeholder="Ex.: situação de risco, sugestão de técnica pelo território"></textarea></label>`,
     async () => { const v = lerViolacao(); if (!v) return null; const obs = $('#m_obs').value;
-      Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade, etapa:'repasse', desfecho:'Indicado acompanhamento', desfecho_data:iso(HOJE), desfecho_obs:obs});
-      salvar(c, 'Indicado acompanhamento', 'api_indicarAcompanhamento', [c.id, obs, v.codigos, v.prioridade], null, obs); return c; }, 'Indicar acompanhamento', 'primary', 'larga');
+      Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade, violacao_outra:v.outra, etapa:'repasse', desfecho:'Indicado acompanhamento', desfecho_data:iso(HOJE), desfecho_obs:obs});
+      salvar(c, 'Indicado acompanhamento', 'api_indicarAcompanhamento', [c.id, obs, v.codigos, v.prioridade, v.outra], null, obs); return c; }, 'Indicar acompanhamento', 'primary', 'larga');
   if (tipo==='deslig') return modal(`<h2>Desligar do acompanhamento</h2><label class="field"><span>Motivo</span><select id="m_mot"><option>Superação da situação de violação</option><option>Contrarreferenciado ao CRAS</option><option>Mudança de município</option><option>Recusa / não adesão</option><option>Óbito</option><option>Outro</option></select></label><label class="field"><span>Observação</span><textarea id="m_obs"></textarea></label>`,
     async () => { const mot=$('#m_mot').value, obs=$('#m_obs').value; encerrarLocal(c, 'Desligado: '+mot, obs); c.desligamento=iso(HOJE); salvar(c, 'Desligamento', 'api_desligar', [c.id, mot, obs], null, obs); return c; });
   return modal(`<h2>${esc(tipo)}</h2><label class="field"><span>Observação</span><textarea id="m_obs" placeholder="Ex.: respondido ofício nº…"></textarea></label>`,
@@ -1445,7 +1455,7 @@ function vInd(){
       ${rems.length?`<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Remetente</th><th style="text-align:right">Recebidos</th><th style="text-align:right">Avaliações concluídas</th><th style="text-align:right">Indicaram acompanhamento</th><th style="text-align:right">Não confirmados</th></tr></thead><tbody>
       ${rems.map(x => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))} title="Abrir a lista">${esc(x.r)}</button></td><td class="mono" style="text-align:right"><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))}>${x.n}</button></td><td class="mono" style="text-align:right">${x.av}</td><td class="mono" style="text-align:right">${x.acomp===null?'—':x.acomp+'%'}</td><td class="mono" style="text-align:right">${x.nc===null?'—':x.nc+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem dados no período.</div>'}
       <div class="muted" style="font-size:12px">Mostra quanto do que cada órgão encaminha se confirma como violação que justifica acompanhamento.</div></section>
-    <section class="panel stack"><h2>Por violação</h2>${hb(viol, 0, k => lk({viol:k}))}<div class="muted" style="font-size:12px">Casos recebidos no período, pela violação marcada ao indicar acompanhamento (a mesma lista do GESUAS). Um caso pode ter mais de uma. Clique numa barra para ver os casos.</div></section>
+    <section class="panel stack"><h2>Por violação</h2>${hb(viol, 0, k => lk({viol:k}))}${(() => { const o = cont(C.filter(c => c.diagnostico.includes('out')).map(c => String(c.violacao_outra||'').trim() || 'Não informada')); return o.length ? `<div style="font-size:12.5px"><span class="label">Dentro de "Outra"</span><div>${o.map(([t,n]) => `${esc(t)} <b>${n}</b>`).join(' · ')}</div></div>` : ''; })()}<div class="muted" style="font-size:12px">Casos recebidos no período, pela violação marcada ao indicar acompanhamento (a mesma lista do GESUAS). Um caso pode ter mais de uma. Clique numa barra para ver os casos.</div></section>
     <section class="panel stack"><h2>Registros de atendimento</h2>
       <div class="row" style="gap:18px"><div><span class="label">Por avaliação concluída</span><div style="font-size:20px;font-weight:700">${mediaReg===null?'—':mediaReg}</div></div><div><span class="label">Avaliações com visita domiciliar</span><div style="font-size:20px;font-weight:700">${comVD===null?'—':comVD+'%'}</div></div></div>
       ${hb(regTipo)}</section>
@@ -1704,6 +1714,12 @@ function bindDup(){ document.querySelectorAll('#dupBox [data-caso]').forEach(el 
 
 /* ================= início ================= */
 const atendObj = L => (L||[]).map(a => ({tecnico:a[0], responsavel:a[1], cpf:a[2], bairro:a[3], data:a[4]}));
+/* marcar ou desmarcar "Outra" mostra o campo Qual? logo abaixo da lista */
+document.addEventListener('change', e => {
+  const t = e.target; if (!t.matches || !t.matches('[data-dg="out"],[data-dgform="out"]')) return;
+  const box = (t.closest('.diag') || document).querySelector('.outra-box'); if (!box) return;
+  box.hidden = !t.checked; if (t.checked) box.querySelector('input').focus();
+});
 function iniciarTema(){
   const sel = $('#tema'); if (!sel) return;
   sel.value = document.documentElement.dataset.theme || '';

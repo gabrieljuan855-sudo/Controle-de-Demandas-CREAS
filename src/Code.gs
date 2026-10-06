@@ -209,6 +209,7 @@ function api_novoCaso(d) {
     exigirVitima(d.pessoas);
     // direto para acompanhamento não passa pela avaliação: a violação vivenciada é marcada aqui
     var violacoes = d.destino === 'acompanhamento' ? exigirViolacoes(d.diagnostico) : [];
+    var outra = exigirOutra(violacoes, d.violacao_outra);
     var receb = isoParaData(d.recebido) || new Date();
     var id = proximoIdCaso(receb.getFullYear());
     var agora = new Date();
@@ -222,7 +223,7 @@ function api_novoCaso(d) {
     if (d.destino === 'avaliacao') { caso.etapa = 'avaliacao'; caso.passou_avaliacao = 'SIM'; }
     if (d.destino === 'acompanhamento') {
       caso.etapa = 'acompanhamento'; caso.tecnica = d.tecnica; caso.complexidade = Number(d.complexidade) || 1;
-      caso.diagnostico = violacoes.join(',');
+      caso.diagnostico = violacoes.join(','); caso.violacao_outra = outra;
       caso.inicio_acomp = agora; caso.desfecho = 'Passado para acompanhamento'; caso.desfecho_data = agora;
     }
     inserirLinhas('Casos', [caso]);
@@ -266,7 +267,7 @@ function api_editarCaso(id, campos, pessoas) {
 }
 
 /** Coordenação decide o destino de um caso em triagem ou aguardando repasse. */
-function api_encaminhar(id, destino, tecnica, complexidade, codigos, prioridade) {
+function api_encaminhar(id, destino, tecnica, complexidade, codigos, prioridade, outra) {
   exigir(['coordenacao']);
   return comTrava(function () {
     var c = buscarCaso(id);
@@ -276,7 +277,8 @@ function api_encaminhar(id, destino, tecnica, complexidade, codigos, prioridade)
     } else if (destino === 'acompanhamento') {
       if (!tecnica) throw new Error('Escolha a técnica de referência.');
       // sem violação marcada (caso que não passou pela avaliação), ela vem junto com o repasse
-      if (codigos && codigos.length) { var v = exigirViolacaoEPrioridade(codigos, prioridade); c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade; }
+      if (codigos && codigos.length) { var v = exigirViolacaoEPrioridade(codigos, prioridade), qual = exigirOutra(v.codigos, outra);
+        c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade; c.violacao_outra = qual; }
       else if (!normalizarViolacoes(c.diagnostico).length) throw new Error('Marque ao menos uma violação vivenciada.');
       c.etapa = 'acompanhamento'; c.tecnica = tecnica; c.complexidade = Number(complexidade) || 1;
       c.inicio_acomp = new Date(); c.desfecho = 'Passado para acompanhamento'; c.desfecho_data = new Date();
@@ -308,6 +310,14 @@ function exigirViolacoes(codigos) {
   return lista;
 }
 
+/** Com "Outra" marcada, é preciso dizer qual; sem ela, o texto não é guardado. */
+function exigirOutra(codigos, outra) {
+  if (codigos.indexOf('out') < 0) return '';
+  var t = String(outra || '').trim();
+  if (!t) throw new Error('Diga qual é a outra violação.');
+  return t;
+}
+
 function exigirViolacaoEPrioridade(codigos, prioridade) {
   var lista = exigirViolacoes(codigos);
   var p = Number(prioridade);
@@ -319,12 +329,12 @@ function exigirViolacaoEPrioridade(codigos, prioridade) {
  * Quem avaliou indica o acompanhamento: marca a violação vivenciada e a prioridade.
  * O caso fica aguardando a coordenação escolher a técnica (etapa "repasse").
  */
-function api_indicarAcompanhamento(id, obs, codigos, prioridade) {
+function api_indicarAcompanhamento(id, obs, codigos, prioridade, outra) {
   papelAtual();
   return comTrava(function () {
-    var v = exigirViolacaoEPrioridade(codigos, prioridade);
+    var v = exigirViolacaoEPrioridade(codigos, prioridade), qual = exigirOutra(v.codigos, outra);
     var c = buscarCaso(id);
-    c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade;
+    c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade; c.violacao_outra = qual;
     c.etapa = 'repasse'; c.desfecho = 'Indicado acompanhamento'; c.desfecho_data = new Date(); c.desfecho_obs = obs || '';
     registrarHistorico(id, 'Avaliação concluída com indicação de acompanhamento');
     return salvarCasoLinha(c);
@@ -332,12 +342,12 @@ function api_indicarAcompanhamento(id, obs, codigos, prioridade) {
 }
 
 /** Corrige as violações e a prioridade de um caso sem mudar a etapa. */
-function api_violacao(id, codigos, prioridade) {
+function api_violacao(id, codigos, prioridade, outra) {
   papelAtual();
   return comTrava(function () {
-    var v = exigirViolacaoEPrioridade(codigos, prioridade);
+    var v = exigirViolacaoEPrioridade(codigos, prioridade), qual = exigirOutra(v.codigos, outra);
     var c = buscarCaso(id);
-    c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade;
+    c.diagnostico = v.codigos.join(','); c.prioridade = v.prioridade; c.violacao_outra = qual;
     registrarHistorico(id, 'Violações e prioridade atualizadas');
     return salvarCasoLinha(c);
   });

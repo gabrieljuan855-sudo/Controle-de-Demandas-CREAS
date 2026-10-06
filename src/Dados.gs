@@ -8,7 +8,7 @@ var ESQUEMA = {
     'remetente', 'remetente_detalhe', 'doc_tipo', 'doc_num', 'recebido', 'prazo', 'prazo_respondido',
     'descricao', 'prioridade', 'etapa', 'passou_avaliacao', 'diagnostico',
     'desfecho', 'desfecho_data', 'desfecho_obs', 'tecnica', 'inicio_acomp', 'complexidade',
-    'desligamento', 'origem', 'atualizado_em', 'gesuas_vinculo', 'gesuas_rejeitados'],
+    'desligamento', 'origem', 'atualizado_em', 'gesuas_vinculo', 'gesuas_rejeitados', 'violacao_outra'],
   Pessoas: ['caso_id', 'nome', 'nascimento', 'sexo'],
   Registros: ['id', 'caso_id', 'data', 'tipo', 'texto', 'autor', 'criado_em', 'criado_por', 'editado_em', 'editado_por', 'gesuas_em', 'gesuas_por', 'pendencias', 'pendencia_ok', 'pendencia_ok_por'],
   Discussoes: ['id', 'caso_id', 'data', 'texto', 'criado_em', 'criado_por'],
