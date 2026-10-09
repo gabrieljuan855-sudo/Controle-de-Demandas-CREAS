@@ -517,7 +517,7 @@ function api_vinculoGesuas(id, acao, nome) {
 
 /**
  * Importação dos relatórios do GESUAS lidos no navegador. Cada parte é opcional:
- *  ges:          famílias acompanhadas por técnico (substitui a lista anterior), já com CPF/bairro se vierem;
+ *  ges:          famílias acompanhadas por técnico (substitui a lista anterior), já com CPF/NIS/bairro/endereço tirados dos atendimentos;
  *  desligar:     casos que saíram do GESUAS desde o relatório anterior;
  *  completar:    [{id, campos}] dados vazios dos casos preenchidos a partir do GESUAS (nunca sobrescreve);
  *  atendimentos: atendimentos por técnico; só entram os que ainda não estão na planilha.

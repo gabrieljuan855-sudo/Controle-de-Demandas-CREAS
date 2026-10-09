@@ -357,8 +357,20 @@ async function lerPdfGesuas(file){
   return {origem:file.name, periodo, linhas: out.map(({seg,...r}) => r)};
 }
 
-/* relatórios do GESUAS exportados em .xls (são tabelas HTML); o PDF de "Acompanhadas por Técnico" continua aceito */
-const TIPOS_REL = {acompanhadas:'Famílias Acompanhadas por Técnico', acompanhamentos:'Acompanhamentos', atendimentos:'Famílias Atendidas por Técnico'};
+/* relatórios do GESUAS exportados em .xls (são tabelas HTML); o PDF de "Acompanhadas por Técnico" continua aceito.
+   Bastam dois: Acompanhadas (quem está em acompanhamento, técnica, início e PAF) e Atendidas (cada atendimento,
+   com CPF, NIS, bairro e endereço). O "Acompanhamentos" traz só as famílias atendidas no período, com os mesmos
+   dados do Atendidas: é reconhecido e deixado de lado. */
+const TIPOS_REL = {acompanhadas:'Famílias Acompanhadas por Técnico', atendimentos:'Famílias Atendidas por Técnico', dispensado:'Acompanhamentos'};
+/* endereço do relatório de atendimentos: tipo + logradouro, com o número depois da vírgula ("Rua X N⁰ 12" vira "Rua X, 12") */
+function enderecoAtend(tipo, logr){
+  let s = String(logr||'').replace(/\s+/g,' ').trim();
+  const m = s.match(/^(.*?)\s*N\s*[º°⁰ᵒ]\s*:?\s*(.*)$/i);
+  if (m){ const num = /\d/.test(m[2]) ? m[2].trim() : ''; s = m[1] + (num ? ', '+num : ''); }
+  if (!s) return '';
+  const t = String(tipo||'').trim();
+  return TIT((t && !norm(s).startsWith(norm(t)) ? t+' ' : '') + s);
+}
 async function lerRelatorioGesuas(file){
   if (/\.pdf$/i.test(file.name) || file.type==='application/pdf'){
     if (!window.pdfjsLib) throw new Error('O leitor de PDF não carregou. Verifique a conexão e recarregue a página.');
@@ -381,24 +393,29 @@ async function lerRelatorioGesuas(file){
     L.forEach(r => { if (r.length>=9){ tec = r[0]; r = r.slice(1); } if (r.length!==8 || !/\d\d\/\d\d\/\d{4}/.test(r[7])) return;
       const data = dataBr(r[7]), k = `${norm(tec)}|${norm(r[0])}|${data}`; vezes[k] = (vezes[k]||0) + 1;
       // a mesma família atendida duas vezes no dia pela mesma técnica conta duas; reimportar o período não duplica
-      out.push({chave:`${k}#${vezes[k]}`, tecnico:tec, responsavel:r[0], cpf:soDig(r[1]), nis:soDig(r[2]), bairro:r[5], data}); });
+      // endereço só serve para completar a família do GESUAS: não vai para a aba Atendimentos
+      out.push({chave:`${k}#${vezes[k]}`, tecnico:tec, responsavel:r[0], cpf:soDig(r[1]), nis:soDig(r[2]), bairro:r[5], endereco:enderecoAtend(r[3], r[4]), data}); });
     if (!out.length) throw new Error(`Nenhum atendimento lido em "${file.name}".`);
     return {...base, tipo:'atendimentos', linhas:out};
   }
-  if (/EM ACOMPANHAMENTO/.test(titulo)){
-    const out = L.filter(r => r.length>=6 && r[0]).map(r => ({responsavel:r[0], cpf:soDig((r[1].match(/CPF:\s*([\d.\-]+)/)||[])[1]), nis:soDig((r[1].match(/NIS:\s*(\d+)/)||[])[1]),
-      endereco:r[2].replace(/\s*Nº:\s*(Não informado)?\s*$/i,'').replace(/\s*Nº:\s*/,', '), bairro:r[3]}));
-    if (!out.length) throw new Error(`Nenhuma família lida em "${file.name}".`);
-    return {...base, tipo:'acompanhamentos', linhas:out};
-  }
-  throw new Error(`"${file.name}" não é um dos relatórios reconhecidos: ${Object.values(TIPOS_REL).join(', ')}.`);
+  if (/EM ACOMPANHAMENTO/.test(titulo)) return {...base, tipo:'dispensado', linhas:[]};
+  throw new Error(`"${file.name}" não é um dos relatórios usados: ${TIPOS_REL.acompanhadas} ou ${TIPOS_REL.atendimentos}.`);
 }
-/* completa CPF, NIS, bairro e endereço das famílias do GESUAS a partir de outra lista */
-function enriquecer(linhas, fonte){
-  if (!fonte.length) return;
-  const porNome = new Map(fonte.map(a => [norm(a.responsavel), a]));
-  linhas.forEach(g => { const a = porNome.get(norm(g.responsavel)) || fonte.find(a => mesmoNome(a.responsavel, g.responsavel));
-    if (a) ['cpf','nis','bairro','endereco'].forEach(k => { if (a[k] && !g[k]) g[k] = a[k]; }); });
+/* completa CPF, NIS, bairro e endereço das famílias do GESUAS a partir de outra lista; devolve quantos campos preencheu.
+   exato: só pelo nome idêntico (os dois relatórios saem do GESUAS com o mesmo nome; parecido pode ser outra família) */
+function enriquecer(linhas, fonte, exato){
+  if (!fonte.length) return 0;
+  const porNome = new Map(fonte.map(a => [norm(a.responsavel), a])); let n = 0;
+  linhas.forEach(g => { const a = porNome.get(norm(g.responsavel)) || (exato ? null : fonte.find(a => mesmoNome(a.responsavel, g.responsavel)));
+    if (a) ['cpf','nis','bairro','endereco'].forEach(k => { if (a[k] && !g[k]){ g[k] = a[k]; n++; } }); });
+  return n;
+}
+/* uma ficha por família a partir dos atendimentos: em cada campo vale o atendimento mais recente que o tem */
+function fichasAtend(L){
+  const m = new Map();
+  [...L].sort((a,b) => String(a.data).localeCompare(String(b.data))).forEach(a => { const k = norm(a.responsavel), f = m.get(k) || {responsavel:a.responsavel};
+    ['cpf','nis','bairro','endereco'].forEach(c => { if (a[c]) f[c] = a[c]; }); m.set(k, f); });
+  return [...m.values()];
 }
 /* casos com dado vazio que o GESUAS pode preencher (nunca sobrescreve o que foi digitado) */
 function casosACompletar(linhas){
@@ -414,15 +431,19 @@ function casosACompletar(linhas){
 }
 async function montarPrevia(files){
   const lidos = []; for (const f of files) lidos.push(await lerRelatorioGesuas(f));
-  const acd = lidos.find(x => x.tipo==='acompanhadas'), acs = lidos.filter(x => x.tipo==='acompanhamentos').flatMap(x => x.linhas);
+  const acd = lidos.find(x => x.tipo==='acompanhadas');
   const prev = {arquivos:lidos.map(x => ({nome:x.origem, tipo:x.tipo, n:x.linhas.length, periodo:x.periodo})),
-    saem:[], foraGes:[], desligar:new Set(), completar:[], atendimentos:lidos.filter(x => x.tipo==='atendimentos').flatMap(x => x.linhas), semBase:false};
-  let linhas = null;
-  if (acd){ linhas = acd.linhas; if (temGes()) enriquecer(linhas, DB.ges.linhas.filter(g => g.cpf || g.bairro)); }
-  else if (acs.length && temGes()) linhas = DB.ges.linhas.map(g => ({...g}));
-  else if (acs.length) prev.semBase = true;
+    saem:[], foraGes:[], desligar:new Set(), completar:[], atendimentos:lidos.filter(x => x.tipo==='atendimentos').flatMap(x => x.linhas)};
+  // CPF, NIS, bairro e endereço das famílias vêm dos atendimentos (os do arquivo e os já importados);
+  // o que já estava na lista anterior do GESUAS fica para quem não teve atendimento
+  const fichas = fichasAtend([...(DB.atend||[]), ...prev.atendimentos]);
+  let linhas = null, novosDados = 0;
+  if (acd){ linhas = acd.linhas; enriquecer(linhas, fichas, true); if (temGes()) enriquecer(linhas, DB.ges.linhas.filter(g => g.cpf || g.bairro)); }
+  else if (prev.atendimentos.length && temGes()){ linhas = DB.ges.linhas.map(g => ({...g})); novosDados = enriquecer(linhas, fichas, true); if (!novosDados) linhas = null; }
+  // atendimentos vão para a aba Atendimentos sem o endereço (ele só completa a família do GESUAS)
+  prev.atendimentos = prev.atendimentos.map(({endereco, ...a}) => a);
+  prev.novosDados = novosDados;
   if (linhas){
-    enriquecer(linhas, acs);
     prev.ges = {origem: acd ? acd.origem : DB.ges.origem, periodo: acd ? acd.periodo : DB.ges.periodo, linhas};
     if (acd && temGes()){ prev.saem = casosQueSaem(linhas).map(c => c.id); prev.desligar = new Set(prev.saem); }
     if (acd) prev.foraGes = casosForaDoGesuas(linhas, acd.periodo).map(c => c.id).filter(id => !prev.saem.includes(id));
@@ -446,13 +467,7 @@ function alertasCalc(){
     if (coord() && c.etapa==='triagem') a.push({sev:'info',c,t:'Aguardando triagem',s:`Recebido em ${fmt(c.recebido)}`});
     if (coord() && c.etapa==='repasse') a.push({sev:'warn',c,t:'Avaliação indicou acompanhamento: escolher a técnica',s:`Concluída em ${fmt(c.desfecho_data)}`});
     if (c.etapa==='avaliacao' && dias(ultimaMov(c))>30) a.push({sev:'warn',c,u:dias(ultimaMov(c)),t:`Avaliação sem movimentação há ${dias(ultimaMov(c))} dias`,s:`Recebido em ${fmt(c.recebido)}`});
-    if (coord() && c.etapa==='acompanhamento'){
-      const g = statusGes(c);
-      if (g && g.tipo==='possivel') a.push({sev:'info',c,t:'Possível família no GESUAS pelo sobrenome: conferir',s:`Técnica: ${c.tecnica}`});
-      if (g && g.tipo==='ausente') a.push({sev:g.dias>7?'crit':'warn',c,u:g.dias,t:`Repassado há ${g.dias} dias e não está no GESUAS`,s:`Técnica: ${c.tecnica}`});
-      if (g && g.tipo==='antigo') a.push({sev:'info',c,t:'Em acompanhamento aqui, mas não consta no GESUAS: desligar ou buscar a família',s:`Técnica: ${c.tecnica || '—'}${c.inicio_acomp?' · repasse em '+fmt(c.inicio_acomp):''}`});
-      if (g && g.tipo==='ok' && g.paf!=='Preenchido') a.push({sev:'info',c,t:'PAF em branco no GESUAS',s:`Técnica: ${tecnicaRef(c)}`});
-    }
+    // o que é do GESUAS (não registrado, PAF, a conferir) fica na Conferência GESUAS, por técnica
   });
   // mais grave primeiro; dentro da mesma gravidade, o mais atrasado
   const ord={crit:0,warn:1,info:2}; return a.sort((x,y) => ord[x.sev]-ord[y.sev] || (y.u||0)-(x.u||0));
@@ -531,40 +546,29 @@ function iniciarCopiar(){
 /* ================= painel ================= */
 function vPainel(){
   const al = alertas();
-  const n = e => DB.casos.filter(c => c.etapa===e).length;
   const conta = (etapa, pend='', extra={}) => listaCasos({etapa, pend, serv:'paefi', ...extra}).length;
   /* cartão que abre a lista de casos já filtrada; o número é contado pela própria lista */
   const kpi = (rot, etapa, pend='', alerta=false, extra={}) => { const v = conta(etapa, pend, extra); return `<button class="kpi ${alerta&&v?'alert':''}" ${linkLista({etapa, pend, ...extra})}><span>${rot}</span><b>${v}</b></button>`; };
-  const pd = pendDisponiveis();
+  // os números do GESUAS ficam só na Conferência; aqui, só o lembrete quando o relatório fica velho
+  const idadeGes = temGes() ? dias(refGes()) : null;
+  const lembrete = !temGes() ? 'Nenhum relatório do GESUAS importado ainda.' : idadeGes > 35 ? `O relatório do GESUAS em uso é de ${fmt(refGes())}, há ${idadeGes} dias. Importe o do mês para a conferência ficar em dia.` : '';
   return `
-  <div class="top"><div><h1>${coord()?'Painel da coordenação':'Painel da avaliação social'}</h1>
+  <div class="top"><div><h1>Painel</h1>
     <p>O que precisa de atenção hoje, ${HOJE.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}.</p></div>
-    ${coord()?'<button class="btn primary" data-act="novo">+ Novo encaminhamento</button>':''}</div>
-  <div class="kpis">
-    ${coord()?kpi('Aguardando triagem','triagem'):''}
+    <button class="btn primary" data-act="novo">+ Novo encaminhamento</button></div>
+  <div class="kpis k7">
+    ${kpi('Aguardando triagem','triagem')}
     ${kpi('Em avaliação social','avaliacao')}
     ${kpi('Urgentes (prioridade 1) em avaliação','avaliacao','',true,{prio:'1'})}
     ${kpi('Avaliações paradas há 30+ dias','avaliacao','parada',true)}
-    ${coord()?`${kpi('Aguardando repasse à técnica','repasse','',true)}
-    ${kpi(temGes()?'Famílias em acompanhamento (PAEFI)':'Em acompanhamento','acompanhamento')}
+    ${kpi('Aguardando repasse à técnica','repasse','',true)}
     ${kpi('Prazos vencidos ou em 7 dias','ativos','prazo',true)}
     ${kpi('Casos com pendência em aberto','ativos','pendreg')}
-    ${pd.includes('nreg')?kpi('Repassados e não registrados no GESUAS','acompanhamento','nreg',true):''}
-    ${pd.includes('conferir')&&conta('acompanhamento','conferir')?kpi('A conferir no GESUAS (sobrenome)','acompanhamento','conferir'):''}
-    ${pd.includes('antigo')&&conta('acompanhamento','antigo')?kpi('Em acompanhamento aqui e fora do GESUAS','acompanhamento','antigo',true):''}
-    ${pd.includes('paf')?kpi('PAF em branco no GESUAS','acompanhamento','paf'):''}
-    ${pd.includes('sematend')?kpi('Sem atendimento há mais de 60 dias','acompanhamento','sematend',true):''}`:''}
   </div>
-  <div class="${coord()?'dash':''}">
-    <section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>${S.painelTudo?'Todas as pendências':'Mais urgentes'}</h2><span class="muted">${S.painelTudo||al.length<=12?al.length:`12 de ${al.length}`}</span></div>
-      <div class="alist">${al.length ? al.slice(0, S.painelTudo ? 300 : 12).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${comCopia(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>12?`<div style="padding-top:10px"><button type="button" class="btn small" data-paineltudo>${S.painelTudo?'Mostrar só as mais urgentes':`Ver todas (${al.length})`}</button></div>`:'') : '<div class="empty">Nenhuma pendência.</div>'}</div>
-    </section>
-    ${coord()?`<section class="panel stack">
-      <div><h2>Conferência com o GESUAS</h2><div class="muted" style="font-size:12.5px">${temGes()?`${esc(DB.ges.origem)}${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}`:'Nenhum relatório importado ainda.'}</div></div>
-      ${temGes()?tabelaTecnicas(resumoTecnicas()):''}
-      <div><button class="btn small" data-go2="gesuas">${temGes()?'Abrir conferência':'Importar relatório do GESUAS'}</button></div>
-    </section>`:''}
-  </div>`;
+  ${lembrete?`<div class="dup row" style="justify-content:space-between;gap:8px;margin-bottom:16px"><span>${lembrete}</span><button type="button" class="btn small" data-go2="gesuas">Abrir a Conferência GESUAS</button></div>`:''}
+  <section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>${S.painelTudo?'Tudo o que precisa de atenção':'Mais urgentes'}</h2><span class="muted">${S.painelTudo||al.length<=12?al.length:`12 de ${al.length}`}</span></div>
+    <div class="alist">${al.length ? al.slice(0, S.painelTudo ? 300 : 12).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${comCopia(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>12?`<div style="padding-top:10px"><button type="button" class="btn small" data-paineltudo>${S.painelTudo?'Mostrar só as mais urgentes':`Ver todas (${al.length})`}</button></div>`:'') : '<div class="empty">Nada pendente.</div>'}</div>
+  </section>`;
 }
 
 /* ================= casos: uma lista só, com filtros =================
@@ -1161,11 +1165,15 @@ function conferirHtml(c, s){
     <div class="row" style="gap:6px">${gvBtn(c,'confirmar','É esta família',g.responsavel,'primary')}${gvBtn(c,'rejeitar','Não é',g.responsavel)}</div></div>`).join('')}
     ${s.cand.length>1?`<div style="padding-top:6px;border-top:1px solid var(--line)">${gvBtn(c,'rejeitar',`Nenhuma destas ${s.cand.length} famílias`,s.cand.map(g => g.responsavel).join('|'))}</div>`:''}</div>`;
 }
+/* resumo por técnica na conferência: cada número abre a lista de casos com o mesmo filtro e é contado por ela */
 function tabelaTecnicas(R){
-  const cel = (t, pend, cor) => { const v = listaCasos({etapa:'acompanhamento', tec:t.k, pend, serv:'todos'}).length;
-    return `<td class="mono" style="text-align:right"><button type="button" class="num-link" ${linkLista({etapa:'acompanhamento', pend, tec:t.k, serv:'todos'})} style="${v&&cor?`color:${cor};font-weight:600`:''}" title="Abrir a lista">${v}</button></td>`; };
-  return `<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">No GESUAS</th><th style="text-align:right">PAF em branco</th><th style="text-align:right">Não registrados</th></tr></thead><tbody>
-  ${R.map(t => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista({etapa:'acompanhamento', tec:t.k, serv:'todos'})}>${esc(nomeTecnica(t.nome))}</button></td>${cel(t,'registrado')}${cel(t,'paf','var(--warn)')}${cel(t,'nreg','var(--crit)')}</tr>`).join('')}</tbody></table></div>`;
+  const cols = [['registrado','No GESUAS',''],['nreg','Repassadas e não registradas','var(--crit)'],['conferir','A conferir (sobrenome)','var(--warn)'],['paf','PAF em branco','var(--warn)'],
+    ...(pendDisponiveis().includes('sematend')?[['sematend','Sem atendimento há 60+ dias','var(--warn)']]:[])];
+  const num = (f, cor) => { const F = {etapa:'acompanhamento', serv:'todos', ...f}, v = listaCasos(F).length;
+    return `<td class="mono" style="text-align:right">${v?`<button type="button" class="num-link" ${linkLista(F)} style="${cor?`color:${cor};font-weight:600`:''}" title="Abrir a lista">${v}</button>`:'<span class="muted">0</span>'}</td>`; };
+  return `<div style="overflow-x:auto"><table class="tab-tec" style="min-width:0"><thead><tr><th>Técnica</th>${cols.map(c => `<th style="text-align:right">${c[1]}</th>`).join('')}</tr></thead><tbody>
+  ${R.map(t => `<tr style="cursor:default"><td>${esc(nomeTecnica(t.nome))}</td>${cols.map(([p,,cor]) => num({tec:t.k, pend:p}, cor)).join('')}</tr>`).join('')}
+  <tr class="total" style="cursor:default"><td>Total</td>${cols.map(([p,,cor]) => num({pend:p}, cor)).join('')}</tr></tbody></table></div>`;
 }
 function vincularGesuas(c, acao, nome){
   if (acao==='confirmar') c.gesuas_vinculo = nome;
@@ -1230,44 +1238,48 @@ function mensagem(t){
 }
 function vGesuas(){
   const prev = S.gPrevia;
-  const R = resumoTecnicas().filter(t => !S.gTec || t.k===S.gTec);
-  const totAus=R.reduce((s,t)=>s+t.ausentes.length,0), totPaf=R.reduce((s,t)=>s+t.pafBranco.length,0), totPos=R.reduce((s,t)=>s+t.possiveis.length,0), totSem=R.reduce((s,t)=>s+t.semAtend.length,0);
-  return `<div class="top"><div><h1>Conferência com o GESUAS</h1><p>Importe os relatórios do GESUAS em .xls (ou o PDF do Acompanhadas por Técnico): <b>Famílias Acompanhadas por Técnico</b>, <b>Acompanhamentos</b> e <b>Famílias Atendidas por Técnico</b>. Pode selecionar os três de uma vez. O sistema cruza com os casos e monta as pendências de cada técnica.</p></div></div>
+  const R = resumoTecnicas();
+  // por técnica, só quem tem algo a resolver; os totais estão na tabela
+  const secoes = R.filter(t => (!S.gTec || t.k===S.gTec) && (t.ausentes.length || t.possiveis.length || t.pafBranco.length || t.semAtend.length));
+  const nAnt = temGes() ? listaCasos({etapa:'acompanhamento', pend:'antigo'}).length : 0;
+  const salvavel = prev && (prev.ges || prev.atendimentos.length);
+  return `<div class="top"><div><h1>Conferência com o GESUAS</h1><p>Importe dois relatórios do GESUAS em .xls, de uma vez: <b>Famílias Acompanhadas por Técnico</b> (quem está em acompanhamento, técnica, início e PAF; também aceito em PDF) e <b>Famílias Atendidas por Técnico</b> (cada atendimento, com CPF, bairro e endereço da família). O sistema cruza com os casos e monta as pendências de cada técnica.</p></div></div>
   <section class="panel stack" style="margin-bottom:16px">
     <div class="row" style="justify-content:space-between">
       <div><span class="label">Relatório em uso</span><div style="font-weight:600">${temGes()?esc(DB.ges.origem):'Nenhum relatório importado'}</div>${temGes()?`<div class="muted" style="font-size:12.5px">${DB.ges.linhas.length} famílias${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}</div>`:''}
         ${temAtend()?`<div class="muted" style="font-size:12.5px">${DB.atend.length} atendimento${DB.atend.length===1?'':'s'} do GESUAS de ${fmt(atendIdx().min)} até hoje</div>`:''}</div>
       <div class="row"><label class="btn primary" for="gFile" style="cursor:pointer">Importar relatórios do GESUAS</label><input id="gFile" type="file" accept=".xls,.html,.htm,.pdf,application/pdf" multiple hidden></div>
     </div>
-    <div id="gStatus" class="muted" style="font-size:12.5px">Os arquivos são lidos neste navegador. Na planilha ficam só técnico, responsável, CPF/NIS, bairro, endereço e datas; telefone não é guardado.</div>
+    <div id="gStatus" class="muted" style="font-size:12.5px">Os arquivos são lidos neste navegador. Na planilha ficam só técnico, responsável, CPF/NIS, bairro, endereço e datas; telefone não é guardado. Atendidas: na primeira vez, exporte os últimos 12 meses; depois, o mês novo.</div>
     ${prev?`<div class="dup stack" style="gap:6px"><div><b>Lido:</b></div>
-      <ul style="margin:0;padding-left:18px">${prev.arquivos.map(a => `<li>${TIPOS_REL[a.tipo]}: <b>${a.n}</b> ${a.tipo==='atendimentos'?'atendimentos':'famílias'}${a.periodo?' · '+esc(a.periodo):''}</li>`).join('')}</ul>
-      ${prev.ges?`<div>${prev.ges.linhas.length} famílias em acompanhamento${prev.comDoc?`, ${prev.comDoc} com CPF/bairro`:''}.${prev.completar.length?` ${prev.completar.length} caso${prev.completar.length>1?'s terão':' terá'} dados vazios completados (responsável, CPF, endereço ou bairro).`:''}</div>`:''}
-      ${prev.semBase?'<div>Para aproveitar o relatório Acompanhamentos, importe junto o Famílias Acompanhadas por Técnico.</div>':''}
+      <ul style="margin:0;padding-left:18px">${prev.arquivos.map(a => a.tipo==='dispensado'
+        ? `<li>${TIPOS_REL.dispensado}: não precisa mais ser importado (as mesmas famílias e dados vêm no ${TIPOS_REL.atendimentos}). Arquivo deixado de lado.</li>`
+        : `<li>${TIPOS_REL[a.tipo]}: <b>${a.n}</b> ${a.tipo==='atendimentos'?'atendimentos':'famílias'}${a.periodo?' · '+esc(a.periodo):''}</li>`).join('')}</ul>
+      ${prev.ges?`<div>${prev.novosDados?`${prev.novosDados} dado${prev.novosDados>1?'s':''} das famílias do GESUAS completado${prev.novosDados>1?'s':''} pelos atendimentos (CPF, NIS, bairro ou endereço).`:`${prev.ges.linhas.length} famílias em acompanhamento, ${prev.comDoc} com CPF ou bairro.`}${prev.completar.length?` ${prev.completar.length} caso${prev.completar.length>1?'s terão':' terá'} dados vazios completados (responsável, CPF, endereço ou bairro).`:''}</div>`:''}
       ${prev.atendimentos.length?`<div>Atendimentos já importados antes não se repetem.</div>`:''}
-    ${prev.saem.length?`<div style="margin-top:10px"><b>${prev.saem.length} ${prev.saem.length===1?'família saiu':'famílias saíram'} do GESUAS</b> desde o relatório anterior e ${prev.saem.length===1?'será desligada':'serão desligadas'} ao salvar. Desmarque se alguma estiver errada:
-    ${prev.foraGes.length?`<details style="margin-top:10px"><summary style="cursor:pointer"><b>${prev.foraGes.length} caso${prev.foraGes.length>1?'s':''} em acompanhamento aqui não aparece${prev.foraGes.length>1?'m':''} no GESUAS</b> (repasse há mais de 90 dias). Marque os que já foram desligados para desligar junto.</summary>
-      <div class="stack" style="gap:4px;margin-top:6px">${prev.foraGes.map(id => { const c = DB.casos.find(x => x.id===id); return `<label class="chk"><input type="checkbox" data-saida="${id}" ${prev.desligar.has(id)?'checked':''}><span>${esc(nomeCaso(c))} <span class="mono muted">${id}</span>${c.inicio_acomp?' · repasse '+fmt(c.inicio_acomp):''}</span></label>`; }).join('')}</div></details>`:''}
-      <div class="stack" style="gap:4px;margin-top:6px">${prev.saem.map(id => { const c = DB.casos.find(x => x.id===id); return `<label class="chk"><input type="checkbox" data-saida="${id}" ${prev.desligar.has(id)?'checked':''}><span>${esc(nomeCaso(c))} <span class="mono muted">${id}</span> · ${esc(tecnicaRef(c))}</span></label>`; }).join('')}</div></div>`:''}
-    <div class="row" style="margin-top:8px"><button class="btn primary small" id="gSalvar">Salvar importação</button><button class="btn small" id="gDescartar">Descartar</button></div></div>`:''}
+      ${prev.saem.length?`<div style="margin-top:10px"><b>${prev.saem.length} ${prev.saem.length===1?'família saiu':'famílias saíram'} do GESUAS</b> desde o relatório anterior e ${prev.saem.length===1?'será desligada':'serão desligadas'} ao salvar. Desmarque se alguma estiver errada:
+        <div class="stack" style="gap:4px;margin-top:6px">${prev.saem.map(id => { const c = DB.casos.find(x => x.id===id); return `<label class="chk"><input type="checkbox" data-saida="${id}" ${prev.desligar.has(id)?'checked':''}><span>${esc(nomeCaso(c))} <span class="mono muted">${id}</span> · ${esc(tecnicaRef(c))}</span></label>`; }).join('')}</div></div>`:''}
+      ${prev.foraGes.length?`<details style="margin-top:10px"><summary style="cursor:pointer"><b>${prev.foraGes.length} caso${prev.foraGes.length>1?'s':''} em acompanhamento aqui não aparece${prev.foraGes.length>1?'m':''} no GESUAS</b> (repasse há mais de 90 dias). Marque os que já foram desligados para desligar junto.</summary>
+        <div class="stack" style="gap:4px;margin-top:6px">${prev.foraGes.map(id => { const c = DB.casos.find(x => x.id===id); return `<label class="chk"><input type="checkbox" data-saida="${id}" ${prev.desligar.has(id)?'checked':''}><span>${esc(nomeCaso(c))} <span class="mono muted">${id}</span>${c.inicio_acomp?' · repasse '+fmt(c.inicio_acomp):''}</span></label>`; }).join('')}</div></details>`:''}
+      ${salvavel?'':'<div>Nada a salvar: importe o Famílias Acompanhadas por Técnico ou o Famílias Atendidas por Técnico.</div>'}
+      <div class="row" style="margin-top:8px">${salvavel?'<button class="btn primary small" id="gSalvar">Salvar importação</button>':''}<button class="btn small" id="gDescartar">Descartar</button></div></div>`:''}
   </section>
   ${temGes()?`
-  <div class="filters"><select id="gTec"><option value="">Todas as técnicas</option>${tecnicasGes().map(t => `<option value="${t.k}" ${S.gTec===t.k?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
-  <div class="kpis">
-    <div class="kpi ${totAus?'alert':''}"><span>Repassados e não registrados</span><b>${totAus}</b></div>
-    <div class="kpi"><span>A conferir (mesmo sobrenome)</span><b>${totPos}</b></div>
-    <div class="kpi"><span>PAF em branco</span><b>${totPaf}</b></div>
-    ${temAtend()&&coberturaAtend()>=60?`<div class="kpi ${totSem?'alert':''}"><span>Sem atendimento há mais de 60 dias</span><b>${totSem}</b></div>`:''}
-  </div>
-  <div class="stack">${R.map(t => `<section class="panel stack">
-    <div class="row" style="justify-content:space-between"><div><h2>${esc(t.nome)}</h2><div class="muted" style="font-size:12.5px">${t.doGes.length} famílias no GESUAS · ${t.pafBranco.length} com PAF em branco · ${t.ausentes.length} repassadas sem registro</div></div>
+  <section class="panel stack" style="margin-bottom:16px">
+    <div><h2>Por técnica</h2><div class="muted" style="font-size:12.5px">Situação no relatório de ${fmt(refGes())}. Clique num número para abrir a lista.</div></div>
+    ${tabelaTecnicas(R)}
+    ${nAnt?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nAnt} caso${nAnt>1?'s':''} em acompanhamento aqui não aparece${nAnt>1?'m':''} no GESUAS</b> (repasse há mais de 90 dias). Provavelmente ${nAnt>1?'foram desligados':'foi desligado'} lá: abra para desligar ou vincular à família.</span><button type="button" class="btn small" ${linkLista({etapa:'acompanhamento', pend:'antigo'})}>Ver a lista</button></div>`:''}
+  </section>
+  ${secoes.length || S.gTec?`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">O que cada técnica precisa resolver</h2><select id="gTec" aria-label="Técnica"><option value="">Todas as técnicas</option>${R.map(t => `<option value="${t.k}" ${S.gTec===t.k?'selected':''}>${esc(nomeTecnica(t.nome))}</option>`).join('')}</select></div>`:''}
+  <div class="stack">${secoes.map(t => `<section class="panel stack">
+    <div class="row" style="justify-content:space-between"><h2>${esc(nomeTecnica(t.nome))}</h2>
     <button class="btn small" data-copy="${t.k}">Copiar mensagem para ${esc(t.nome.split(' ')[0])}</button></div>
     ${t.possiveis.length?`<div><h3 style="color:var(--warn)">Conferir: possível família pelo sobrenome</h3><div class="alist">${t.possiveis.map(x => `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="aitem" data-caso="${x.c.id}" tabindex="0" style="border-top:0;padding:0 0 4px"><div class="sev warn"></div><div><div class="nm">${comCopia(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">${respDif(x.c)?'Resp.: '+comCopia(respDif(x.c))+' · ':''}Repasse em ${fmt(x.c.inicio_acomp)}</div></div><span></span></div>${conferirHtml(x.c, x.s)}<div class="row" style="margin-top:6px">${gvBtn(x.c,'manual','Está no GESUAS com outro nome')}</div></div>`).join('')}</div></div>`:''}
     ${t.ausentes.length?`<div><h3 style="color:var(--crit)">Repassadas e ainda não registradas no GESUAS</h3><div class="alist">${t.ausentes.map(c => `<div class="aitem" data-caso="${c.id}" tabindex="0"><div class="sev crit"></div><div><div class="nm">${comCopia(nomeFamilia(c))} <span class="mono muted">${c.id}</span></div><div class="muted" style="font-size:12.5px">Repasse em ${fmt(c.inicio_acomp)}${c.inicio_acomp?' · há '+dias(c.inicio_acomp)+' dias':''}</div></div><span></span></div>`).join('')}</div></div>`:''}
     ${t.semAtend.length?`<details><summary style="cursor:pointer;font-weight:600;color:var(--warn)">Sem atendimento no GESUAS há mais de 60 dias (${t.semAtend.length})</summary><div style="overflow-x:auto;margin-top:8px"><table style="min-width:0"><thead><tr><th>Responsável familiar</th><th>Último atendimento</th><th>Início</th></tr></thead><tbody>${t.semAtend.map(g => { const u = ultimoAtend(g); return `<tr data-fam="${esc(g.responsavel)}" tabindex="0"><td>${comCopiaComo(TIT(g.responsavel), g.responsavel)}</td><td class="mono">${u?fmt(u)+' · há '+dias(u)+' dias':'nenhum'}</td><td class="mono">${esc(g.inicio)}</td></tr>`; }).join('')}</tbody></table></div></details>`:''}
     ${t.pafBranco.length?`<details><summary style="cursor:pointer;font-weight:600">PAF em branco (${t.pafBranco.length})</summary><div style="overflow-x:auto;margin-top:8px"><table style="min-width:0"><thead><tr><th>Responsável familiar</th><th>Início</th><th>Serviço</th></tr></thead><tbody>${t.pafBranco.map(g => `<tr data-fam="${esc(g.responsavel)}" tabindex="0"><td>${comCopiaComo(TIT(g.responsavel), g.responsavel)}</td><td class="mono">${esc(g.inicio)}</td><td>${/MSE/.test(g.servico)?'MSE (LA/PSC)':esc(g.servico)}</td></tr>`).join('')}</tbody></table></div></details>`:''}
     <textarea id="msg_${t.k}" readonly hidden>${esc(mensagem(t))}</textarea>
-  </section>`).join('')}</div>`:''}`;
+  </section>`).join('') || (S.gTec?'<div class="empty">Nada a resolver para esta técnica.</div>':'')}</div>`:''}`;
 }
 
 /* ================= indicadores ================= */
@@ -1405,10 +1417,10 @@ function vInd(){
   let carga = [];
   if (coord() && temGes()){
     const casoDe = new Map(); DB.casos.forEach(c => { const s = statusGes(c); if (s && s.tipo==='ok') casoDe.set(s.g, c); });
-    const aguard = DB.casos.filter(c => (statusGes(c)||{}).tipo==='ausente');
+    // PAF em branco e famílias aguardando inclusão ficam na Conferência GESUAS, por técnica
     carga = tecnicasGes().map(t => { const L = DB.ges.linhas.filter(g => !ehMSE(g) && primeiroNome(g.tecnico)===t.k);
-      return {nome:nomeTecnica(t.nome), fam:L.length, peso:L.reduce((s,g) => s + (Number((casoDe.get(g)||{}).complexidade) || 1), 0), paf:pct(L.filter(g => g.paf==='Preenchido').length, L.length), aguard:aguard.filter(c => tecItem(c)===t.k).length}; })
-      .filter(t => t.fam || t.aguard).sort((a,b) => b.peso-a.peso);
+      return {nome:nomeTecnica(t.nome), fam:L.length, peso:L.reduce((s,g) => s + (Number((casoDe.get(g)||{}).complexidade) || 1), 0)}; })
+      .filter(t => t.fam).sort((a,b) => b.peso-a.peso);
   }
   // atendimentos importados do GESUAS
   const atP = temAtend() ? DB.atend.filter(a => noPeriodo(a.data, P)) : [];
@@ -1475,11 +1487,11 @@ function vInd(){
       <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Bairro</th>${topViol.map(([l]) => `<th style="text-align:right">${esc(l)}</th>`).join('')}</tr></thead><tbody>
       ${terrViol.filter(x => x.b).map(x => `<tr style="cursor:default"><td>${esc(x.b)}</td>${x.n.map((n,i) => `<td class="mono calor" style="text-align:right;--a:${n/maxTV}" title="${esc(x.b)} · ${esc(topViol[i][0])}: ${n}">${n?`<button type="button" class="num-link" ${linkLista(lk({bairro:x.b, viol:topViol[i][2]}))}>${n}</button>`:''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
       <div class="muted" style="font-size:12px">Casos recebidos no período, nos bairros com mais encaminhamentos. As 6 violações mais frequentes do período; um caso pode ter mais de uma. Cor mais forte, mais casos.</div></section>`:''}
-    ${terrGes.some(x => x[0])?`<section class="panel stack"><h2>Famílias em acompanhamento por território</h2>${hb(terrGes.filter(x => x[0]))}<div class="muted" style="font-size:12px">Do relatório Acompanhamentos do GESUAS. Situação atual.</div></section>`:''}
+    ${terrGes.some(x => x[0])?`<section class="panel stack"><h2>Famílias em acompanhamento por território</h2>${hb(terrGes.filter(x => x[0]))}<div class="muted" style="font-size:12px">Bairro das famílias no GESUAS, tirado dos atendimentos importados. Situação atual.</div></section>`:''}
     ${carga.length?`<section class="panel stack" style="grid-column:1/-1"><h2>Carga por técnica</h2>
-      <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">Famílias</th><th style="text-align:right">Carga</th><th style="text-align:right">PAF ok</th><th style="text-align:right">Aguardando</th></tr></thead><tbody>
-      ${carga.map(t => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista({etapa:'acompanhamento', tec:primeiroNome(t.nome)})} title="Abrir as famílias desta técnica">${esc(t.nome)}</button></td><td class="mono" style="text-align:right">${t.fam}</td><td class="mono" style="text-align:right">${String(t.peso).replace('.',',')}</td><td class="mono" style="text-align:right">${t.paf===null?'—':t.paf+'%'}</td><td class="mono" style="text-align:right;${t.aguard?'color:var(--crit);font-weight:600':''}">${t.aguard?`<button type="button" class="num-link" ${linkLista({etapa:'acompanhamento', tec:primeiroNome(t.nome), pend:'nreg'})} style="color:inherit" title="Repassadas e não registradas">${t.aguard}</button>`:0}</td></tr>`).join('')}</tbody></table></div>
-      <div class="muted" style="font-size:12px">Famílias no GESUAS. PAF ok: com PAF preenchido. Aguardando: repassadas e ainda não incluídas. Carga soma a complexidade de cada família (baixa 0,5 · média 1 · alta 1,5). Famílias que estão só no GESUAS contam como média. Situação atual, não depende do período.</div></section>`:''}
+      <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">Famílias</th><th style="text-align:right">Carga</th></tr></thead><tbody>
+      ${carga.map(t => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista({etapa:'acompanhamento', tec:primeiroNome(t.nome)})} title="Abrir as famílias desta técnica">${esc(t.nome)}</button></td><td class="mono" style="text-align:right">${t.fam}</td><td class="mono" style="text-align:right">${String(t.peso).replace('.',',')}</td></tr>`).join('')}</tbody></table></div>
+      <div class="muted" style="font-size:12px">Famílias PAEFI no GESUAS. Carga soma a complexidade de cada família (baixa 0,5 · média 1 · alta 1,5); as que estão só no GESUAS contam como média. Situação atual, não depende do período. PAF em branco e famílias aguardando inclusão estão na Conferência GESUAS.</div></section>`:''}
     <section class="panel stack"><h2>Famílias que já tinham caso</h2>
       ${reinc.length?`<div class="muted" style="font-size:12.5px">${reinc.length} dos ${C.length} encaminhamentos do período são de vítimas ou famílias com caso anterior.</div>
       <div class="alist">${reinc.slice(0,8).map(x => `<div class="aitem" data-caso="${x.c.id}" tabindex="0"><div class="sev info"></div><div><div class="nm">${esc(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">Caso anterior: ${x.ant.id} · ${esc(x.ant.desfecho||ETAPAS[x.ant.etapa]||'')}</div></div><span></span></div>`).join('')}</div>`:'<div class="empty">Nenhum encaminhamento de família já conhecida no período.</div>'}</section>
