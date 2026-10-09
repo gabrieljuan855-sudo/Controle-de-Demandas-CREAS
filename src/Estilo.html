@@ -85,12 +85,14 @@ textarea{min-height:76px;resize:vertical}
 
 /* KPI */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+/* painel: os sete cartões cabem numa linha no computador */
+.kpis.k7{grid-template-columns:repeat(auto-fit,minmax(124px,1fr))}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:4px}
 .kpi:hover{border-color:var(--ink-3)}
 .kpi b{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
 .kpi span{font-size:12.5px;color:var(--ink-2)}
 .kpi.alert b{color:var(--crit)}
-.dash{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+.tab-tec tr.total td{font-weight:700;border-top:2px solid var(--line)}
 .alist{display:flex;flex-direction:column}
 .aitem{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
 .aitem:first-child{border-top:0}
@@ -209,8 +211,7 @@ td.calor{background:color-mix(in srgb,var(--accent) calc(var(--a,0)*55%),transpa
   .who{margin-top:0;flex-direction:row;align-items:center}
   .proto{display:none}
   .main{padding-inline:16px}
-  .dash,.detail{grid-template-columns:minmax(0,1fr)}
-  .dash > *{min-width:0}
+  .detail{grid-template-columns:minmax(0,1fr)}
   /* no celular, um desfecho por linha e compacto: nome e explicação lado a lado */
   .outcomes{grid-template-columns:minmax(0,1fr);gap:6px}
   .outcomes button{padding:9px 12px;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px}
