@@ -59,7 +59,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   Quando o nome não bate, mas há família com o mesmo sobrenome (da mesma técnica, ou com dois sobrenomes em comum), o caso aparece como **a conferir**. A coordenação confirma ("É esta família"), recusa ("Não é") ou recusa todas as sugestões de uma vez ("Nenhuma destas famílias"). Quando a família foi cadastrada com outro nome, **"Está no GESUAS com outro nome"** abre uma busca: digite parte do nome e a lista do relatório vai filtrando (famílias da mesma técnica aparecem primeiro); um clique vincula o caso àquela família. Se não achar, dá para confirmar sem vincular. A decisão fica salva no caso e pode ser desfeita.
 
   Um botão copia a mensagem pronta para cada técnica.
-- **Painel enxuto: o andamento dos casos.** Sete cartões, na ordem do fluxo: aguardando triagem, em avaliação social, urgentes (prioridade 1) em avaliação, avaliações paradas há 30+ dias, aguardando repasse, prazos vencidos ou em 7 dias e casos com pendência em aberto. Cada cartão abre a lista filtrada. Abaixo, as **12 mais urgentes** (a mais grave primeiro e, na mesma gravidade, a mais atrasada); "Ver todas" abre a lista completa. Os números do GESUAS não aparecem no painel, só na Conferência GESUAS; o painel avisa apenas quando o relatório em uso tem mais de 35 dias.
+- **Painel enxuto: o andamento dos casos.** Sete cartões, na ordem do fluxo: aguardando triagem, em avaliação social, urgentes (prioridade 1) em avaliação, avaliações paradas há 30+ dias (sem registro desde a entrada na avaliação ou o último registro), aguardando repasse, prazos vencidos ou em 7 dias e casos com pendência em aberto. Cada cartão abre a lista filtrada. Abaixo, as **12 mais urgentes** (a mais grave primeiro e, na mesma gravidade, a mais atrasada); "Ver todas" abre a lista completa. Os números do GESUAS não aparecem no painel, só na Conferência GESUAS; o painel avisa apenas quando o relatório em uso tem mais de 35 dias.
 - **Tela do caso sem repetição.** A descrição aparece uma vez (abaixo do nome). O resumo junta responsável e CPF, endereço e bairro, remetente, documento e data de recebimento numa linha de origem; a técnica de referência aparece só no resumo (com "conforme o GESUAS" e a data de início); a situação no GESUAS só na aba Dados. Na lista de casos, o responsável aparece abaixo da vítima só quando é outra pessoa.
 - **Celular (modo de campo):** mostra a idade da vítima, **Abrir no mapa** (endereço e bairro no mapa do celular, útil na zona rural), o telefone para ligar e as pendências em aberto antes do formulário. Na versão completa no celular, os desfechos da avaliação ficam em uma lista compacta.
 - **Painel e lista de casos.** Há uma só lista de **Casos**, com filtros de etapa (triagem, avaliação, repasse, acompanhamento, encerrados), técnica, pendência e serviço (PAEFI ou MSE). Cada número do painel e da tabela por técnica da Conferência GESUAS é um atalho: abre essa lista já filtrada, e é contado por ela, então os números sempre batem. Em **Acompanhamento** aparecem também, só para consulta, as famílias que as técnicas incluíram direto no GESUAS.
@@ -67,7 +67,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - **Busca:** procura por palavras em qualquer ordem ("silva maria" acha "Maria da Silva") em nome, nº do caso, CPF (com ou sem pontos), bairro, endereço, remetente, ofício e técnica. Se o caso estiver em outra etapa, o número na aba mostra onde. A tecla **/** leva à busca de qualquer tela, e **Esc** limpa.
   - **Ordenar:** clique no título da coluna (uma vez sobe, outra desce, outra volta ao normal). Na fila de triagem, avaliação e repasse, a última coluna mostra a última movimentação e há quantos dias.
   - **Baixar lista (.csv):** baixa a lista filtrada, na ordem da tela, para abrir no Excel ou no Planilhas.
-  - **Menu lateral:** o número ao lado de **Casos** é o de famílias em acompanhamento. Ao entrar em Casos, abrem logo abaixo os atalhos **Avaliação social** e **Acompanhamentos**, cada um com seu número; Casos continua abrindo a lista geral.
+  - **Menu lateral:** o número ao lado de **Casos** é o da lista que ele abre (**Ativos**): os casos em triagem, avaliação social, repasse e acompanhamento. Ao entrar em Casos, abrem logo abaixo os atalhos **Avaliação social** e **Acompanhamentos**, cada um com seu número; Casos continua abrindo a lista geral.
   - **Famílias que estão só no GESUAS** também abrem, para consulta: técnica, início, serviço, PAF, CPF, NIS, bairro, endereço, a lista de atendimentos importados e os casos deste sistema com o mesmo nome. Abrem pela lista de Acompanhamento e pelas tabelas da Conferência GESUAS.
   - Ao voltar de um caso, a lista abre no mesmo ponto em que estava. O caso mostra também os **outros casos da mesma família** (mesmo nome ou CPF).
 - **Situação no GESUAS de cada caso em acompanhamento**, sempre em relação à data do relatório importado:
@@ -82,16 +82,17 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - encaminhamentos por mês, comparando com o mesmo mês do ano anterior;
   - caminho dos encaminhamentos: recebidos, avaliados, indicados para acompanhamento, em acompanhamento no GESUAS;
   - tempo (mediana) de cada etapa: recebimento até a conclusão da avaliação, conclusão até o repasse, repasse até a inclusão no GESUAS;
+  - casos em avaliação social hoje, com o tempo na fila (mediana), porque o tempo até concluir só mede as avaliações já concluídas;
   - desfecho das avaliações e, por remetente, quanto se confirma como acompanhamento ou não se confirma;
   - violações do GESUAS mais frequentes, e o cruzamento com o bairro (as 6 mais frequentes como colunas);
-  - registros de atendimento por tipo, registros por avaliação e avaliações com visita domiciliar;
-  - carga por técnica (famílias no GESUAS ponderadas pela complexidade). PAF em branco e famílias aguardando inclusão ficam na Conferência GESUAS;
+  - registros de atendimento por tipo, registros por avaliação e avaliações com visita domiciliar (só os registros até a conclusão da avaliação);
+  - carga por técnica (famílias registradas no GESUAS ponderadas pela complexidade, as mesmas da lista que abre ao clicar no nome). PAF em branco e famílias aguardando inclusão ficam na Conferência GESUAS;
   - atendimentos registrados no GESUAS por mês, produção por técnica e tempo do repasse até o primeiro atendimento;
   - **mês a mês, duas pendências do GESUAS:** famílias aguardando inclusão no GESUAS (repassadas e ainda não registradas, no último dia de cada mês) e famílias sem atendimento há mais de 60 dias (com a % sobre as famílias em acompanhamento naquele mês). Os meses são refeitos a cada abertura, sem nada a registrar: a espera conta do repasse até a data de início da família no GESUAS, e a falta de atendimento usa os atendimentos importados. O último ponto é o mesmo número do painel, e o botão "Ver a lista de hoje" abre essa lista. Só aparecem os meses com 60 dias de atendimentos importados, e quem já saiu do GESUAS não entra nos meses antigos;
   - encaminhamentos por território e território × violação (bairro do caso ou do GESUAS), e famílias em acompanhamento por território;
   - encaminhamentos de vítimas ou famílias que já tinham caso anterior.
 
-  Os números de recebidos, remetentes, violações, situações, territórios e da carga por técnica são clicáveis: abrem a lista de casos com o mesmo filtro e o mesmo período, e a contagem bate.
+  Os números de recebidos, remetentes, violações, situações, territórios e da carga por técnica são clicáveis: abrem a lista de casos com o mesmo filtro e o mesmo período, e a contagem bate (em "Tudo", inclusive os casos migrados sem data de recebimento).
 
 ## Quem acessa
 

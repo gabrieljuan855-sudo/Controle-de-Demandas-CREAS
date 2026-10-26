@@ -454,7 +454,14 @@ async function montarPrevia(files){
 }
 
 /* ================= alertas ================= */
-function ultimaMov(c){ return c.registros.length ? c.registros[c.registros.length-1].data : c.recebido; }
+/* última movimentação: o registro mais recente, a entrada na avaliação vinda da triagem, a reabertura ou o recebimento.
+   Sem contar a entrada, um caso recebido há meses e enviado hoje para a avaliação já nasceria "parado". */
+const MOV_HIST = /^(Enviado para avaliação social|Caso reaberto)/;
+function ultimaMov(c){
+  const r = c.registros.length ? String(c.registros[c.registros.length-1].data||'').slice(0,10) : '';
+  const h = c.historico.filter(x => MOV_HIST.test(String(x.acao))).map(x => String(x.data_hora).slice(0,10));
+  return [String(c.recebido||''), r, ...h].filter(Boolean).sort().pop() || c.recebido;
+}
 const alertas = umaVezPorVersao(alertasCalc);
 function alertasCalc(){
   const a=[];
@@ -477,12 +484,14 @@ function alertasCalc(){
 function renderNav(){
   const nAval = DB.casos.filter(c => c.etapa==='avaliacao').length;
   const nAcomp = listaCasos({etapa:'acompanhamento', serv:'paefi'}).length;
+  // o número de Casos é o da lista que ele abre (Ativos): triagem, avaliação, repasse e acompanhamento
+  const nAtivos = listaCasos({etapa:'ativos'}).length;
   const naLista = ['casos','caso','familia'].includes(S.view);
   // Casos abre a lista geral; dentro dela, Avaliação social e Acompanhamentos são atalhos da barra lateral
   const items = [
     ['painel','Painel',''],
     ['novo','Novo encaminhamento',''],
-    ['casos','Casos', coord() ? nAcomp : nAval, coord() ? 'Famílias em acompanhamento' : 'Casos em avaliação social'],
+    ['casos','Casos', coord() ? nAtivos : nAval, coord() ? 'Casos em andamento: triagem, avaliação social, repasse e acompanhamento' : 'Casos em avaliação social'],
     ...(naLista ? [['sub:avaliacao','Avaliação social', nAval, ''], ['sub:acompanhamento','Acompanhamentos', nAcomp, '']] : []),
     ['gesuas','Conferência GESUAS',''],
     ['indicadores','Indicadores','']
@@ -618,11 +627,14 @@ function listaCasos(f){
   if (f.prio) L = L.filter(c => String(c.prioridade)===f.prio);
   // famílias só do GESUAS não têm data de entrada, remetente, violação nem prioridade aqui
   const soCasos = f.per || f.rem || f.viol || f.prio;
-  if (etapa==='acompanhamento' && coord() && temGes() && (!pend || pend[3]) && !soCasos){
-    let G = linhasSoGesuas().filter(g => serv==='todos' ? true : serv==='mse' ? ehMSE(g) : !ehMSE(g));
-    if (pend) G = G.filter(pend[3]);
+  if (etapa==='acompanhamento' && coord() && temGes()){
+    // os casos deste sistema são do PAEFI: em MSE ficam só as famílias do GESUAS, com qualquer filtro
     if (serv==='mse') L = [];
-    L = [...L, ...G.map(g => ({ges:g}))];
+    if ((!pend || pend[3]) && !soCasos){
+      let G = linhasSoGesuas().filter(g => serv==='todos' ? true : serv==='mse' ? ehMSE(g) : !ehMSE(g));
+      if (pend) G = G.filter(pend[3]);
+      L = [...L, ...G.map(g => ({ges:g}))];
+    }
   }
   if (f.bairro) L = L.filter(it => bairroItem(it)===f.bairro);
   if (f.tec) L = L.filter(it => tecItem(it)===f.tec);
@@ -731,7 +743,7 @@ function vCasos(){
 }
 /* baixa a lista filtrada, na ordem da tela; ; e BOM para o Excel em português abrir certo */
 function baixarCsv(){
-  const L = ordenar(listaCasos(filtrosAtuais()), S.ordem);
+  const L = ordenar(listaCasos(filtrosAtuais()), S.ordem || (ETAPAS_FILA.includes(S.f.etapa) ? 'fila' : ''));
   const cab = ['Nº','Vítima(s)','Responsável familiar','CPF','Bairro','Endereço','Contato','Remetente','Documento','Recebido','Prazo','Prioridade','Etapa','Desfecho','Técnica','Início do acompanhamento','Situação no GESUAS','PAF (GESUAS)'];
   const SIT = {ok:'Registrado', manual:'Confirmado manualmente', depois:'Aguardando relatório', possivel:'Conferir (sobrenome)', ausente:'Não registrado', antigo:'Não consta'};
   const linhas = L.map(it => { if (it.ges){ const g = it.ges;
@@ -1117,7 +1129,8 @@ function repassarLocal(c, t, cx){ Object.assign(c, {etapa:'acompanhamento', tecn
 function encerrarLocal(c, desfecho, obs){ Object.assign(c, {etapa:'encerrado', desfecho, desfecho_data:iso(HOJE), desfecho_obs:obs||''}); }
 function acao(c, tipo){
   if (tipo==='p_aval') return modal(`<h2>Enviar para avaliação social</h2><p style="margin:0">${esc(nomeCaso(c))} entra na fila da avaliação com os dados do encaminhamento.</p>`,
-    async () => { Object.assign(c, {etapa:'avaliacao', passou_avaliacao:true}); salvar(c, 'Enviado para avaliação social', 'api_encaminhar', [c.id, 'avaliacao']); return c; });
+    async () => { Object.assign(c, {etapa:'avaliacao', passou_avaliacao:true}); c.historico.push({data_hora:iso(HOJE)+'T00:00:00', usuario:autorTxt(), acao:'Enviado para avaliação social'});
+      salvar(c, 'Enviado para avaliação social', 'api_encaminhar', [c.id, 'avaliacao']); return c; });
   if (tipo==='p_acomp'){
     // caso que não passou pela avaliação (direto da triagem) ainda não tem violação marcada: ela vem junto com o repasse
     const faltaViol = !c.diagnostico.length;
@@ -1362,7 +1375,10 @@ function evoPainel(titulo, serie, link, nota, aviso){
 }
 function vInd(){
   const P = periodoInd();
-  const C = DB.casos.filter(c => noPeriodo(c.recebido, P));
+  // em "Tudo" entram também os casos sem data de recebimento (migrados): a lista aberta pelo número também os mostra
+  const C = DB.casos.filter(c => (!P.ini && !P.fim) || noPeriodo(c.recebido, P));
+  // fila de hoje: o tempo até concluir a avaliação só mede as concluídas, e as que seguem abertas também contam
+  const filaAval = DB.casos.filter(c => c.etapa==='avaliacao'), tFila = mediana(filaAval.map(c => dias(c.recebido)));
   const aval = DB.casos.filter(c => noPeriodo(fimAvaliacao(c), P));
   const cont = arr => { const o={}; arr.forEach(k => { if (k) o[k]=(o[k]||0)+1; }); return Object.entries(o).sort((a,b) => b[1]-a[1]); };
   /* barras horizontais; com "link", cada barra abre a lista de casos com o filtro daquela linha */
@@ -1409,17 +1425,19 @@ function vInd(){
   const regTipo = cont(regs.map(r => r.tipo));
   const ehVD = r => /(^|\W)VD(\W|$)|visita/i.test(r.tipo) && !/tentativa/i.test(r.tipo);
   const regAval = aval.filter(c => !migrado(c));
-  const mediaReg = regAval.length ? (regAval.reduce((s,c) => s + c.registros.length, 0)/regAval.length).toFixed(1).replace('.',',') : null;
-  const comVD = pct(regAval.filter(c => c.registros.some(ehVD)).length, regAval.length);
+  // só os registros até a conclusão: os do acompanhamento, depois, não são da avaliação
+  const regAte = c => { const f = fimAvaliacao(c); return c.registros.filter(r => String(r.data||'').slice(0,10) <= f); };
+  const mediaReg = regAval.length ? (regAval.reduce((s,c) => s + regAte(c).length, 0)/regAval.length).toFixed(1).replace('.',',') : null;
+  const comVD = pct(regAval.filter(c => regAte(c).some(ehVD)).length, regAval.length);
   const reinc = reincidentes(C);
 
   // carga por técnica, a partir do GESUAS
   let carga = [];
   if (coord() && temGes()){
-    const casoDe = new Map(); DB.casos.forEach(c => { const s = statusGes(c); if (s && s.tipo==='ok') casoDe.set(s.g, c); });
+    // contada pela própria lista que o nome abre (registradas no GESUAS, PAEFI): o número bate com a lista;
     // PAF em branco e famílias aguardando inclusão ficam na Conferência GESUAS, por técnica
-    carga = tecnicasGes().map(t => { const L = DB.ges.linhas.filter(g => !ehMSE(g) && primeiroNome(g.tecnico)===t.k);
-      return {nome:nomeTecnica(t.nome), fam:L.length, peso:L.reduce((s,g) => s + (Number((casoDe.get(g)||{}).complexidade) || 1), 0)}; })
+    carga = tecnicasGes().map(t => { const f = {etapa:'acompanhamento', tec:t.k, pend:'registrado'}, L = listaCasos(f);
+      return {nome:nomeTecnica(t.nome), f, fam:L.length, peso:L.reduce((s,it) => s + (it.ges ? 1 : Number(it.complexidade) || 1), 0)}; })
       .filter(t => t.fam).sort((a,b) => b.peso-a.peso);
   }
   // atendimentos importados do GESUAS
@@ -1446,6 +1464,7 @@ function vInd(){
   <div class="kpis">
     <button class="kpi" ${linkLista(lk({}))}><span>Encaminhamentos recebidos</span><b>${C.length}</b></button>
     <div class="kpi"><span>Tempo até concluir a avaliação (mediana)</span><b>${fd(mediana(tAval))}</b></div>
+    <button class="kpi" ${linkLista({etapa:'avaliacao'})} title="Situação de hoje, não depende do período"><span>Em avaliação social hoje</span><b>${filaAval.length}</b>${tFila===null?'':`<small class="muted">na fila há ${tFila} dia${tFila===1?'':'s'} (mediana)</small>`}</button>
     <div class="kpi"><span>Avaliações que indicaram acompanhamento</span><b>${confirm===null?semDados:confirm+'%'}</b></div>
     ${temGes()?`<div class="kpi"><span>Repasse até a inclusão no GESUAS (mediana)</span><b>${fd(mediana(tGes))}</b></div>
     <button class="kpi" ${linkLista({etapa:'acompanhamento'})}><span>Famílias em acompanhamento no PAEFI${nMSE?` (mais ${nMSE} em MSE)`:''}</span><b>${famAcomp}</b></button>`:''}
@@ -1490,8 +1509,8 @@ function vInd(){
     ${terrGes.some(x => x[0])?`<section class="panel stack"><h2>Famílias em acompanhamento por território</h2>${hb(terrGes.filter(x => x[0]))}<div class="muted" style="font-size:12px">Bairro das famílias no GESUAS, tirado dos atendimentos importados. Situação atual.</div></section>`:''}
     ${carga.length?`<section class="panel stack" style="grid-column:1/-1"><h2>Carga por técnica</h2>
       <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">Famílias</th><th style="text-align:right">Carga</th></tr></thead><tbody>
-      ${carga.map(t => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista({etapa:'acompanhamento', tec:primeiroNome(t.nome)})} title="Abrir as famílias desta técnica">${esc(t.nome)}</button></td><td class="mono" style="text-align:right">${t.fam}</td><td class="mono" style="text-align:right">${String(t.peso).replace('.',',')}</td></tr>`).join('')}</tbody></table></div>
-      <div class="muted" style="font-size:12px">Famílias PAEFI no GESUAS. Carga soma a complexidade de cada família (baixa 0,5 · média 1 · alta 1,5); as que estão só no GESUAS contam como média. Situação atual, não depende do período. PAF em branco e famílias aguardando inclusão estão na Conferência GESUAS.</div></section>`:''}
+      ${carga.map(t => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista(t.f)} title="Abrir as famílias desta técnica">${esc(t.nome)}</button></td><td class="mono" style="text-align:right">${t.fam}</td><td class="mono" style="text-align:right">${String(t.peso).replace('.',',')}</td></tr>`).join('')}</tbody></table></div>
+      <div class="muted" style="font-size:12px">Famílias PAEFI registradas no GESUAS (ou confirmadas à mão na conferência), as mesmas da lista que abre ao clicar no nome. Carga soma a complexidade de cada família (baixa 0,5 · média 1 · alta 1,5); as que estão só no GESUAS contam como média. Situação atual, não depende do período. PAF em branco e famílias aguardando inclusão estão na Conferência GESUAS.</div></section>`:''}
     <section class="panel stack"><h2>Famílias que já tinham caso</h2>
       ${reinc.length?`<div class="muted" style="font-size:12.5px">${reinc.length} dos ${C.length} encaminhamentos do período são de vítimas ou famílias com caso anterior.</div>
       <div class="alist">${reinc.slice(0,8).map(x => `<div class="aitem" data-caso="${x.c.id}" tabindex="0"><div class="sev info"></div><div><div class="nm">${esc(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">Caso anterior: ${x.ant.id} · ${esc(x.ant.desfecho||ETAPAS[x.ant.etapa]||'')}</div></div><span></span></div>`).join('')}</div>`:'<div class="empty">Nenhum encaminhamento de família já conhecida no período.</div>'}</section>
