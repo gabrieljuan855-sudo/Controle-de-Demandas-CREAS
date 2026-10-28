@@ -14,14 +14,12 @@
   <div class="carregando" id="carregando">Carregando os casos…</div>
   <div class="app" id="app" hidden>
     <aside class="side">
-      <div class="brand"><b>CREAS Taquara</b><span>Controle de demandas · PSE</span></div>
-      <nav id="nav"></nav>
-      <div class="who">
-        <div class="whoami" id="whoami"></div>
-        <label class="tema"><span>Tema</span><select id="tema"><option value="">Automático</option><option value="light">Claro</option><option value="dark">Escuro</option></select></label>
-      </div>
+      <div class="brand"><span class="logo" aria-hidden="true">CR</span><div><b>CREAS Taquara</b><span>Controle de demandas · PSE</span></div></div>
+      <nav id="nav" aria-label="Menu"></nav>
+      <div class="who"><div class="whoami" id="whoami"></div></div>
     </aside>
-    <main class="main" id="main"></main>
+    <!-- barra: busca, tema, prazos e quem está usando; fica à direita do título de cada tela -->
+    <main class="main"><div class="barra" id="barra"></div><div id="main"></div></main>
   </div>
   <div id="layer"></div>
   <div id="fila" class="fila" role="status" aria-live="polite" hidden>

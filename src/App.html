@@ -463,44 +463,74 @@ function ultimaMov(c){
   return [String(c.recebido||''), r, ...h].filter(Boolean).sort().pop() || c.recebido;
 }
 const alertas = umaVezPorVersao(alertasCalc);
+/* cada alerta: k é o ícone, t e s a descrição, v e vs o número de destaque à direita ("125 dias" / "sem movimento") */
 function alertasCalc(){
-  const a=[];
+  const a=[], dd = n => `${n} dia${n===1?'':'s'}`;
   DB.casos.forEach(c => {
     if (coord() && c.prazo && !c.prazo_respondido && c.etapa!=='encerrado'){
-      const r = -dias(c.prazo);
-      if (r<0) a.push({sev:'crit',c,u:-r,t:`Prazo de resposta vencido há ${-r} dia${-r>1?'s':''}`,s:`${c.remetente} · ${c.doc_tipo} ${c.doc_num}`});
-      else if (r<=7) a.push({sev:'warn',c,t:`Prazo de resposta em ${r} dia${r!==1?'s':''} (${fmtC(c.prazo)})`,s:`${c.remetente} · ${c.doc_tipo} ${c.doc_num}`});
+      const r = -dias(c.prazo), s = `${c.remetente} · ${c.doc_tipo} ${c.doc_num}`;
+      if (r<0) a.push({sev:'crit',c,u:-r,k:'prazo',t:`Prazo de resposta vencido em ${fmtC(c.prazo)}`,s,v:dd(-r),vs:'vencido'});
+      else if (r<=7) a.push({sev:'warn',c,k:'prazo',t:r===0 ? 'Prazo de resposta vence hoje' : `Prazo de resposta vence em ${fmtC(c.prazo)}`,s,v:r===0 ? 'hoje' : `em ${dd(r)}`,vs:'prazo'});
     }
-    if (coord() && c.etapa==='triagem') a.push({sev:'info',c,t:'Aguardando triagem',s:`Recebido em ${fmt(c.recebido)}`});
-    if (coord() && c.etapa==='repasse') a.push({sev:'warn',c,t:'Avaliação indicou acompanhamento: escolher a técnica',s:`Concluída em ${fmt(c.desfecho_data)}`});
-    if (c.etapa==='avaliacao' && dias(ultimaMov(c))>30) a.push({sev:'warn',c,u:dias(ultimaMov(c)),t:`Avaliação sem movimentação há ${dias(ultimaMov(c))} dias`,s:`Recebido em ${fmt(c.recebido)}`});
+    if (coord() && c.etapa==='triagem') a.push({sev:'info',c,k:'triagem',t:'Aguardando triagem',s:`Recebido em ${fmt(c.recebido)}`,v:dd(dias(c.recebido)),vs:'na triagem'});
+    if (coord() && c.etapa==='repasse') a.push({sev:'warn',c,k:'repasse',t:'Avaliação indicou acompanhamento: escolher a técnica',s:`Concluída em ${fmt(c.desfecho_data)}`,v:dd(dias(c.desfecho_data)),vs:'aguardando'});
+    if (c.etapa==='avaliacao'){ const d = dias(ultimaMov(c));
+      if (d>30) a.push({sev:'warn',c,u:d,k:'relogio',t:'Avaliação sem movimentação',s:`Recebido em ${fmt(c.recebido)}`,v:dd(d),vs:'sem movimento'}); }
     // o que é do GESUAS (não registrado, PAF, a conferir) fica na Conferência GESUAS, por técnica
   });
   // mais grave primeiro; dentro da mesma gravidade, o mais atrasado
   const ord={crit:0,warn:1,info:2}; return a.sort((x,y) => ord[x.sev]-ord[y.sev] || (y.u||0)-(x.u||0));
 }
 
+/* ================= ícones (traço, 24×24) ================= */
+const ICONES = {
+  painel:'<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  novo:'<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><line x1="9" x2="15" y1="15" y2="15"/>',
+  casos:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  avaliacao:'<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  acomp:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  gesuas:'<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>',
+  indicadores:'<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  campo:'<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>',
+  lua:'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  sol:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  auto:'<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+  sino:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  busca:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  baixar:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  filtro:'<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  relogio:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  triagem:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  repasse:'<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  prazo:'<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
+  caneta:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  bandeira:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>'
+};
+const ic = (k, t=18) => `<svg width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[k]||''}</svg>`;
+
 /* ================= navegação ================= */
+/* menu em duas seções; Casos é um grupo com Avaliação social e Acompanhamentos sempre à vista */
 function renderNav(){
   const nAval = DB.casos.filter(c => c.etapa==='avaliacao').length;
   const nAcomp = listaCasos({etapa:'acompanhamento', serv:'paefi'}).length;
   // o número de Casos é o da lista que ele abre (Ativos): triagem, avaliação, repasse e acompanhamento
   const nAtivos = listaCasos({etapa:'ativos'}).length;
   const naLista = ['casos','caso','familia'].includes(S.view);
-  // Casos abre a lista geral; dentro dela, Avaliação social e Acompanhamentos são atalhos da barra lateral
-  const items = [
-    ['painel','Painel',''],
-    ['novo','Novo encaminhamento',''],
-    ['casos','Casos', coord() ? nAtivos : nAval, coord() ? 'Casos em andamento: triagem, avaliação social, repasse e acompanhamento' : 'Casos em avaliação social'],
-    ...(naLista ? [['sub:avaliacao','Avaliação social', nAval, ''], ['sub:acompanhamento','Acompanhamentos', nAcomp, '']] : []),
-    ['gesuas','Conferência GESUAS',''],
-    ['indicadores','Indicadores','']
-  ].filter(i => coord() || !['novo','gesuas'].includes(i[0]));
-  if (CELULAR) items.unshift(['campo','Modo de campo','']);
+  const principal = [
+    ['painel','Painel','','','painel'],
+    ['novo','Novo encaminhamento','','','novo'],
+    ['casos','Casos', coord() ? nAtivos : nAval, coord() ? 'Casos em andamento: triagem, avaliação social, repasse e acompanhamento' : 'Casos em avaliação social','casos'],
+    ['sub:avaliacao','Avaliação social', nAval, 'Fila da avaliação social'],
+    ['sub:acompanhamento','Acompanhamentos', nAcomp, 'Famílias em acompanhamento, incluindo as que estão só no GESUAS'],
+    ['gesuas','Conferência GESUAS','','','gesuas'],
+    ['indicadores','Indicadores','','','indicadores']
+  ].filter(i => coord() || !['novo','gesuas','sub:acompanhamento'].includes(i[0]));
+  const outros = CELULAR ? [['campo','Modo de campo','','','campo']] : [];
   const sub = k => k.startsWith('sub:') ? k.slice(4) : '';
   const ligado = k => sub(k) ? S.view==='casos' && S.f.etapa===sub(k)
     : k==='casos' ? naLista && !(S.view==='casos' && ['avaliacao','acompanhamento'].includes(S.f.etapa)) : S.view===k;
-  $('#nav').innerHTML = items.map(([k,l,c,t]) => `<button class="${ligado(k)?'on':''}${sub(k)?' sub':''}" data-go="${k}"${t?` title="${t}"`:''}>${l}${c!==''?`<span class="count">${c}</span>`:''}</button>`).join('');
+  const botao = ([k,l,c,t,i]) => `<button class="${ligado(k)?'on':''}${sub(k)?' sub':''}" data-go="${k}"${t?` title="${t}"`:''}${ligado(k)?' aria-current="page"':''}>${i?ic(i):''}<span class="lbl">${l}</span>${c!==''?`<span class="count">${c}</span>`:''}</button>`;
+  $('#nav').innerHTML = `<div class="nav-sec">Menu principal</div>${principal.map(botao).join('')}${outros.length?`<div class="nav-sec">Outros</div>${outros.map(botao).join('')}`:''}`;
   $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => {
     const k = b.dataset.go;
     if (k==='novo'){ S.draft=null; S.editando=null; }
@@ -508,7 +538,36 @@ function renderNav(){
     if (k==='casos' || sub(k)){ LIM_LISTA = 300; S.ordem = ''; S.maisFiltros = false; S.f = {...FILTRO_VAZIO, etapa: sub(k) || (coord() ? 'ativos' : 'avaliacao')}; }
     go(sub(k) ? 'casos' : k);
   });
+  renderBarra();
 }
+/* barra à direita do título: busca, tema, prazos (o número é o da lista que abre) e quem está usando */
+const TEMAS = [['','Automático (segue o aparelho)','auto'],['light','Claro','sol'],['dark','Escuro','lua']];
+const temaAtual = () => document.documentElement.dataset.theme || '';
+function renderBarra(){
+  const el = $('#barra'); if (!el) return;
+  const nPrazo = coord() ? listaCasos({etapa:'ativos', pend:'prazo'}).length : 0, vencido = nPrazo && alertas().some(a => a.sev==='crit');
+  const t = TEMAS.find(x => x[0]===temaAtual()) || TEMAS[0];
+  // "Avaliação social" vira AS; com uma palavra só ("Coordenação"), as duas primeiras letras
+  const palavras = autorTxt().split(/\s+/).filter(Boolean);
+  const sigla = (palavras.length > 1 ? palavras.slice(0,2).map(p => p[0]).join('') : autorTxt().slice(0,2)).toUpperCase();
+  el.innerHTML = `<button type="button" class="ib" data-bbusca title="Buscar casos (tecla /)" aria-label="Buscar casos">${ic('busca')}</button>
+    <button type="button" class="ib" data-btema title="Tema: ${t[1]}. Clique para trocar." aria-label="Tema: ${t[1]}. Trocar tema">${ic(t[2])}</button>
+    ${coord()?`<button type="button" class="ib" data-bprazo title="Prazos de resposta vencidos ou em 7 dias: ${nPrazo}" aria-label="Prazos de resposta vencidos ou em 7 dias: ${nPrazo}">${ic('sino')}${nPrazo?`<span class="badge${vencido?'':' warn'}">${nPrazo}</span>`:''}</button>`:''}
+    <span class="avatar" title="${esc(autorTxt())} · ${esc(DB.email||'')}">${esc(sigla)}</span>`;
+  el.querySelector('[data-bbusca]').onclick = irParaBusca;
+  el.querySelector('[data-btema]').onclick = () => {
+    const prox = TEMAS[(TEMAS.findIndex(x => x[0]===temaAtual()) + 1) % TEMAS.length];
+    if (prox[0]) document.documentElement.dataset.theme = prox[0]; else delete document.documentElement.dataset.theme;
+    try { if (prox[0]) localStorage.setItem('tema', prox[0]); else localStorage.removeItem('tema'); } catch(e){}
+    toast(`Tema: ${prox[1].toLowerCase()}`); renderBarra();
+  };
+  const bp = el.querySelector('[data-bprazo]'); if (bp) bp.onclick = () => {
+    if (!nPrazo){ toast('Nenhum prazo de resposta vencido ou vencendo em 7 dias.'); return; }
+    LIM_LISTA = 300; go('casos', {f:{...FILTRO_VAZIO, pend:'prazo'}, ordem:'prazo', maisFiltros:false});
+  };
+}
+/* abre a lista de casos com o cursor na busca (ícone da barra, tecla / e atalho do painel) */
+function irParaBusca(){ if (S.view!=='casos') go('casos'); const b = $('#busca'); if (b){ b.focus(); b.select(); } }
 const pill = c => `<span class="pill p-${c.etapa}">${ETAPAS[c.etapa]||c.etapa}</span>`;
 const PRIO_ROT = {1:'1 · Urgente (risco iminente)', 2:'2 · Alta', 3:'3 · Regular'};
 const prio = p => p ? `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>` : '';
@@ -548,36 +607,72 @@ function iniciarCopiar(){
   document.addEventListener('keydown', e => {
     if (e.key!=='/' || e.ctrlKey || e.metaKey || e.altKey || S.view==='campo' || $('#app').hidden) return;
     const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) || $('#layer').innerHTML) return;
-    e.preventDefault(); if (S.view!=='casos') go('casos'); const b = $('#busca'); if (b){ b.focus(); b.select(); }
+    e.preventDefault(); irParaBusca();
   });
 }
 
 /* ================= painel ================= */
+const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
+/* medidor em meio círculo, de 0 a 100% */
+function medidor(p, cor){
+  const a = Math.PI * (1 - p/100), x = (100 + 80*Math.cos(a)).toFixed(1), y = (100 - 80*Math.sin(a)).toFixed(1);
+  return `<svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="var(--accent-soft)" stroke-width="18" stroke-linecap="round"/>${p>0?`<path d="M20 100 A80 80 0 0 1 ${x} ${y}" fill="none" stroke="${cor}" stroke-width="18" stroke-linecap="round"/>`:''}</svg>`;
+}
+/* item da lista de urgentes: ícone pelo tipo, descrição e, à direita, os dias */
+const itemAlerta = a => `<div class="li" data-caso="${a.c.id}" tabindex="0"><span class="circ ${a.sev}">${ic(a.k)}</span>
+  <div class="li-txt"><div class="nm">${comCopia(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div class="muted li-sub">${esc(a.t)} · ${esc(a.s)}</div></div>
+  <span class="val ${a.sev}">${esc(a.v)}<small>${esc(a.vs)}</small></span></div>`;
+/* cada número do painel abre a lista de casos já filtrada e é contado por ela */
 function vPainel(){
-  const al = alertas();
-  const conta = (etapa, pend='', extra={}) => listaCasos({etapa, pend, serv:'paefi', ...extra}).length;
-  /* cartão que abre a lista de casos já filtrada; o número é contado pela própria lista */
-  const kpi = (rot, etapa, pend='', alerta=false, extra={}) => { const v = conta(etapa, pend, extra); return `<button class="kpi ${alerta&&v?'alert':''}" ${linkLista({etapa, pend, ...extra})}><span>${rot}</span><b>${v}</b></button>`; };
+  const al = alertas(), n = f => listaCasos({serv:'paefi', ...f}).length;
   // os números do GESUAS ficam só na Conferência; aqui, só o lembrete quando o relatório fica velho
   const idadeGes = temGes() ? dias(refGes()) : null;
   const lembrete = !temGes() ? 'Nenhum relatório do GESUAS importado ainda.' : idadeGes > 35 ? `O relatório do GESUAS em uso é de ${fmt(refGes())}, há ${idadeGes} dias. Importe o do mês para a conferência ficar em dia.` : '';
+  const etapas = [['triagem','Aguardando triagem','triagem'],['avaliacao','Em avaliação social','avaliacao'],['repasse','Aguardando repasse à técnica','repasse'],['acompanhamento','Em acompanhamento','acomp']];
+  const fila = n({etapa:'avaliacao'}), parada = n({etapa:'avaliacao', pend:'parada'}), p = fila ? Math.round(parada/fila*100) : 0;
+  const urg = n({etapa:'avaliacao', prio:'1'}), prazos = n({etapa:'ativos', pend:'prazo'}), pend = n({etapa:'ativos', pend:'pendreg'});
+  const lim = S.painelTudo ? 300 : 8;
   return `
-  <div class="top"><div><h1>Painel</h1>
-    <p>O que precisa de atenção hoje, ${HOJE.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}.</p></div>
-    <button class="btn primary" data-act="novo">+ Novo encaminhamento</button></div>
-  <div class="kpis k7">
-    ${kpi('Aguardando triagem','triagem')}
-    ${kpi('Em avaliação social','avaliacao')}
-    ${kpi('Urgentes (prioridade 1) em avaliação','avaliacao','',true,{prio:'1'})}
-    ${kpi('Avaliações paradas há 30+ dias','avaliacao','parada',true)}
-    ${kpi('Aguardando repasse à técnica','repasse','',true)}
-    ${kpi('Prazos vencidos ou em 7 dias','ativos','prazo',true)}
-    ${kpi('Casos com pendência em aberto','ativos','pendreg')}
-  </div>
+  <div class="top"><div><h1>${saudacao()}, ${esc(autorTxt())}</h1>
+    <p>${HOJE.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · o que precisa de atenção hoje.</p></div></div>
   ${lembrete?`<div class="dup row" style="justify-content:space-between;gap:8px;margin-bottom:16px"><span>${lembrete}</span><button type="button" class="btn small" data-go2="gesuas">Abrir a Conferência GESUAS</button></div>`:''}
-  <section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>${S.painelTudo?'Tudo o que precisa de atenção':'Mais urgentes'}</h2><span class="muted">${S.painelTudo||al.length<=12?al.length:`12 de ${al.length}`}</span></div>
-    <div class="alist">${al.length ? al.slice(0, S.painelTudo ? 300 : 12).map(a => `<div class="aitem" data-caso="${a.c.id}" tabindex="0"><div class="sev ${a.sev}"></div><div><div class="nm">${comCopia(nomeCaso(a.c))} <span class="mono muted">${a.c.id}</span></div><div>${esc(a.t)}</div><div class="muted" style="font-size:12px">${esc(a.s)}</div></div>${pill(a.c)}</div>`).join('') + (al.length>12?`<div style="padding-top:10px"><button type="button" class="btn small" data-paineltudo>${S.painelTudo?'Mostrar só as mais urgentes':`Ver todas (${al.length})`}</button></div>`:'') : '<div class="empty">Nada pendente.</div>'}</div>
-  </section>`;
+  <div class="painel-g">
+    <section class="panel"><div class="card-cab"><h2>Andamento dos casos</h2><span class="muted">do encaminhamento ao acompanhamento</span></div>
+      <div class="fluxo">${etapas.map(([k,l,i]) => `<button type="button" class="etapa${k==='avaliacao'?' forte':''}" ${linkLista({etapa:k})}><span class="ic">${ic(i)}</span><b>${n({etapa:k})}</b><span class="rot">${l}</span></button>`).join('')}</div></section>
+    <section class="panel destaque"><span class="rot">Casos em andamento</span>
+      <button type="button" class="grande" ${linkLista({etapa:'ativos'})} title="Abrir a lista">${n({etapa:'ativos'})}</button>
+      <span class="muted">${fmt(HOJE)} · ${urg ? `<button type="button" class="num-link urg" ${linkLista({etapa:'avaliacao', prio:'1'})}>${urg} urgente${urg>1?'s':''} (P1) na avaliação</button>` : 'nenhum urgente (P1) na avaliação'}</span>
+      <div class="acoes"><button type="button" class="acao" data-act="novo">${ic('novo')}Novo</button><button type="button" class="acao" data-registrar>${ic('caneta')}Registrar</button><button type="button" class="acao" data-buscar>${ic('busca')}Buscar</button></div></section>
+  </div>
+  <div class="painel-g">
+    <section class="panel"><div class="card-cab"><h2>${S.painelTudo?'Tudo o que precisa de atenção':'Mais urgentes'}</h2><span class="muted">${S.painelTudo||al.length<=lim?al.length:`${lim} de ${al.length}`}</span></div>
+      <div class="lista">${al.length ? al.slice(0, lim).map(itemAlerta).join('') : '<div class="empty">Nada pendente.</div>'}</div>
+      ${al.length>8?`<div style="padding-top:12px"><button type="button" class="btn small" data-paineltudo>${S.painelTudo?'Mostrar só as mais urgentes':`Ver todas (${al.length})`}</button></div>`:''}</section>
+    <section class="panel medidor"><div class="card-cab"><h2>Fila da avaliação</h2></div>
+      <button type="button" class="medidor-btn" ${linkLista({etapa:'avaliacao', pend:'parada'})} aria-label="${parada} de ${fila} avaliações paradas há 30 dias ou mais. Abrir a lista">
+        ${medidor(p, 'var(--warn)')}<span class="pct">${fila ? p+'%' : '—'}</span><span class="nivel${parada?'':' ok'}">${!fila ? 'fila vazia' : parada ? 'parada há 30+ dias' : 'nenhuma parada há 30+ dias'}</span></button>
+      <span class="rodape">${parada} de ${fila} caso${fila===1?'':'s'} na fila</span>
+      <div class="mini">
+        <button type="button" ${linkLista({etapa:'ativos', pend:'prazo'})}><span>${ic('prazo',16)}Prazos vencidos ou em 7 dias</span><b class="${prazos?'crit':''}">${prazos}</b></button>
+        <button type="button" ${linkLista({etapa:'ativos', pend:'pendreg'})}><span>${ic('bandeira',16)}Casos com pendência em aberto</span><b>${pend}</b></button>
+      </div></section>
+  </div>`;
+}
+/* atalho "Registrar" do painel: escolhe o caso e abre direto a aba de registros */
+function escolherCasoParaRegistro(){
+  const achar = q => q.trim() ? DB.casos.filter(c => c.etapa!=='encerrado' && casaBusca(txtCaso(c), q)).slice(0,8) : ordenarFila(DB.casos.filter(c => c.etapa==='avaliacao')).slice(0,8);
+  const lista = q => { const r = achar(q);
+    return r.length ? r.map(c => `<button type="button" class="gbusca-item" data-rcaso="${c.id}"><b>${esc(nomeCaso(c))} <span class="mono muted">${c.id}</span></b><span class="muted">${ETAPAS[c.etapa]||c.etapa}${bairroDe(c)?' · '+esc(bairroDe(c)):''}</span></button>`).join('')
+      : '<div class="muted" style="padding:8px 2px">Nenhum caso em andamento com esse nome.</div>'; };
+  const abrir = id => { $('#layer').innerHTML = ''; go('caso', {caso:id, tab:'registros', prev:S.view}); };
+  modal(`<h2>Registrar atendimento</h2><p class="muted" style="margin:0">Escolha o caso. Sem digitar nada, aparece a fila da avaliação social.</p>
+    <label class="field"><span>Caso</span><input id="rbusca" autocomplete="off" placeholder="Nome, nº do caso, CPF ou bairro"></label>
+    <div id="rbusca-res" class="gbusca">${lista('')}</div>`,
+    async () => { const b = $('#rbusca-res [data-rcaso]'); if (b) abrir(b.dataset.rcaso); return null; }, 'Abrir o primeiro');
+  const inp = $('#rbusca'), res = $('#rbusca-res');
+  inp.oninput = () => { res.innerHTML = lista(inp.value); };
+  inp.onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); const b = res.querySelector('[data-rcaso]'); if (b) abrir(b.dataset.rcaso); } };
+  res.onclick = e => { const b = e.target.closest('[data-rcaso]'); if (b) abrir(b.dataset.rcaso); };
 }
 
 /* ================= casos: uma lista só, com filtros =================
@@ -717,17 +812,18 @@ function vCasos(){
   // em Acompanhamento, estes filtros deixam de fora as famílias que estão só no GESUAS
   const avisoGes = acomp && coord() && temGes() && (f.per || f.rem || f.viol || f.prio);
   return `<div class="top"><div><h1>Casos</h1><p class="sub-fixo">${sub}</p></div></div>
+  <div class="tab-card">
   <div class="filters"><input id="busca" type="search" placeholder="Buscar nome, nº, CPF, bairro, remetente, ofício, técnica" value="${esc(f.busca)}" title="Atalho: tecla /">
     <div class="seg">${segs.map(([k,l]) => `<button class="${f.etapa===k?'on':''}" data-seg="${k}"${k==='ativos'?' title="Casos em andamento neste sistema"':''}>${l} <small>${nSeg(k)}</small></button>`).join('')}</div></div>
   <div class="filters">
     ${tecs.length?sel('fTec','Técnica','Todas as técnicas', tecs.map(t => [t.k, nomeTecnica(t.nome)]), f.tec):''}
     ${pends.length?sel('fPend','Situação','Qualquer situação', pends.map(k => [k, PENDENCIAS[k][0]]), f.pend):''}
     ${temMSE?`<select id="fServ" aria-label="Serviço" class="${acomp&&f.serv!=='paefi'?'ativo':''}"${acomp?'':' style="visibility:hidden" tabindex="-1" aria-hidden="true" disabled'}><option value="paefi" ${f.serv==='paefi'?'selected':''}>PAEFI</option><option value="mse" ${f.serv==='mse'?'selected':''}>MSE (LA/PSC)</option><option value="todos" ${f.serv==='todos'?'selected':''}>PAEFI e MSE</option></select>`:''}
-    <button type="button" class="btn small" data-mais aria-expanded="${abrir}">${abrir?'Menos filtros':'Mais filtros'}${nMais?` (${nMais})`:''}</button>
+    <button type="button" class="btn small" data-mais aria-expanded="${abrir}">${ic('filtro',14)}${abrir?'Menos filtros':'Mais filtros'}${nMais?` (${nMais})`:''}</button>
     <span class="filters-fim">
       <span class="muted resultados">${total} ${total===1?'resultado':'resultados'}</span>
       <button type="button" class="btn small" data-limpar${algum?'':' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}>Limpar filtros</button>
-      <button type="button" class="btn small" data-csv title="Baixa a lista filtrada para abrir no Excel ou no Planilhas"${total?'':' disabled'}>Baixar lista (.csv)</button>
+      <button type="button" class="btn small" data-csv title="Baixa a lista filtrada para abrir no Excel ou no Planilhas"${total?'':' disabled'}>${ic('baixar',15)}Baixar lista (.csv)</button>
     </span>
   </div>
   ${abrir?`<div class="filters mais">
@@ -738,7 +834,7 @@ function vCasos(){
     ${sel('fPrio','Prioridade','Qualquer prioridade', [['1','1 · Urgente'],['2','2 · Alta'],['3','3 · Regular'],['0','Sem prioridade definida']], f.prio)}
   </div>`:''}
   ${avisoGes?'<p class="muted" style="margin:-4px 0 10px;font-size:12.5px">Com período, remetente, violação ou prioridade, a lista mostra só os casos deste sistema: as famílias que estão só no GESUAS não têm esses dados.</p>':''}
-  <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div>
+  <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div></div>
   ${total>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${total}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, total-LIM_LISTA)}</button></div>`:''}`;
 }
 /* baixa a lista filtrada, na ordem da tela; ; e BOM para o Excel em português abrir certo */
@@ -1654,6 +1750,8 @@ function bind(){
   const pt = m.querySelector('[data-paineltudo]'); if (pt) pt.onclick = () => { S.painelTudo = !S.painelTudo; render(); };
   m.querySelectorAll('[data-go2]').forEach(el => el.onclick = () => go(el.dataset.go2));
   m.querySelectorAll('[data-act="novo"]').forEach(el => el.onclick = () => { S.draft=null; S.editando=null; go('novo'); });
+  const rg = m.querySelector('[data-registrar]'); if (rg) rg.onclick = escolherCasoParaRegistro;
+  const bu = m.querySelector('[data-buscar]'); if (bu) bu.onclick = irParaBusca;
   m.querySelectorAll('[data-seg]').forEach(el => el.onclick = () => { S.f.etapa = el.dataset.seg; LIM_LISTA = 300; render(); });
   m.querySelectorAll('[data-per]').forEach(el => el.onclick = () => { S.indPer=el.dataset.per; render(); });
   // a busca repinta depois de uma pausa curta na digitação, para não travar a cada letra
@@ -1751,16 +1849,6 @@ document.addEventListener('change', e => {
   const box = (t.closest('.diag') || document).querySelector('.outra-box'); if (!box) return;
   box.hidden = !t.checked; if (t.checked) box.querySelector('input').focus();
 });
-function iniciarTema(){
-  const sel = $('#tema'); if (!sel) return;
-  sel.value = document.documentElement.dataset.theme || '';
-  sel.onchange = () => {
-    const t = sel.value;
-    if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
-    try { if (t) localStorage.setItem('tema', t); else localStorage.removeItem('tema'); } catch(e){}
-  };
-}
-iniciarTema();
 iniciarFila();
 iniciarCopiar();
 iniciarCampo();
