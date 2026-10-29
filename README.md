@@ -8,7 +8,9 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
 - **Novo encaminhamento** (coordenação). A vítima é o dado principal e obrigatório; o responsável familiar é opcional. Remetente, documento e prazo vêm de listas. O sistema avisa quando a vítima ou a família já tem registro.
 - **Vítima como nome do caso.** Listas, painel e ficha mostram o nome da vítima. A conferência com o GESUAS continua cruzando pelo responsável familiar e pelas demais pessoas do caso.
-- **Salvamento em segundo plano.** Ao salvar (registro, violações, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar". Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
+- **Salvamento em segundo plano.** Ao salvar (registro, violações, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho por cerca de 2 minutos; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar", e quando a internet volta tenta outra vez sozinho. Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
+  - **Nada do que foi digitado se perde.** Registros e discussões que ainda não chegaram à planilha ficam guardados no navegador: se a aba fechar, a página recarregar ou o computador desligar, eles voltam para a fila na próxima abertura (sem duplicar). O registro em digitação e o novo encaminhamento em digitação também ficam guardados: sair da tela, clicar de novo em "Novo encaminhamento" ou recarregar não apaga; só "Limpar" (com confirmação) e o registro apagam.
+  - **Novo encaminhamento sem duplicar:** se a resposta da gravação se perder e a pessoa clicar de novo, o servidor reconhece o mesmo cadastro e devolve o caso já gravado.
 - **Violações iguais às do GESUAS.** A lista de violações do sistema é a mesma do GESUAS: Violência Física, Psicológica, Exploração Sexual, Abuso/Violência Sexual, Negligência ou Abandono, Trabalho Infantil, Trajetória de Rua, Tráfico de Pessoas, Discriminação por orientação sexual, Violência Patrimonial, Afastamento do convívio familiar (medida socioeducativa e medida de proteção), Discriminação em decorrência de raça/etnia, Descumprimento de condicionalidades do PBF e do PETI, Exploração da imagem, Membro em situação de desaparecimento, Violência Moral, Violência Institucional, Bullying e Outra. Os casos já marcados com o quadro antigo são convertidos sozinhos ao abrir (todos os itens de negligência e abandono viram "Negligência ou Abandono"; a antiga "Exploração sexual, de imagem ou relacionados" vira "Exploração Sexual", e vale conferir em "Editar violações" os que eram de imagem). A planilha só passa a guardar os códigos novos quando o caso é editado.
   - **"Outra": qual?** Ao marcar "Outra", aparece o campo **Qual é a outra violação?** (obrigatório), com sugestões das normativas do SUAS que não têm opção própria no GESUAS (mendicância, discriminação por deficiência, por identidade de gênero, por idade e religiosa, autonegligência da pessoa idosa, trabalho análogo ao de escravo) e o que já foi digitado em outros casos, para manter a mesma escrita. Aparece no caso como "Outra: …", na ficha impressa (em branco, com linha para escrever) e no indicador "Por violação", que mostra o que há dentro de "Outra".
   - **Direto para acompanhamento** (no cadastro do encaminhamento ou pelo botão da triagem) também mostra o quadro de violações e exige ao menos uma, já que o caso não passa pela avaliação social. No repasse da triagem, a prioridade também aparece para confirmar. Casos que já têm violação marcada (vindos da avaliação) não pedem de novo no repasse à técnica.
@@ -24,7 +26,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - **Importante:** abra o sistema no celular **com internet, antes de sair**, e deixe a aba aberta. O Google não permite abrir o sistema do zero sem internet. Se a aba fechar, os registros guardados são enviados na próxima vez que o sistema abrir com internet.
   - No iPhone, o Safari pode apagar dados de sites pouco usados; prefira enviar os registros no mesmo dia.
   - "Abrir a versão completa" leva ao sistema inteiro; "Modo de campo", no menu, volta.
-- **Visual.** Menu lateral com ícones, em duas seções (Menu principal e, no celular, Outros), cartões sem borda com cantos arredondados, e a lista de casos com busca, abas, filtros e tabela num cartão só. O texto cinza tem contraste de pelo menos 4,5:1 nos dois temas, e a etapa "aguardando repasse" tem cor própria (não a vermelha de alerta).
+- **Visual.** Menu lateral com ícones, em duas seções (Menu principal e Outros), cartões sem borda com cantos arredondados, e a lista de casos com busca, abas, filtros e tabela num cartão só. O texto cinza tem contraste de pelo menos 4,5:1 nos dois temas, e a etapa "aguardando repasse" tem cor própria (não a vermelha de alerta).
 - **Barra no topo, à direita do título de cada tela:**
   - **busca** (o mesmo que a tecla **/**);
   - **tema**: cada clique troca entre Automático (segue o aparelho), Claro e Escuro, e a escolha fica salva no navegador;
@@ -61,7 +63,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
   O GESUAS é a referência: com a família encontrada lá, a **técnica do caso passa a ser a do GESUAS** (a indicada no repasse fica como histórico). A aba **Acompanhamento** mostra só as famílias em acompanhamento no GESUAS: os casos daqui vinculados a uma família de lá (achada no relatório ou confirmada à mão) e as famílias que as técnicas incluíram direto no GESUAS, só para consulta (não é preciso cadastrá-las aqui). O caso repassado à técnica que ainda não foi achado no relatório fica na aba **Repasse**, como "aguardando inclusão no GESUAS", até aparecer lá.
 
-  Ao importar um relatório novo, as famílias que **saíram do GESUAS** desde o relatório anterior aparecem numa lista marcada e são **desligadas ao salvar** (dá para desmarcar alguma antes). Assim o desligamento não precisa ser registrado à mão.
+  Ao importar um relatório novo, as famílias que **saíram do GESUAS** desde o relatório anterior aparecem numa lista marcada e são **desligadas ao salvar** (dá para desmarcar alguma antes). Assim o desligamento não precisa ser registrado à mão. Se o relatório novo for bem menor que o anterior (menos de 80% das famílias, ou muitas saindo de uma vez, como quando é exportado só de uma técnica), aparece um aviso em vermelho e **nenhum caso vem marcado**: marque só os que saíram mesmo. Um caso desligado por engano volta pelo botão **Reabrir caso > Voltar ao acompanhamento**, com a mesma técnica e a mesma data de início.
 
   Quando o nome não bate, mas há família com o mesmo sobrenome (da mesma técnica, ou com dois sobrenomes em comum), o caso aparece como **a conferir**. A coordenação confirma ("É esta família"), recusa ("Não é") ou recusa todas as sugestões de uma vez ("Nenhuma destas famílias"). Quando a família foi cadastrada com outro nome, **"Está no GESUAS com outro nome"** abre uma busca: digite parte do nome e a lista do relatório vai filtrando (famílias da mesma técnica aparecem primeiro); um clique vincula o caso àquela família. Se não achar, dá para confirmar sem vincular. A decisão fica salva no caso e pode ser desfeita.
 
@@ -83,7 +85,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - **Busca:** procura por palavras em qualquer ordem ("silva maria" acha "Maria da Silva") em nome, nº do caso, CPF (com ou sem pontos), bairro, endereço, remetente, ofício e técnica. Se o caso estiver em outra etapa, o número na aba mostra onde. A tecla **/** leva à busca de qualquer tela, e **Esc** limpa.
   - **Ordenar:** clique no título da coluna (uma vez sobe, outra desce, outra volta ao normal). Na fila de triagem, avaliação e repasse, a última coluna mostra a última movimentação e há quantos dias.
   - **Baixar lista (.csv):** baixa a lista filtrada, na ordem da tela, para abrir no Excel ou no Planilhas.
-  - **Menu lateral:** o número ao lado de **Casos** é o da lista que ele abre (**Em atendimento**). Logo abaixo, sempre à vista, ficam os atalhos **Avaliação social** e **Acompanhamentos**, cada um com seu número. Casos continua abrindo a lista geral.
+  - **Menu lateral:** o número ao lado de **Casos** é o da lista que ele abre (**Em atendimento**). Logo abaixo, sempre à vista, ficam **Avaliação social** e o nome de cada técnica, com o número de famílias que ela acompanha (somados, dão o total da aba Acompanhamento); cada um abre a lista já filtrada. Casos continua abrindo a lista geral. Em **Outros** fica **Verificar a base**.
   - **Famílias que estão só no GESUAS** também abrem, para consulta: técnica, início, serviço, PAF, CPF, NIS, bairro, endereço, a lista de atendimentos importados e os casos deste sistema com o mesmo nome. Abrem pela lista de Acompanhamento e pelas tabelas da Conferência GESUAS.
   - Ao voltar de um caso, a lista abre no mesmo ponto em que estava. O caso mostra também os **outros casos da mesma família** (mesmo nome ou CPF).
 - **Situação no GESUAS de cada caso em acompanhamento**, sempre em relação à data do relatório importado:
@@ -163,6 +165,25 @@ Com os dados de 24/09/2026, o resultado esperado é de 349 casos: 98 em acompanh
 
 Cole os arquivos novos no editor. Depois abra **Implantar > Gerenciar implantações**, edite a implantação e escolha **Nova versão**. A URL continua a mesma.
 
+### Verificar a base (sinais de dado perdido)
+
+No menu, **Outros > Verificar a base** (ou, no editor do Apps Script, a função `auditarBase`, com o resultado no Registro de execução). Só lê a planilha, não muda nada, e aponta:
+
+- número de caso repetido, linha sem número e caso sem nenhuma vítima;
+- pessoa, registro, discussão ou histórico ligados a um caso que não existe;
+- registro sem texto, sem data ou com id repetido, e atendimento do GESUAS importado duas vezes;
+- CPF com 9 ou 10 dígitos (provável zero da frente perdido), texto que a planilha transformou em data ("01/2023") ou em fórmula com erro (texto que começava com "-", "+" ou "=");
+- data guardada como texto (fica fora dos prazos e dos indicadores);
+- caso em acompanhamento sem técnica, sem início ou com técnica fora da lista (ex.: "Avaliação", vindo da planilha antiga), encerrado sem desfecho e prioridade fora de 1 a 3;
+- aba com colunas mexidas à mão.
+
+**Proteções da gravação:**
+- o sistema lê e grava cada coluna pela posição. Se alguém inserir, apagar ou trocar uma coluna de lugar na planilha, ele para com um aviso em vez de gravar na coluna errada; renomear o título de uma coluna não atrapalha. Desfaça a mudança em **Arquivo > Histórico de versões**;
+- cada linha nova recebe o formato da coluna antes do valor (texto continua texto, data continua data), e a aba cresce sozinha quando passa do tamanho dela;
+- o número do caso é calculado dentro da trava, relendo a planilha, e nunca repete um número que já existe;
+- ao editar as vítimas, as novas são gravadas antes de apagar as antigas;
+- a lista nova do GESUAS é gravada por cima da anterior antes de limpar a sobra.
+
 Quem preferir a linha de comando pode usar o [clasp](https://github.com/google/clasp) (`clasp clone <scriptId>` e `clasp push`) com a pasta `src/` como `rootDir`.
 
 ## Estrutura
@@ -170,7 +191,7 @@ Quem preferir a linha de comando pode usar o [clasp](https://github.com/google/c
 ```
 src/
   appsscript.json   manifesto (fuso, publicação como web app)
-  Code.gs           web app, instalação, perfis e funções chamadas pelo navegador (api_*)
+  Code.gs           web app, instalação, perfis, funções chamadas pelo navegador (api_*) e verificação da base
   Dados.gs          leitura e gravação das abas (cada aba é uma tabela)
   Util.gs           normalização de nomes, datas e remetentes
   Migracao.gs       importação da planilha antiga
