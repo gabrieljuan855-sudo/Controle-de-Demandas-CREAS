@@ -421,6 +421,12 @@ th .ord.on{color:var(--accent)}
   .barra{float:none;justify-content:flex-end;margin:0 0 12px}
   .card-cab{flex-wrap:wrap}
 }
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 8px}
+.chip{all:unset;cursor:pointer;font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.chip b{font-variant-numeric:tabular-nums;margin-left:2px}
+.chip:hover{color:var(--ink)}
+.chip.on{background:var(--accent);color:var(--accent-ink)}
+.chip:focus-visible{outline:2px solid var(--accent)}
 .relatorio{margin:0;white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;line-height:1.55;background:var(--surface-2);border-radius:10px;padding:12px 14px;max-height:60vh;overflow:auto}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
