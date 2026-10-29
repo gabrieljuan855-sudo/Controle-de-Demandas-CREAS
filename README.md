@@ -57,7 +57,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - famílias repassadas e ainda não cadastradas no GESUAS;
   - a conferir (mesmo sobrenome);
   - famílias com PAF em branco;
-  - famílias sem atendimento registrado no GESUAS há mais de 60 dias (aparece quando houver pelo menos 60 dias de atendimentos importados).
+  - famílias sem atendimento registrado no GESUAS há mais de 60 dias, ou o que estiver na Config (aparece quando houver pelo menos esse tempo de atendimentos importados).
 
   Abaixo da tabela, um aviso mostra os casos em acompanhamento aqui que não aparecem no GESUAS (provavelmente desligados lá). Em seguida vem **o que cada técnica precisa resolver**, só para quem tem pendência, com a conferência pelo sobrenome e as listas;
 
@@ -71,8 +71,17 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 - **Painel: o andamento dos casos.** Abre com a saudação e a data. Cada número abre a lista filtrada e é contado por ela:
   - **Andamento dos casos:** as quatro etapas lado a lado, na ordem do fluxo (aguardando triagem, em avaliação social, aguardando técnica ou inclusão no GESUAS, em acompanhamento no GESUAS). Elas somam o total "Em atendimento";
   - **Em atendimento:** o total (o mesmo número do menu), os urgentes (prioridade 1) na avaliação e três atalhos. **Novo** abre o cadastro do encaminhamento. **Registrar** abre uma busca de caso (sem digitar nada, mostra a fila da avaliação) e leva direto à aba de registros. **Buscar** vai para a busca de casos;
-  - **Mais urgentes:** as 8 mais urgentes (a mais grave primeiro e, na mesma gravidade, a mais atrasada), com um ícone por tipo (prazo, avaliação parada, triagem, repasse) e os dias à direita; "Ver todas" mostra a lista completa;
-  - **Fila da avaliação:** um medidor com a parte da fila parada há 30+ dias (sem registro desde a entrada na avaliação ou o último registro), e logo abaixo os prazos vencidos ou em 7 dias e os casos com pendência em aberto. Os números do GESUAS não aparecem no painel, só na Conferência GESUAS; o painel avisa apenas quando o relatório em uso tem mais de 35 dias.
+  - **Mais urgentes:** as 8 mais urgentes, com um ícone por tipo e os dias à direita; "Ver todas" mostra a lista completa ("Tudo o que precisa de atenção"). Acima da lista, um botão por tipo, com a contagem, mostra só aquele tipo. Os avisos, na ordem em que aparecem (vermelho antes de amarelo e de azul; no mesmo tipo, o mais atrasado primeiro):
+    - **prazo de resposta** vencido (vermelho) ou que vence em até 7 dias;
+    - **escolher a técnica:** a avaliação indicou acompanhamento e falta o repasse;
+    - **triagem sem decisão de destino** há mais de 7 dias (até lá, aviso azul "Aguardando triagem");
+    - **avaliação sem movimentação** há mais de 30 dias (sem registro desde a entrada na avaliação ou o último registro);
+    - **sem inclusão no GESUAS:** repassado há mais de 30 dias e ainda não achado no relatório (não registrado, a conferir pelo sobrenome ou que não consta mais). Quem foi repassado depois da data do relatório em uso não entra: ainda não dá para cobrar;
+    - **pendência em aberto** há mais de 15 dias, anotada num registro e não marcada como resolvida (um aviso por caso, pela mais antiga);
+    - **sem atendimento registrado no GESUAS** há mais de 60 dias, inclusive das famílias que estão só no GESUAS (abre a ficha da família).
+
+    **Os dias de cada aviso ficam na aba Config** e a coordenação muda lá, sem mexer no código: `alerta_dias_triagem` (7), `alerta_dias_avaliacao` (30), `alerta_dias_gesuas` (30), `alerta_dias_pendencia` (15) e `alerta_dias_atendimento` (60). As linhas aparecem sozinhas na primeira abertura depois da atualização; valor vazio ou inválido volta ao padrão. Os dias da avaliação e do atendimento valem também para o medidor, os filtros da lista de casos, a Conferência GESUAS e os Indicadores.
+  - **Fila da avaliação:** um medidor com a parte da fila parada há mais de 30 dias, ou o que estiver na Config (sem registro desde a entrada na avaliação ou o último registro), e logo abaixo os prazos vencidos ou em 7 dias e os casos com pendência em aberto. Os números do GESUAS não aparecem no painel, só na Conferência GESUAS; o painel avisa apenas quando o relatório em uso tem mais de 35 dias.
 - **Tela do caso sem repetição.** A descrição aparece uma vez (abaixo do nome). O resumo junta responsável e CPF, endereço e bairro, remetente, documento e data de recebimento numa linha de origem; a técnica de referência aparece só no resumo (com "conforme o GESUAS" e a data de início); a situação no GESUAS só na aba Dados. Na lista de casos, o responsável aparece abaixo da vítima só quando é outra pessoa.
 - **Celular (modo de campo):** mostra a idade da vítima, **Abrir no mapa** (endereço e bairro no mapa do celular, útil na zona rural), o telefone para ligar e as pendências em aberto antes do formulário. Na versão completa no celular, os desfechos da avaliação ficam em uma lista compacta.
 - **Painel e lista de casos.** Há uma só lista de **Casos**, com filtros de etapa, técnica, pendência e serviço (PAEFI ou MSE). Cada número do painel e da tabela por técnica da Conferência GESUAS é um atalho: abre essa lista já filtrada, e é contado por ela, então os números sempre batem. As abas de etapa:
@@ -212,7 +221,7 @@ src/
 | GESUAS | Último relatório "Famílias Acompanhadas por Técnico" importado, com CPF, NIS, bairro e endereço tirados dos atendimentos |
 | Atendimentos | Atendimentos importados do relatório "Famílias Atendidas por Técnico" (técnico, responsável, CPF/NIS, bairro e data) |
 | Listas | Remetentes, tipos de documento, técnicas, bairros e tipos de registro. Edite aqui para mudar as opções do site |
-| Config | E-mails de acesso, numeração dos casos e dados da última importação do GESUAS |
+| Config | E-mails de acesso, numeração dos casos, dados da última importação do GESUAS e os dias de cada aviso do Painel (`alerta_dias_...`) |
 
 ## Privacidade
 

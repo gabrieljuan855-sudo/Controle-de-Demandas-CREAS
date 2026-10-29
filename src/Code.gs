@@ -68,6 +68,7 @@ function configurar() {
   if (!('emails_coordenacao' in cfg)) gravarConfig('emails_coordenacao', eu, 'E-mails com acesso de coordenação, separados por vírgula');
   if (!('emails_avaliacao' in cfg)) gravarConfig('emails_avaliacao', '', 'E-mails com acesso da avaliação social, separados por vírgula');
   if (!('planilha_antiga_id' in cfg)) gravarConfig('planilha_antiga_id', '', 'ID da planilha antiga (já convertida para Planilhas Google), usado só na migração');
+  completarLimites(cfg);
   var padrao = ss.getSheetByName('Página1') || ss.getSheetByName('Sheet1');
   if (padrao && padrao.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(padrao);
   return 'Planilha base pronta. Confira os e-mails na aba Config.';
@@ -199,13 +200,36 @@ function lerAtendimentos() {
   });
 }
 
+/** Dias sem movimentação até virar aviso no Painel. Ficam na aba Config: a coordenação muda o número lá. */
+var LIMITES_PADRAO = {
+  alerta_dias_triagem: [7, 'Dias aguardando triagem sem decisão de destino até virar aviso no Painel'],
+  alerta_dias_avaliacao: [30, 'Dias de avaliação social sem registro até virar aviso ("avaliação parada")'],
+  alerta_dias_gesuas: [30, 'Dias depois do repasse sem a família aparecer no GESUAS até virar aviso no Painel'],
+  alerta_dias_pendencia: [15, 'Dias com pendência de registro em aberto até virar aviso no Painel'],
+  alerta_dias_atendimento: [60, 'Dias sem atendimento registrado no GESUAS até virar aviso (Painel, Conferência e Indicadores)']
+};
+
+/** {triagem, avaliacao, gesuas, pendencia, atendimento}: o número da Config ou, vazio ou inválido, o padrão. */
+function lerLimites(cfg) {
+  var o = {};
+  Object.keys(LIMITES_PADRAO).forEach(function (k) { var n = Number(cfg[k]); o[k.replace('alerta_dias_', '')] = n > 0 ? n : LIMITES_PADRAO[k][0]; });
+  return o;
+}
+
+/** Põe na Config as linhas dos limites que ainda não existem (planilhas criadas antes deles). */
+function completarLimites(cfg) {
+  Object.keys(LIMITES_PADRAO).forEach(function (k) { if (!(k in cfg)) gravarConfig(k, LIMITES_PADRAO[k][0], LIMITES_PADRAO[k][1]); });
+}
+
 function api_iniciar() {
   var papel = papelAtual();
   var cfg = lerConfig();
   var casos = montarCasos().filter(function (c) { return visivelPara(papel, c); });
   var ges = papel === 'coordenacao' ? lerGesuas(cfg) : null;
   var atend = papel === 'coordenacao' ? lerAtendimentos() : [];
-  return { papel: papel, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, listas: lerListas() };
+  // na primeira abertura depois da atualização, as linhas dos limites aparecem na Config para a coordenação ajustar
+  if (Object.keys(LIMITES_PADRAO).some(function (k) { return !(k in cfg); })) comTrava(function () { CONFIG_CACHE = null; completarLimites(lerConfig()); });
+  return { papel: papel, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, listas: lerListas(), limites: lerLimites(cfg) };
 }
 
 function api_novoCaso(d) {
