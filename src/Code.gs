@@ -37,6 +37,11 @@ function configurar() {
     var sh = ss.getSheetByName(nome);
     if (!sh) sh = ss.insertSheet(nome);
     var cols = ESQUEMA[nome];
+    // com colunas mexidas à mão, reescrever o cabeçalho esconderia que os dados estão fora do lugar
+    var ult = sh.getLastColumn(), prob = problemasCabecalho(nome, ult ? sh.getRange(1, 1, 1, ult).getValues()[0] : []);
+    if (prob.length) throw new Error('A aba "' + nome + '" foi alterada à mão: ' + prob.join('; ') + '. Corrija antes de rodar configurar().');
+    // planilha nova nasce com 26 colunas; a aba Casos tem mais que isso
+    garantirTamanho(sh, 2, cols.length);
     sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold').setBackground('#e8eeed');
     sh.setFrozenRows(1);
     // colunas de texto não podem virar data sozinhas (ex.: ofício "01/2023")
@@ -206,6 +211,12 @@ function api_iniciar() {
 function api_novoCaso(d) {
   exigir(['coordenacao']);
   return comTrava(function () {
+    // a chave vem do navegador: se a resposta se perdeu e a pessoa clicou de novo, devolve o caso já gravado
+    var origem = d.chave ? 'sistema:' + String(d.chave) : 'sistema';
+    if (d.chave) {
+      var ja = lerTabela('Casos').filter(function (c) { return String(c.origem) === origem; })[0];
+      if (ja) return montarCasos([String(ja.id)])[0];
+    }
     exigirVitima(d.pessoas);
     // direto para acompanhamento não passa pela avaliação: a violação vivenciada é marcada aqui
     var violacoes = d.destino === 'acompanhamento' ? exigirViolacoes(d.diagnostico) : [];
@@ -218,7 +229,7 @@ function api_novoCaso(d) {
       bairro: d.bairro, contato: d.contato, remetente: d.remetente, remetente_detalhe: d.remetente_detalhe,
       doc_tipo: d.doc_tipo, doc_num: d.doc_num, recebido: receb, prazo: isoParaData(d.prazo), prazo_respondido: '',
       descricao: d.descricao, prioridade: Number(d.prioridade) || 2, etapa: 'triagem', passou_avaliacao: '', diagnostico: '',
-      origem: 'sistema', atualizado_em: agora
+      origem: origem, atualizado_em: agora
     };
     if (d.destino === 'avaliacao') { caso.etapa = 'avaliacao'; caso.passou_avaliacao = 'SIM'; }
     if (d.destino === 'acompanhamento') {
@@ -256,10 +267,12 @@ function api_editarCaso(id, campos, pessoas) {
     });
     if (pessoas) {
       var sh = aba('Pessoas');
-      var linhas = lerTabela('Pessoas').filter(function (p) { return String(p.caso_id) === String(id); });
-      linhas.reverse().forEach(function (p) { sh.deleteRow(p._linha); });
+      var antigas = lerTabela('Pessoas').filter(function (p) { return String(p.caso_id) === String(id); })
+        .map(function (p) { return p._linha; }).sort(function (a, b) { return b - a; });
+      // grava as pessoas novas antes de apagar as antigas: se algo falhar no meio, ninguém some
       inserirLinhas('Pessoas', pessoas.filter(function (p) { return String(p.nome || '').trim(); })
         .map(function (p) { return { caso_id: id, nome: p.nome.trim(), nascimento: isoParaData(p.nascimento), sexo: p.sexo || '' }; }));
+      antigas.forEach(function (l) { sh.deleteRow(l); });
     }
     registrarHistorico(id, 'Dados do caso editados');
     return salvarCasoLinha(c);
@@ -473,12 +486,22 @@ function api_desligar(id, motivo, obs) {
   });
 }
 
-function api_reabrir(id) {
+/**
+ * Reabre um caso encerrado. destino 'acompanhamento' desfaz um desligamento (feito por engano ou pela
+ * importação do GESUAS): volta com a mesma técnica e a mesma data de início. Sem destino, vai para nova triagem.
+ */
+function api_reabrir(id, destino) {
   exigir(['coordenacao']);
   return comTrava(function () {
     var c = buscarCaso(id);
-    c.etapa = 'triagem'; c.desfecho = ''; c.desfecho_data = ''; c.desfecho_obs = ''; c.desligamento = '';
-    registrarHistorico(id, 'Caso reaberto para nova triagem');
+    if (destino === 'acompanhamento') {
+      if (!c.tecnica || !c.inicio_acomp) throw new Error('Este caso não tem técnica e início de acompanhamento para onde voltar.');
+      c.etapa = 'acompanhamento'; c.desfecho = 'Passado para acompanhamento'; c.desfecho_data = c.inicio_acomp; c.desfecho_obs = ''; c.desligamento = '';
+      registrarHistorico(id, 'Desligamento desfeito: volta ao acompanhamento com ' + c.tecnica);
+    } else {
+      c.etapa = 'triagem'; c.desfecho = ''; c.desfecho_data = ''; c.desfecho_obs = ''; c.desligamento = '';
+      registrarHistorico(id, 'Caso reaberto para nova triagem');
+    }
     return salvarCasoLinha(c);
   });
 }
@@ -531,9 +554,8 @@ function api_importarGesuas(p) {
     var autor = autorAtual();
     var anotar = function (id, acao) { hist.push({ data_hora: agora, usuario: autor, caso_id: id, acao: acao }); };
     if (p.ges) {
-      var sh = aba('GESUAS');
-      if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ESQUEMA.GESUAS.length).clearContent();
-      inserirLinhas('GESUAS', (p.ges.linhas || []).map(function (g) {
+      // grava por cima da lista anterior e só depois limpa a sobra: uma falha no meio não deixa a aba vazia
+      substituirLinhas('GESUAS', (p.ges.linhas || []).map(function (g) {
         return { tecnico: g.tecnico, responsavel: g.responsavel, inicio: String(g.inicio || ''), servico: g.servico, paf: g.paf,
           cpf: g.cpf || '', nis: g.nis || '', bairro: g.bairro || '', endereco: g.endereco || '' };
       }));
@@ -575,4 +597,128 @@ function api_importarGesuas(p) {
     return { ges: p.soAtendimentos ? null : lerGesuas(lerConfig()), casos: ids.length ? montarCasos(ids) : [],
       atend: p.fim ? lerAtendimentos() : null, novos: novos };
   });
+}
+
+/* ---------- manutenção: verificação da base ---------- */
+
+/**
+ * Procura na planilha sinais de dado perdido ou estragado. Só lê: não muda nada.
+ * Rode pelo editor (selecione auditarBase e clique em Executar; o resultado sai no Registro de execução)
+ * ou pelo item "Verificar a base" do menu do sistema.
+ */
+function auditarBase() {
+  var ss = planilhaBase(), t = {}, avisos = [];
+  Object.keys(ESQUEMA).forEach(function (nome) {
+    var sh = ss.getSheetByName(nome);
+    if (!sh) { avisos.push('A aba "' + nome + '" não existe na planilha.'); return; }
+    var ult = sh.getLastColumn(), prob = problemasCabecalho(nome, ult ? sh.getRange(1, 1, 1, ult).getValues()[0] : []);
+    if (prob.length) { avisos.push('A aba "' + nome + '" teve colunas mexidas à mão (' + prob.join('; ') + '). Ela não foi verificada.'); return; }
+    t[nome] = lerTabela(nome);
+  });
+  var tecnicas = t.Listas ? lerListas().tecnicas : [];
+  var r = auditarDados(t, tecnicas);
+  var texto = [
+    'Verificação da base em ' + Utilities.formatDate(new Date(), FUSO, 'dd/MM/yyyy HH:mm'),
+    '',
+    r.resumo.join('\n'),
+    '',
+    avisos.concat(r.avisos).length ? avisos.concat(r.avisos).map(function (a) { return '⚠ ' + a; }).join('\n') : '✓ Nenhum sinal de dado perdido ou estragado.'
+  ].join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+function api_auditoria() {
+  exigir(['coordenacao']);
+  return auditarBase();
+}
+
+/**
+ * As verificações, sobre as abas já lidas (t.Casos, t.Pessoas...). Aba que não veio (colunas mexidas) é pulada.
+ * Devolve {resumo, avisos}; cada aviso traz até 8 exemplos (nº do caso ou linha da planilha).
+ */
+function auditarDados(t, tecnicas) {
+  var avisos = [], resumo = [];
+  var exemplos = function (l) { return l.slice(0, 8).join(', ') + (l.length > 8 ? ' e mais ' + (l.length - 8) : ''); };
+  var aviso = function (l, txt) { if (l.length) avisos.push(txt + ': ' + l.length + ' (' + exemplos(l) + ')'); };
+  var vazio = function (v) { return v === '' || v === null || v === undefined; };
+  var dig = function (v) { return String(v === null || v === undefined ? '' : v).replace(/\D/g, ''); };
+  var erroFormula = function (v) { return typeof v === 'string' && /^#(ERROR|NAME|VALUE|REF|N\/A|DIV\/0|NUM)/.test(v); };
+  var ehData = function (v) { return Object.prototype.toString.call(v) === '[object Date]'; };
+  var casos = t.Casos || [], porId = {};
+
+  if (t.Casos) {
+    var repetidos = [], semId = [];
+    casos.forEach(function (c) {
+      var id = String(c.id).trim();
+      if (!id) { semId.push('linha ' + c._linha); return; }
+      if (porId[id]) repetidos.push(id + ' (linhas ' + porId[id]._linha + ' e ' + c._linha + ')'); else porId[id] = c;
+    });
+    aviso(repetidos, 'Número de caso repetido (os registros e as pessoas desses casos se misturam)');
+    aviso(semId, 'Linha da aba Casos sem número de caso');
+    var etapas = { triagem: 1, avaliacao: 1, repasse: 1, acompanhamento: 1, encerrado: 1 }, cont = {};
+    casos.forEach(function (c) { cont[c.etapa] = (cont[c.etapa] || 0) + 1; });
+    resumo.push('Casos: ' + casos.length + ' (' + Object.keys(cont).map(function (k) { return (k || 'sem etapa') + ' ' + cont[k]; }).join(', ') + ')');
+    aviso(casos.filter(function (c) { return !etapas[c.etapa]; }).map(function (c) { return c.id + ' ("' + c.etapa + '")'; }), 'Caso com etapa desconhecida');
+    var acomp = casos.filter(function (c) { return c.etapa === 'acompanhamento'; });
+    aviso(acomp.filter(function (c) { return vazio(c.tecnica); }).map(function (c) { return c.id; }), 'Caso em acompanhamento sem técnica');
+    aviso(acomp.filter(function (c) { return vazio(c.inicio_acomp); }).map(function (c) { return c.id; }), 'Caso em acompanhamento sem data de início');
+    var primeiros = {}; (tecnicas || []).forEach(function (x) { primeiros[primeiroNome(x)] = 1; });
+    if ((tecnicas || []).length) aviso(acomp.filter(function (c) { return !vazio(c.tecnica) && !primeiros[primeiroNome(c.tecnica)]; }).map(function (c) { return c.id + ' ("' + c.tecnica + '")'; }),
+      'Caso em acompanhamento com técnica que não está na lista de técnicas (ex.: "Avaliação", vindo da planilha antiga)');
+    aviso(casos.filter(function (c) { return c.etapa === 'encerrado' && vazio(c.desfecho); }).map(function (c) { return c.id; }), 'Caso encerrado sem desfecho');
+    aviso(casos.filter(function (c) { return !vazio(c.prioridade) && [1, 2, 3].indexOf(Number(c.prioridade)) < 0; }).map(function (c) { return c.id + ' (' + c.prioridade + ')'; }), 'Prioridade fora de 1, 2 ou 3');
+    // datas guardadas como texto e textos que a planilha transformou em data, número ou fórmula
+    var comoTexto = [], viraram = [], formula = [];
+    casos.forEach(function (c) {
+      Object.keys(COLUNAS_DATA).forEach(function (k) { if (k in c && !vazio(c[k]) && !ehData(c[k])) comoTexto.push(c.id + ' (' + k + ': "' + c[k] + '")'); });
+      ['cpf', 'contato', 'doc_num', 'responsavel', 'endereco', 'bairro', 'descricao', 'remetente', 'remetente_detalhe'].forEach(function (k) {
+        if (ehData(c[k])) viraram.push(c.id + ' (' + k + ')');
+        if (erroFormula(c[k])) formula.push(c.id + ' (' + k + ')');
+      });
+    });
+    aviso(comoTexto, 'Data guardada como texto (não entra nos prazos e nos indicadores)');
+    aviso(viraram, 'Texto que a planilha transformou em data (ex.: nº do ofício "01/2023")');
+    aviso(formula, 'Texto que a planilha transformou em fórmula com erro (começava com "-", "+" ou "=")');
+    aviso(casos.filter(function (c) { var n = dig(c.cpf).length; return n === 9 || n === 10 || typeof c.cpf === 'number'; }).map(function (c) { return c.id + ' (' + c.cpf + ')'; }),
+      'CPF com 9 ou 10 dígitos ou guardado como número (provável zero da frente perdido)');
+  }
+
+  var orfaos = function (nome, rot) {
+    if (!t[nome] || !t.Casos) return;
+    aviso(t[nome].filter(function (x) { return !porId[String(x.caso_id).trim()]; }).map(function (x) { return 'linha ' + x._linha + (vazio(x.caso_id) ? '' : ' (caso ' + x.caso_id + ')'); }), rot);
+  };
+  if (t.Pessoas) {
+    resumo.push('Pessoas: ' + t.Pessoas.length);
+    orfaos('Pessoas', 'Pessoa ligada a um caso que não existe');
+    if (t.Casos) {
+      var comPessoa = {}; t.Pessoas.forEach(function (p) { if (String(p.nome || '').trim()) comPessoa[String(p.caso_id).trim()] = 1; });
+      aviso(casos.filter(function (c) { return String(c.id).trim() && !comPessoa[String(c.id).trim()]; }).map(function (c) { return c.id; }), 'Caso sem nenhuma vítima ou pessoa');
+    }
+    aviso(t.Pessoas.filter(function (p) { return erroFormula(p.nome); }).map(function (p) { return 'linha ' + p._linha; }), 'Nome de pessoa que virou fórmula com erro');
+  }
+  if (t.Registros) {
+    resumo.push('Registros de atendimento: ' + t.Registros.length);
+    orfaos('Registros', 'Registro ligado a um caso que não existe');
+    var vistos = {}, regRep = [];
+    t.Registros.forEach(function (r) { var id = String(r.id).trim(); if (!id) return; if (vistos[id]) regRep.push(id); vistos[id] = 1; });
+    aviso(regRep, 'Registro com id repetido');
+    aviso(t.Registros.filter(function (r) { return !String(r.texto || '').trim(); }).map(function (r) { return 'linha ' + r._linha + ' (caso ' + r.caso_id + ')'; }), 'Registro sem texto');
+    aviso(t.Registros.filter(function (r) { return !ehData(r.data); }).map(function (r) { return 'linha ' + r._linha + ' (caso ' + r.caso_id + ')'; }), 'Registro sem data ou com data guardada como texto');
+    aviso(t.Registros.filter(function (r) { return erroFormula(r.texto) || erroFormula(r.pendencias); }).map(function (r) { return 'linha ' + r._linha + ' (caso ' + r.caso_id + ')'; }),
+      'Texto de registro ou pendência que virou fórmula com erro');
+  }
+  if (t.Discussoes) { resumo.push('Discussões de caso: ' + t.Discussoes.length); orfaos('Discussoes', 'Discussão ligada a um caso que não existe'); }
+  if (t.Historico) { resumo.push('Histórico: ' + t.Historico.length + ' ações'); orfaos('Historico', 'Histórico ligado a um caso que não existe'); }
+  if (t.GESUAS) {
+    resumo.push('Famílias no relatório do GESUAS: ' + t.GESUAS.length);
+    aviso(t.GESUAS.filter(function (g) { var n = dig(g.cpf).length; return n === 9 || n === 10; }).map(function (g) { return 'linha ' + g._linha; }), 'CPF de família do GESUAS com 9 ou 10 dígitos (provável zero perdido)');
+  }
+  if (t.Atendimentos) {
+    resumo.push('Atendimentos do GESUAS importados: ' + t.Atendimentos.length);
+    var chaves = {}, atRep = [];
+    t.Atendimentos.forEach(function (a) { var k = String(a.chave); if (chaves[k]) atRep.push('linha ' + a._linha); chaves[k] = 1; });
+    aviso(atRep, 'Atendimento do GESUAS importado duas vezes');
+  }
+  return { resumo: resumo, avisos: avisos };
 }
