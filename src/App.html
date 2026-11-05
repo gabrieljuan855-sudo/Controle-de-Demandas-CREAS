@@ -1125,6 +1125,78 @@ function draft(){
   };
   return S.draft;
 }
+/* ---------- preencher pelo "Relatório Sintético da Família" do GESUAS (PDF) ----------
+   O arquivo é lido neste navegador (pdf.js), nada é enviado. Traz a pessoa de referência (nome, sexo, nascimento,
+   CPF, telefone, endereço e bairro) e a composição familiar (nome, nascimento e parentesco de cada membro).
+   Quem é vítima e quem é o responsável familiar a pessoa escolhe; o resto do encaminhamento é digitado. */
+async function lerSintetico(file){
+  const pdf = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+  // linhas na ordem do arquivo (a mesma da página): item em outra altura começa outra linha
+  const linhas = [];
+  for (let pi = 1; pi <= pdf.numPages; pi++){
+    const tc = await (await pdf.getPage(pi)).getTextContent(); let y = null, atual = [];
+    tc.items.forEach(it => { if (!it.str || !it.str.trim()) return; const iy = it.transform[5];
+      if (y !== null && Math.abs(iy - y) > 2){ linhas.push(atual.join(' ')); atual = []; } y = iy; atual.push(it.str.trim()); });
+    if (atual.length) linhas.push(atual.join(' '));
+  }
+  const L = linhas.map(l => l.replace(/\s+/g,' ').trim()).filter(Boolean), txt = L.join('\n');
+  if (!/Relat[óo]rio Sint[ée]tico da Fam[íi]lia/i.test(txt) || !/Composi[çc][ãa]o Familiar/i.test(txt)) throw new Error('Este arquivo não é o Relatório Sintético da Família do GESUAS.');
+  const iComp = txt.search(/Composi[çc][ãa]o Familiar/i), cab = txt.slice(0, iComp), plano = cab.replace(/\n/g,' ');
+  const pega = (re, t=plano) => { const m = t.match(re); return m ? m[1].trim() : ''; };
+  const ref = {nome: pega(/Nome:\s*(.+?)\s+Sexo:/), sexo: pega(/Sexo:\s*([FM])\b/), nasc: pega(/Data de Nascimento:\s*(\d\d\/\d\d\/\d{4})/),
+    cpf: pega(/CPF:\s*([\d.\-]{11,14})/), tel: pega(/Telefone:\s*(.+?)\s+(?:Data de Nascimento|$)/)};
+  if (/n[ãa]o informado/i.test(ref.tel)) ref.tel = '';
+  if (!ref.nome) throw new Error('Não achei o nome da pessoa de referência no relatório.');
+  // endereço: a linha "Endereço:", a do bairro e a da cidade "(UF)"
+  const lc = cab.split('\n'), ie = lc.findIndex(l => /^Endere[çc]o:/i.test(l));
+  let logr = '', bairro = '';
+  if (ie >= 0){
+    logr = lc[ie].replace(/^Endere[çc]o:\s*/i,'').replace(/,\s*0+(\d)/, ', $1').trim();
+    const b = lc[ie+1] || ''; if (b && !/\(\w\w\)\s*$/.test(b) && !/^CEP/i.test(b)) bairro = b.trim();
+  }
+  // composição familiar: cada membro começa em "Nome:"
+  const fimComp = txt.slice(iComp).search(/Programas da Fam[íi]lia|Despesas da Fam[íi]lia|Informa[çc][õo]es do Domic[íi]lio/i);
+  const comp = txt.slice(iComp, fimComp > 0 ? iComp + fimComp : undefined).replace(/\n/g,' ');
+  const membros = comp.split(/Nome:\s*/).slice(1).map(ch => ({
+    nome: ch.split(/\s+Data de\b/)[0].trim(),
+    nasc: (ch.match(/Nascimento:\s*(\d\d\/\d\d\/\d{4})/)||[])[1] || '',
+    parentesco: ((ch.match(/Refer[êe]ncia:\s*(.+?)\s+(?:Remunera|Escolaridade|Condi)/)||[])[1] || '').trim()
+  })).filter(m => m.nome);
+  membros.forEach(m => { m.ref = norm(m.nome)===norm(ref.nome) || /pessoa de refer/i.test(m.parentesco); });
+  if (!membros.some(m => m.ref)) membros.unshift({nome:ref.nome, nasc:ref.nasc, parentesco:'Pessoa de referência', ref:true});
+  return {ref, logr, bairro, membros};
+}
+/* janela: marcar as vítimas (crianças e adolescentes já vêm marcados) e o responsável familiar */
+function preencherPorSintetico(R){
+  const Dd = draft(), bairros = DB.listas.bairros || [];
+  const bairro = R.bairro ? (bairros.find(b => norm(b)===norm(R.bairro)) || TIT(R.bairro)) : '';
+  const linha = (m, i) => { const id = m.nasc ? idade(dataBr(m.nasc)) : '';
+    return `<tr><td><input type="checkbox" data-sv="${i}" ${id!=='' && id < 18 ? 'checked' : ''} aria-label="Vítima: ${esc(TIT(m.nome))}"></td>
+      <td><b>${esc(TIT(m.nome))}</b><div class="muted" style="font-size:12px">${esc(m.parentesco||'—')}${id!==''?` · ${id} anos`:''}</div></td>
+      <td><input type="radio" name="s_resp" value="${i}" ${m.ref?'checked':''} aria-label="Responsável: ${esc(TIT(m.nome))}"></td></tr>`; };
+  const ja = Dd.pessoas.some(p => String(p.nome||'').trim()) || Dd.responsavel || Dd.endereco;
+  modal(`<h2>Relatório Sintético da Família</h2>
+    <p class="muted" style="margin:0">Marque as vítimas e o responsável familiar. Crianças e adolescentes já vêm marcados como vítimas.</p>
+    <div class="tablewrap" style="box-shadow:none"><table style="min-width:0"><thead><tr><th>Vítima</th><th>Pessoa</th><th>Responsável</th></tr></thead>
+      <tbody>${R.membros.map(linha).join('')}</tbody></table></div>
+    <dl class="gav-res">
+      ${R.logr?`<dt>Endereço</dt><dd>${esc(TIT(R.logr))}</dd>`:''}${bairro?`<dt>Bairro</dt><dd>${esc(bairro)}</dd>`:''}
+      ${R.ref.cpf?`<dt>CPF</dt><dd>${esc(R.ref.cpf)} <span class="muted">(da pessoa de referência)</span></dd>`:''}${R.ref.tel?`<dt>Contato</dt><dd>${esc(R.ref.tel)}</dd>`:''}
+    </dl>
+    ${ja?'<div class="dup">As vítimas e os dados da família já digitados serão trocados pelos do relatório. Origem, prazo e descrição continuam.</div>':''}`,
+    async () => {
+      const marc = [...document.querySelectorAll('#layer [data-sv]:checked')].map(el => R.membros[+el.dataset.sv]);
+      if (!marc.length){ toast('Marque ao menos uma vítima.'); return null; }
+      const r = R.membros[+((document.querySelector('#layer [name=s_resp]:checked')||{}).value ?? -1)];
+      Object.assign(Dd, {
+        pessoas: marc.map(m => ({nome:TIT(m.nome), nascimento:dataBr(m.nasc), sexo: m.ref ? R.ref.sexo : ''})),
+        responsavel: r ? TIT(r.nome) : '', cpf: r && r.ref ? R.ref.cpf : '',
+        endereco: R.logr ? TIT(R.logr) : Dd.endereco, bairro: bairro || Dd.bairro, contato: R.ref.tel || Dd.contato });
+      guardarRascunhoNovo(); $('#layer').innerHTML = ''; render();
+      toast(marc.some(m => !m.ref) ? 'Preenchido. Confira o sexo das vítimas e complete origem e descrição.' : 'Preenchido. Complete origem e descrição.');
+      return null;
+    }, 'Preencher');
+}
 function duplicados(nome){
   const q = norm(nome); if (q.length<4) return [];
   const partes = toks(nome);
@@ -1139,7 +1211,7 @@ function atualizarDup(){ const box = $('#dupBox'); if (box){ box.innerHTML = dup
 function opcoes(lista, atual){ const l = lista.slice(); if (atual && !l.includes(atual)) l.push(atual); return l.map(v => `<option ${v===atual?'selected':''}>${esc(v)}</option>`).join(''); }
 function vNovo(){
   const Dd = draft(); const edit = !!S.editando;
-  return `<div class="top"><div><h1>${edit?'Editar dados do caso '+esc(S.editando):'Novo encaminhamento'}</h1></div></div>
+  return `<div class="top top-casos"><h1>${edit?'Editar dados do caso '+esc(S.editando):'Novo encaminhamento'}</h1>${edit?'':`<span class="row" style="gap:4px"><label class="btn small" for="nSint" style="cursor:pointer">${ic('novo',15)}Preencher pelo Relatório Sintético</label><input id="nSint" type="file" accept=".pdf,application/pdf" hidden>${infoBtn('Relatório Sintético da Família, gerado no GESUAS em PDF. Preenche vítimas (você escolhe quem), responsável, CPF, endereço, bairro e contato. O arquivo é lido neste navegador: nada é enviado nem guardado além do que vai para o caso.')}</span>`}</div>
   <form id="fNovo" class="stack">
   <section class="panel stack"><h2>Vítima(s)</h2>
     <div class="stack" style="gap:8px">
@@ -2125,6 +2197,9 @@ function bind(){
       if (!id && rascunhoNovoGuardado() && !confirm('Limpar o formulário? O que foi digitado será apagado.')) return;
       S.draft=null; S.editando=null; if (id) go('caso',{caso:id}); else { apagarRascunhoNovo(); render(); } };
     fn.onsubmit = e => { e.preventDefault(); salvarNovo(); };
+    const si = $('#nSint'); if (si) si.onchange = async () => { const f = si.files[0]; si.value = ''; if (!f) return;
+      try { if (typeof pdfjsLib==='undefined') throw new Error('O leitor de PDF não carregou. Recarregue a página.'); toast('Lendo o relatório…'); preencherPorSintetico(await lerSintetico(f)); }
+      catch(err){ toast(err && err.message ? err.message : 'Não foi possível ler o arquivo.'); } };
     bindDup();
   }
 }
