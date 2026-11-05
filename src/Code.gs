@@ -478,6 +478,27 @@ function api_prazoRespondido(id) {
   });
 }
 
+/** Muda o prazo de resposta (prorrogação, data corrigida) ou o tira (novo vazio). Fica no histórico do caso. */
+function api_alterarPrazo(id, novo) {
+  exigir(['coordenacao']);
+  return comTrava(function () {
+    var c = buscarCaso(id);
+    var br = function (v) {
+      var d = v instanceof Date ? v : (isoParaData(v) || extrairDataBr(v));
+      return d instanceof Date && !isNaN(d) ? Utilities.formatDate(d, FUSO, 'dd/MM/yyyy') : '';
+    };
+    var antes = br(c.prazo);
+    c.prazo = novo ? isoParaData(novo) : '';
+    var depois = br(c.prazo);
+    if (antes === depois) return montarCasos([String(id)])[0];
+    if (depois) c.prazo_respondido = '';
+    registrarHistorico(id, !depois ? 'Prazo de resposta removido (era ' + antes + ')'
+      : antes ? 'Prazo de resposta alterado de ' + antes + ' para ' + depois
+      : 'Prazo de resposta definido para ' + depois);
+    return salvarCasoLinha(c);
+  });
+}
+
 function api_acompanhamento(id, tecnica, complexidade) {
   exigir(['coordenacao']);
   return comTrava(function () {
