@@ -283,6 +283,15 @@ function casosForaDoGesuas(novas, periodo){
   const velho = DB.ges; DB.ges = {...(velho||{}), linhas: novas, periodo: periodo || (velho||{}).periodo || ''}; novaVersao();
   try { return DB.casos.filter(c => (statusGes(c)||{}).tipo==='antigo'); } finally { DB.ges = velho; novaVersao(); }
 }
+/* nome da família no GESUAS de cada caso achado lá, no relatório novo e no atual (o novo vale mais);
+   só os que mudam vão para gesuas_visto */
+function casosVistos(novas){
+  const nomes = new Map(), pega = () => DB.casos.forEach(c => { const s = statusGes(c); if (s && s.tipo==='ok' && !nomes.has(c.id)) nomes.set(c.id, s.g.responsavel); });
+  const velho = DB.ges;
+  try { DB.ges = {...(velho||{}), linhas: novas}; novaVersao(); pega(); } finally { DB.ges = velho; novaVersao(); }
+  if (temGes()) pega();
+  return [...nomes].filter(([id, n]) => (DB.casos.find(c => c.id===id).gesuas_visto||'') !== n);
+}
 /* casos que estavam no relatório atual e não aparecem no novo */
 function casosQueSaem(novas){
   const antes = DB.casos.filter(c => { const s = statusGes(c); return s && s.tipo==='ok'; });
@@ -300,15 +309,20 @@ function refGes(){
 /* situação de um caso em acompanhamento frente ao relatório:
    ok (está lá) · manual (confirmado à mão) · depois (repassado depois da data do relatório: ainda não dá para cobrar)
    · possivel (mesmo sobrenome, conferir) · ausente (repasse recente e não está lá: cobrar a técnica)
-   · antigo (repasse há mais de 90 dias e não está lá: provavelmente desligado no GESUAS) */
+   · antigo (já esteve no GESUAS e saiu, ou repasse há mais de 90 dias e não está lá: provavelmente desligado no GESUAS).
+   Quem já foi achado lá (gesuas_visto, gravado na importação, ou família escolhida à mão) e sumiu é sempre "antigo" (saiu):
+   nunca volta a ser cobrado como "não registrado". "*" é a confirmação antiga sem família escolhida (manual). */
 const statusGes = porVersao(statusGesCalc);
 function statusGesCalc(c){
   if (!temGes() || c.etapa !== 'acompanhamento') return null;
   if (c.gesuas_vinculo === '*') return {tipo:'manual'};
-  const conf = c.gesuas_vinculo ? DB.ges.linhas.find(x => norm(x.responsavel) === norm(c.gesuas_vinculo)) : null;
-  const g = conf || noGesuas(c);
+  const porNome = n => n ? DB.ges.linhas.find(x => norm(x.responsavel) === norm(n)) : null;
+  const conf = porNome(c.gesuas_vinculo);
+  const g = conf || noGesuas(c) || porNome(c.gesuas_visto);
   if (g) return {tipo:'ok', g, confirmado: !!conf, paf: g.paf};
-  const ref = refGes(), ini = String(c.inicio_acomp||'').slice(0,10);
+  const ini = String(c.inicio_acomp||'').slice(0,10);
+  if (c.gesuas_visto || c.gesuas_vinculo) return {tipo:'antigo', saiu:true, dias: dias(ini)};
+  const ref = refGes();
   if (ini && ini > ref) return {tipo:'depois', dias: dias(ini)};
   const cand = candidatosSobrenome(c);
   if (cand.length) return {tipo:'possivel', cand, dias: dias(ini)};
@@ -489,6 +503,7 @@ async function montarPrevia(files){
       prev.desligar = new Set(prev.suspeito ? [] : prev.saem);
     }
     if (acd) prev.foraGes = casosForaDoGesuas(linhas, acd.periodo).map(c => c.id).filter(id => !prev.saem.includes(id));
+    if (acd) prev.vistos = casosVistos(linhas);
     prev.completar = casosACompletar(linhas);
     prev.comDoc = linhas.filter(g => g.cpf || g.bairro).length;
   }
@@ -524,7 +539,7 @@ function alertasCalc(){
       if (d > L.avaliacao) a.push({sev:'warn',tipo:'avaliacao',c,u:d,k:'relogio',t:'Avaliação sem movimentação',s:`Recebido em ${fmt(c.recebido)}`,v:dd(d),vs:'sem movimento'}); }
     // repassado e ainda não achado no GESUAS (o repassado depois do relatório em uso ainda não dá para cobrar)
     if (coord() && aguardaGesuas(c)){ const st = statusGes(c), d = dias(c.inicio_acomp);
-      const T = {ausente:'Repassado e ainda não registrado no GESUAS', possivel:'A conferir no GESUAS (família com o mesmo sobrenome)', antigo:'Não consta mais no GESUAS (desligado lá?)'}[st.tipo];
+      const T = {ausente:'Repassado e ainda não registrado no GESUAS', possivel:'A conferir no GESUAS (família com o mesmo sobrenome)', antigo: st.saiu ? 'Saiu do GESUAS: desligar aqui?' : 'Não consta mais no GESUAS (desligado lá?)'}[st.tipo];
       if (T && d > L.gesuas) a.push({sev:'warn',tipo:'gesuas',c,u:d,k:'gesuas',t:T,s:`Com ${c.tecnica||'—'} desde ${fmt(c.inicio_acomp)}`,v:dd(d),vs:'sem GESUAS'}); }
     // pendência anotada num registro e não resolvida: um aviso por caso, pela mais antiga
     if (c.etapa!=='encerrado'){ const pa = pendAbertas(c).sort((x,y) => String(x.data).localeCompare(String(y.data)));
@@ -652,10 +667,12 @@ function irParaBusca(){ if (S.view!=='casos') go('casos'); const b = $('#busca')
    da técnica. Sem relatório importado, vale a etapa gravada. */
 const aguardaGesuas = c => c.etapa==='acompanhamento' && temGes() && !['ok','manual'].includes((statusGes(c)||{}).tipo);
 const etapaLista = c => aguardaGesuas(c) ? 'repasse' : c.etapa;
-const etapaRot = c => aguardaGesuas(c) ? 'Aguardando inclusão no GESUAS' : ETAPAS[c.etapa]||c.etapa;
+/* já esteve no GESUAS e saiu: não espera inclusão, espera o desligamento aqui */
+const saiuGes = c => !!(statusGes(c)||{}).saiu;
+const etapaRot = c => aguardaGesuas(c) ? (saiuGes(c) ? 'Saiu do GESUAS' : 'Aguardando inclusão no GESUAS') : ETAPAS[c.etapa]||c.etapa;
 /* em Repasse: desde quando espera a técnica (avaliação concluída) ou a inclusão no GESUAS (repasse) */
 const desdeRepasse = c => c.etapa==='repasse' ? c.desfecho_data : c.inicio_acomp;
-const pill = c => aguardaGesuas(c) ? '<span class="pill p-repasse" title="Repassado à técnica e ainda não encontrado no relatório do GESUAS">Aguardando GESUAS</span>'
+const pill = c => aguardaGesuas(c) ? (saiuGes(c) ? '<span class="pill p-encerrado" title="A família já esteve no GESUAS e não aparece no último relatório">Saiu do GESUAS</span>' : '<span class="pill p-repasse" title="Repassado à técnica e ainda não encontrado no relatório do GESUAS">Aguardando GESUAS</span>')
   : `<span class="pill p-${c.etapa}">${ETAPAS[c.etapa]||c.etapa}</span>`;
 const PRIO_ROT = {1:'1 · Urgente (risco iminente)', 2:'2 · Alta', 3:'3 · Regular'};
 const prio = p => p ? `<span class="prio p${p}" title="Prioridade ${p}">P${p}</span>` : '';
@@ -768,6 +785,7 @@ const PENDENCIAS = {
   conferir: ['A conferir no GESUAS (mesmo sobrenome)', c => (statusGes(c)||{}).tipo==='possivel', 'ges'],
   depois:   ['Repassado depois do último relatório', c => (statusGes(c)||{}).tipo==='depois', 'ges'],
   antigo:   ['Não consta no GESUAS (desligado lá?)', c => (statusGes(c)||{}).tipo==='antigo', 'ges'],
+  semfam:   ['Confirmado no GESUAS sem a família escolhida', c => (statusGes(c)||{}).tipo==='manual', 'ges'],
   registrado:['Registrado no GESUAS', c => ['ok','manual'].includes((statusGes(c)||{}).tipo), 'ges', g => true],
   paf:      ['PAF em branco no GESUAS', c => { const x = statusGes(c); return !!x && x.tipo==='ok' && x.paf!=='Preenchido'; }, 'ges', g => g.paf!=='Preenchido'],
   pendreg:  ['Com pendência em aberto (registros)', c => pendAbertas(c).length > 0],
@@ -901,7 +919,7 @@ function vCasos(){
     if (fila){ const u = ultimaMov(c), d = dias(u); return `<td class="mono"${c.etapa==='avaliacao'&&d>LIM().avaliacao?' style="color:var(--warn);font-weight:600"':''}>${fmt(u)}<div class="muted" style="font-size:12px;font-weight:400">há ${d} dia${d===1?'':'s'}</div></td>`; }
     return `<td>${pill(c)}${c.etapa==='acompanhamento'?`<div class="muted" style="font-size:12px">${esc(tecnicaRef(c))}</div>`:c.etapa==='encerrado'&&c.desfecho?`<div class="muted" style="font-size:12px">${esc(c.desfecho)}</div>`:''}</td>`; };
   const rows = V.map(c => c.ges ? (acomp ? linhaGes(c.ges) : linhaGesAtend(c.ges)) : repasse
-    ? `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(respDif(c))}</div>`:''}${pendTag(c)}</td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${c.etapa==='repasse'?'<span class="pill p-repasse">Escolha da técnica</span>':'<span class="pill p-repasse" title="Repassado à técnica e ainda não encontrado no relatório do GESUAS">Inclusão no GESUAS</span>'}</td><td>${c.tecnica?esc(c.tecnica):'<span class="muted">—</span>'}</td>${desdeCel(c)}<td>${c.etapa==='repasse'?'<span class="muted">—</span>':gesSit(c)}</td></tr>`
+    ? `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(respDif(c))}</div>`:''}${pendTag(c)}</td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${c.etapa==='repasse'?'<span class="pill p-repasse">Escolha da técnica</span>':saiuGes(c)?'<span class="pill p-encerrado" title="A família já esteve no GESUAS e não aparece no último relatório">Saiu do GESUAS</span>':'<span class="pill p-repasse" title="Repassado à técnica e ainda não encontrado no relatório do GESUAS">Inclusão no GESUAS</span>'}</td><td>${c.tecnica?esc(c.tecnica):'<span class="muted">—</span>'}</td>${desdeCel(c)}<td>${c.etapa==='repasse'?'<span class="muted">—</span>':gesSit(c)}</td></tr>`
     : acomp
     ? `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(respDif(c))}</div>`:''}${pendTag(c)}</td><td>${esc(tecnicaRef(c))}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
     : `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)||bairroDe(c)?`<div class="muted" style="font-size:12px">${respDif(c)?'Resp.: '+comCopia(respDif(c)):''}${respDif(c)&&bairroDe(c)?' · ':''}${esc(bairroDe(c))}</div>`:''}${pendTag(c)}</td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`).join('');
@@ -1426,11 +1444,12 @@ function tabHist(c){
 
 /* ================= modais ================= */
 function modal(html, onOk, rotuloOk='Confirmar', classeOk='primary', classeModal=''){
-  $('#layer').innerHTML = `<div class="modal-bg"><div class="modal ${classeModal}" role="dialog" aria-modal="true">${html}<div class="row" style="justify-content:flex-end"><button class="btn" data-mx>Cancelar</button><button class="btn ${classeOk}" data-mok>${rotuloOk}</button></div></div></div>`;
+  $('#layer').innerHTML = `<div class="modal-bg"><div class="modal ${classeModal}" role="dialog" aria-modal="true">${html}<div class="row" style="justify-content:flex-end"><button class="btn" data-mx>${onOk?'Cancelar':'Fechar'}</button>${onOk?`<button class="btn ${classeOk}" data-mok>${rotuloOk}</button>`:''}</div></div></div>`;
   const fechar = () => $('#layer').innerHTML='';
   $('#layer [data-mx]').onclick = fechar;
   $('#layer .modal-bg').onclick = e => { if (e.target.classList.contains('modal-bg')) fechar(); };
-  $('#layer [data-mok]').onclick = async () => {
+  /* sem onOk, a janela só tem "Fechar" (a escolha acontece dentro dela) */
+  if (onOk) $('#layer [data-mok]').onclick = async () => {
     const b = $('#layer [data-mok]'); b.disabled = true;
     try { const c = await onOk(); if (c){ substituir(c); fechar(); render(); } else b.disabled = false; } catch(e){ b.disabled = false; }
   };
@@ -1504,12 +1523,12 @@ function tabelaTecnicas(R){
 }
 function vincularGesuas(c, acao, nome){
   if (acao==='confirmar') c.gesuas_vinculo = nome;
-  if (acao==='manual') c.gesuas_vinculo = '*';
-  if (acao==='rejeitar'){ const novos = nome.split('|'); c.gesuas_rejeitados = [...new Set([...String(c.gesuas_rejeitados||'').split('|').filter(Boolean), ...novos])].join('|'); if (novos.includes(c.gesuas_vinculo)) c.gesuas_vinculo=''; }
-  if (acao==='desfazer'){ c.gesuas_vinculo=''; c.gesuas_rejeitados=''; }
+  if (acao==='rejeitar'){ const novos = nome.split('|'); c.gesuas_rejeitados = [...new Set([...String(c.gesuas_rejeitados||'').split('|').filter(Boolean), ...novos])].join('|'); if (novos.includes(c.gesuas_vinculo)) c.gesuas_vinculo=''; if (novos.includes(c.gesuas_visto)) c.gesuas_visto=''; }
+  if (acao==='desfazer'){ c.gesuas_vinculo=''; c.gesuas_rejeitados=''; c.gesuas_visto=''; }
   salvar(c, {confirmar:'GESUAS: família vinculada', rejeitar: nome.includes('|') ? 'GESUAS: nenhuma das sugeridas' : 'GESUAS: não é esta família', manual:'GESUAS: está no GESUAS', desfazer:'GESUAS: conferência desfeita'}[acao], 'api_vinculoGesuas', [c.id, acao, nome]);
 }
-/* "está no GESUAS com outro nome": digita e a lista do relatório vai filtrando; um clique vincula */
+/* "está no GESUAS com outro nome": digita e a lista do relatório vai filtrando; um clique vincula.
+   Não há "confirmar sem escolher": sem o nome da família, o sistema não perceberia quando ela saísse do GESUAS. */
 function buscarNoGesuas(c){
   const achar = q => {
     const t = norm(q).split(' ').filter(Boolean); if (!t.length) return [];
@@ -1524,7 +1543,7 @@ function buscarNoGesuas(c){
   modal(`<h2>Vincular à família do GESUAS</h2><p class="muted" style="margin:0">${comCopia(nomeCaso(c))}${c.responsavel&&c.responsavel!==nomeCaso(c)?' · resp.: '+comCopia(c.responsavel):''}</p>
     <label class="field"><span>Nome no GESUAS</span><input id="gbusca" autocomplete="off" placeholder="Ex.: Pereira, Maria Souza"></label>
     <div id="gbusca-res" class="gbusca">${lista('')}</div>`,
-    async () => { vincularGesuas(c, 'manual'); return c; }, 'Não achei, confirmar sem vincular', '');
+    null);
   const inp = $('#gbusca'), res = $('#gbusca-res');
   inp.oninput = () => { res.innerHTML = lista(inp.value); };
   res.onclick = e => { const b = e.target.closest('[data-gpick]'); if (!b) return;
@@ -1537,14 +1556,14 @@ function gesSit(c){
   if (s.tipo==='ausente') return `<span class="pill p-crit">Não registrado</span><div class="muted" style="font-size:12px">há ${s.dias} dias</div>`;
   if (s.tipo==='possivel') return `<span class="pill p-avaliacao">Conferir</span><div class="muted" style="font-size:12px">mesmo sobrenome</div>`;
   if (s.tipo==='depois') return `<span class="pill p-encerrado">Aguardando relatório</span><div class="muted" style="font-size:12px">repasse após ${fmt(refGes())}</div>`;
-  if (s.tipo==='antigo') return `<span class="pill p-encerrado">Não consta</span><div class="muted" style="font-size:12px">desligado no GESUAS?</div>`;
-  if (s.tipo==='manual') return `<span class="pill p-ok">Confirmado</span><div class="muted" style="font-size:12px">manualmente</div>`;
+  if (s.tipo==='antigo') return s.saiu ? `<span class="pill p-encerrado">Saiu do GESUAS</span><div class="muted" style="font-size:12px">desligar aqui?</div>` : `<span class="pill p-encerrado">Não consta</span><div class="muted" style="font-size:12px">desligado no GESUAS?</div>`;
+  if (s.tipo==='manual') return `<span class="pill p-ok">Confirmado</span><div class="muted" style="font-size:12px">escolher a família</div>`;
   const u = temAtend() ? ultimoAtend(s.g) : '';
   return `<span class="pill p-ok">Registrado</span>${temAtend()?`<div class="muted" style="font-size:12px">${u?'últ. atend. '+fmt(u):'sem atendimento importado'}</div>`:''}`;
 }
 /* situação no GESUAS numa linha, para o painel lateral (a data do último atendimento já aparece acima) */
 function gesSitCurta(s){
-  const T = {ok:['p-ok','Registrado'], manual:['p-ok','Confirmado manualmente'], depois:['p-encerrado','Aguardando o próximo relatório'], possivel:['p-avaliacao','Conferir: mesmo sobrenome'], ausente:['p-crit',`Não registrado (repassado há ${s.dias} dias)`], antigo:['p-encerrado','Não consta (desligado lá?)']}[s.tipo] || ['p-encerrado', s.tipo];
+  const T = {ok:['p-ok','Registrado'], manual:['p-ok','Confirmado, falta escolher a família'], depois:['p-encerrado','Aguardando o próximo relatório'], possivel:['p-avaliacao','Conferir: mesmo sobrenome'], ausente:['p-crit',`Não registrado (repassado há ${s.dias} dias)`], antigo:['p-encerrado', s.saiu ? 'Saiu do GESUAS (desligar aqui?)' : 'Não consta (desligado lá?)']}[s.tipo] || ['p-encerrado', s.tipo];
   return `<span class="pill ${T[0]}">${esc(T[1])}</span>${s.tipo==='ok' ? ` <span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">PAF ${esc(s.paf==='Preenchido'?'preenchido':'em branco')}</span>` : ''}`;
 }
 function gesCells(c){
@@ -1554,11 +1573,12 @@ function gesCells(c){
 function gesBox(c){
   const s = statusGes(c); if (!s) return temGes() ? '' : '<div class="muted">Importe o relatório do GESUAS para ver a situação deste caso.</div>';
   const desfazer = c.gesuas_vinculo || c.gesuas_rejeitados ? gvBtn(c,'desfazer','Desfazer conferência') : '';
-  if (s.tipo==='manual') return `<div class="panel stack" style="box-shadow:none;background:var(--surface-2)"><div><span class="label">No GESUAS</span><div style="margin-top:4px">Confirmado manualmente que está em acompanhamento no GESUAS.</div></div><div>${desfazer}</div></div>`;
+  if (s.tipo==='manual') return `<div class="dup stack" style="gap:8px"><div><b>Confirmado à mão, sem a família do GESUAS escolhida.</b> Escolha a família para o sistema perceber quando ela sair do GESUAS. Se ela não estiver mais lá, desligue o caso.</div>
+    <div class="row" style="gap:6px">${gvBtn(c,'manual','Escolher a família no GESUAS')}${desfazer}</div></div>`;
   if (s.tipo==='possivel') return `<div class="dup stack" style="gap:8px"><div><b>Possível família no GESUAS pelo sobrenome.</b> Confira e confirme:</div>${conferirHtml(c, s)}
     <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS com outro nome')}${desfazer}</div></div>`;
   if (s.tipo==='depois') return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><span class="label">No GESUAS</span><div style="margin-top:4px">Repassado depois do relatório em uso (${fmt(refGes())}). A conferência acontece no próximo relatório importado.</div></div>`;
-  if (s.tipo==='antigo') return `<div class="dup stack" style="gap:8px"><div><b>Não consta no relatório do GESUAS.</b> Este caso está em acompanhamento aqui${c.inicio_acomp?' desde '+fmt(c.inicio_acomp):''}, mas a família não aparece no relatório de ${fmt(refGes())}. Provavelmente foi desligada no GESUAS.</div>
+  if (s.tipo==='antigo') return `<div class="dup stack" style="gap:8px"><div>${s.saiu ? `<b>Saiu do GESUAS.</b> A família${c.gesuas_visto||c.gesuas_vinculo?` (${esc(TIT(c.gesuas_visto||c.gesuas_vinculo))})`:''} já esteve no GESUAS e não aparece no relatório de ${fmt(refGes())}. Provavelmente foi desligada lá.` : `<b>Não consta no relatório do GESUAS.</b> Este caso está em acompanhamento aqui${c.inicio_acomp?' desde '+fmt(c.inicio_acomp):''}, mas a família não aparece no relatório de ${fmt(refGes())}. Provavelmente foi desligada no GESUAS.`}</div>
     <div class="row" style="gap:6px"><button type="button" class="btn small primary" data-out="deslig">Desligar do acompanhamento</button>${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
   if (s.tipo==='ausente') return `<div class="dup stack" style="gap:8px;border-color:var(--crit);background:var(--crit-soft)"><div><b style="color:var(--crit)">Não encontrado no GESUAS.</b> Repassado a ${esc(c.tecnica)} há ${s.dias} dias. Conferido no relatório ${esc(DB.ges.origem)}.</div>
     <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
@@ -1579,6 +1599,7 @@ function vGesuas(){
   // por técnica, só quem tem algo a resolver; os totais estão na tabela
   const secoes = R.filter(t => (!S.gTec || t.k===S.gTec) && (t.ausentes.length || t.possiveis.length || t.pafBranco.length || t.semAtend.length));
   const nAnt = temGes() ? listaCasos({etapa:'repasse', pend:'antigo'}).length : 0;
+  const nSemFam = temGes() ? listaCasos({etapa:'acompanhamento', pend:'semfam'}).length : 0;
   const salvavel = prev && (prev.ges || prev.atendimentos.length);
   return `<div class="top"><div><h1>Conferência com o GESUAS</h1><p>Importe dois relatórios do GESUAS em .xls, de uma vez: <b>Famílias Acompanhadas por Técnico</b> (quem está em acompanhamento, técnica, início e PAF; também aceito em PDF) e <b>Famílias Atendidas por Técnico</b> (cada atendimento, com CPF, bairro e endereço da família). O sistema cruza com os casos e monta as pendências de cada técnica.</p></div></div>
   <section class="panel stack" style="margin-bottom:16px">
@@ -1597,7 +1618,7 @@ function vGesuas(){
       ${prev.saem.length&&prev.suspeito?`<div class="dup" style="margin-top:10px;border-color:var(--crit);background:var(--crit-soft)"><b style="color:var(--crit)">Confira o relatório antes de salvar.</b> Ele tem ${prev.ges.linhas.length} famílias, e o anterior tinha ${prev.antes}; ${prev.saem.length} casos sairiam de uma vez. Isso costuma acontecer quando o relatório é exportado só de uma técnica. Por segurança, nenhum caso vem marcado para desligar: marque só os que saíram mesmo.</div>`:''}
       ${prev.saem.length?`<div style="margin-top:10px"><b>${prev.saem.length} ${prev.saem.length===1?'família saiu':'famílias saíram'} do GESUAS</b> desde o relatório anterior. ${prev.suspeito?'Marque as que devem ser desligadas ao salvar:':`${prev.saem.length===1?'Será desligada':'Serão desligadas'} ao salvar. Desmarque se alguma estiver errada:`}
         <div class="stack" style="gap:4px;margin-top:6px">${prev.saem.map(id => { const c = DB.casos.find(x => x.id===id); return `<label class="chk"><input type="checkbox" data-saida="${id}" ${prev.desligar.has(id)?'checked':''}><span>${esc(nomeCaso(c))} <span class="mono muted">${id}</span> · ${esc(tecnicaRef(c))}</span></label>`; }).join('')}</div></div>`:''}
-      ${prev.foraGes.length?`<details style="margin-top:10px"><summary style="cursor:pointer"><b>${prev.foraGes.length} caso${prev.foraGes.length>1?'s':''} em acompanhamento aqui não aparece${prev.foraGes.length>1?'m':''} no GESUAS</b> (repasse há mais de 90 dias). Marque os que já foram desligados para desligar junto.</summary>
+      ${prev.foraGes.length?`<details style="margin-top:10px"><summary style="cursor:pointer"><b>${prev.foraGes.length} caso${prev.foraGes.length>1?'s':''} em acompanhamento aqui não aparece${prev.foraGes.length>1?'m':''} no GESUAS</b> (já estiveram no GESUAS e saíram antes, ou repasse há mais de 90 dias). Marque os que já foram desligados para desligar junto.</summary>
         <div class="stack" style="gap:4px;margin-top:6px">${prev.foraGes.map(id => { const c = DB.casos.find(x => x.id===id); return `<label class="chk"><input type="checkbox" data-saida="${id}" ${prev.desligar.has(id)?'checked':''}><span>${esc(nomeCaso(c))} <span class="mono muted">${id}</span>${c.inicio_acomp?' · repasse '+fmt(c.inicio_acomp):''}</span></label>`; }).join('')}</div></details>`:''}
       ${salvavel?'':'<div>Nada a salvar: importe o Famílias Acompanhadas por Técnico ou o Famílias Atendidas por Técnico.</div>'}
       <div class="row" style="margin-top:8px">${salvavel?'<button class="btn primary small" id="gSalvar">Salvar importação</button>':''}<button class="btn small" id="gDescartar">Descartar</button></div></div>`:''}
@@ -1606,7 +1627,8 @@ function vGesuas(){
   <section class="panel stack" style="margin-bottom:16px">
     <div><h2>Por técnica</h2><div class="muted" style="font-size:12.5px">Situação no relatório de ${fmt(refGes())}. Clique num número para abrir a lista.</div></div>
     ${tabelaTecnicas(R)}
-    ${nAnt?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nAnt} caso${nAnt>1?'s':''} em acompanhamento aqui não aparece${nAnt>1?'m':''} no GESUAS</b> (repasse há mais de 90 dias). Provavelmente ${nAnt>1?'foram desligados':'foi desligado'} lá: abra para desligar ou vincular à família.</span><button type="button" class="btn small" ${linkLista({etapa:'repasse', pend:'antigo'})}>Ver a lista</button></div>`:''}
+    ${nAnt?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nAnt} caso${nAnt>1?'s':''} em acompanhamento aqui não aparece${nAnt>1?'m':''} no GESUAS</b> (já estiveram lá e saíram, ou repasse há mais de 90 dias). Provavelmente ${nAnt>1?'foram desligados':'foi desligado'} lá: abra para desligar ou vincular à família.</span><button type="button" class="btn small" ${linkLista({etapa:'repasse', pend:'antigo'})}>Ver a lista</button></div>`:''}
+    ${nSemFam?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nSemFam} caso${nSemFam>1?'s':''} confirmado${nSemFam>1?'s':''} à mão sem a família do GESUAS escolhida.</b> Escolha a família em cada um, uma vez só, para o sistema perceber quando ela sair do GESUAS.</span><button type="button" class="btn small" ${linkLista({etapa:'acompanhamento', pend:'semfam'})}>Ver a lista</button></div>`:''}
   </section>
   ${secoes.length || S.gTec?`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">O que cada técnica precisa resolver</h2><select id="gTec" aria-label="Técnica"><option value="">Todas as técnicas</option>${R.map(t => `<option value="${t.k}" ${S.gTec===t.k?'selected':''}>${esc(nomeTecnica(t.nome))}</option>`).join('')}</select></div>`:''}
   <div class="stack">${secoes.map(t => `<section class="panel stack">
@@ -2054,7 +2076,7 @@ function bind(){
       const P = S.gPrevia, st = $('#gStatus'), at = P.atendimentos, LOTE = 1000;
       // primeiro a lista do GESUAS e os casos; depois os atendimentos em lotes, com progresso na tela
       st.textContent = 'Salvando a lista do GESUAS…';
-      const r = await run('api_importarGesuas', {ges:P.ges||null, desligar:[...P.desligar], completar:P.completar, atendimentos:[], fim:!at.length});
+      const r = await run('api_importarGesuas', {ges:P.ges||null, desligar:[...P.desligar], completar:P.completar, vistos:P.vistos||[], atendimentos:[], fim:!at.length});
       let novos = 0, lista = r.atend;
       for (let i = 0; i < at.length; i += LOTE){
         st.textContent = `Salvando atendimentos: ${Math.min(i+LOTE, at.length)} de ${at.length}…`;

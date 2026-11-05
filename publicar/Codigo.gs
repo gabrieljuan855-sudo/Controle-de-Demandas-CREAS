@@ -136,7 +136,8 @@ var ESQUEMA = {
     'remetente', 'remetente_detalhe', 'doc_tipo', 'doc_num', 'recebido', 'prazo', 'prazo_respondido',
     'descricao', 'prioridade', 'etapa', 'passou_avaliacao', 'diagnostico',
     'desfecho', 'desfecho_data', 'desfecho_obs', 'tecnica', 'inicio_acomp', 'complexidade',
-    'desligamento', 'origem', 'atualizado_em', 'gesuas_vinculo', 'gesuas_rejeitados', 'violacao_outra'],
+    'desligamento', 'origem', 'atualizado_em', 'gesuas_vinculo', 'gesuas_rejeitados', 'violacao_outra',
+    'gesuas_visto'],
   Pessoas: ['caso_id', 'nome', 'nascimento', 'sexo'],
   Registros: ['id', 'caso_id', 'data', 'tipo', 'texto', 'autor', 'criado_em', 'criado_por', 'editado_em', 'editado_por', 'gesuas_em', 'gesuas_por', 'pendencias', 'pendencia_ok', 'pendencia_ok_por'],
   Discussoes: ['id', 'caso_id', 'data', 'texto', 'criado_em', 'criado_por'],
@@ -931,7 +932,7 @@ function api_reabrir(id, destino) {
 
 /**
  * Conferência manual com o GESUAS.
- * confirmar: nome é a família do GESUAS; manual: está no GESUAS sem escolher família;
+ * confirmar: nome é a família do GESUAS ("está no GESUAS" sempre escolhe a família, para o sistema perceber quando ela sair);
  * rejeitar: nome não é esta família; desfazer: volta à comparação automática.
  */
 function api_vinculoGesuas(id, acao, nome) {
@@ -942,19 +943,18 @@ function api_vinculoGesuas(id, acao, nome) {
     if (acao === 'confirmar' && nome) {
       c.gesuas_vinculo = nome;
       registrarHistorico(id, 'GESUAS: confirmado como a família "' + nome + '"');
-    } else if (acao === 'manual') {
-      c.gesuas_vinculo = '*';
-      registrarHistorico(id, 'GESUAS: confirmado manualmente que está em acompanhamento');
     } else if (acao === 'rejeitar' && nome) {
       var rej = String(c.gesuas_rejeitados || '').split('|').filter(Boolean);
       var novos = nome.split('|').filter(Boolean);
       novos.forEach(function (n) { if (rej.indexOf(n) < 0) rej.push(n); });
       c.gesuas_rejeitados = rej.join('|');
       if (novos.indexOf(c.gesuas_vinculo) >= 0) c.gesuas_vinculo = '';
+      if (novos.indexOf(c.gesuas_visto) >= 0) c.gesuas_visto = '';
       registrarHistorico(id, novos.length > 1 ? 'GESUAS: nenhuma das famílias sugeridas é esta' : 'GESUAS: "' + nome + '" não é esta família');
     } else if (acao === 'desfazer') {
       c.gesuas_vinculo = '';
       c.gesuas_rejeitados = '';
+      c.gesuas_visto = '';
       registrarHistorico(id, 'GESUAS: conferência desfeita, volta à comparação automática');
     } else throw new Error('Ação inválida.');
     return salvarCasoLinha(c);
@@ -966,6 +966,8 @@ function api_vinculoGesuas(id, acao, nome) {
  *  ges:          famílias acompanhadas por técnico (substitui a lista anterior), já com CPF/NIS/bairro/endereço tirados dos atendimentos;
  *  desligar:     casos que saíram do GESUAS desde o relatório anterior;
  *  completar:    [{id, campos}] dados vazios dos casos preenchidos a partir do GESUAS (nunca sobrescreve);
+ *  vistos:       [[id, nome]] casos encontrados no GESUAS e o nome da família lá (gesuas_visto): se ela sumir
+ *                de um relatório futuro, o caso aparece como "saiu do GESUAS", nunca como "não registrado";
  *  atendimentos: atendimentos por técnico; só entram os que ainda não estão na planilha.
  * O navegador manda os atendimentos em lotes (soAtendimentos) para cada execução ficar curta;
  * a lista completa de atendimentos só volta no último lote (fim).
@@ -986,9 +988,10 @@ function api_importarGesuas(p) {
       gravarConfig('gesuas_periodo', p.ges.periodo || '', 'Período do último relatório do GESUAS');
       gravarConfig('gesuas_importado_em', Utilities.formatDate(agora, FUSO, 'dd/MM/yyyy HH:mm'), 'Quando o relatório foi importado');
     }
-    var desligar = (p.desligar || []).map(String), completar = {};
+    var desligar = (p.desligar || []).map(String), completar = {}, vistos = {};
     (p.completar || []).forEach(function (x) { completar[String(x.id)] = x.campos || {}; });
-    if (desligar.length || Object.keys(completar).length) {
+    (p.vistos || []).forEach(function (x) { if (x && x[1]) vistos[String(x[0])] = String(x[1]); });
+    if (desligar.length || Object.keys(completar).length || Object.keys(vistos).length) {
       lerTabela('Casos').forEach(function (c) {
         var id = String(c.id), mudou = false;
         if (completar[id]) {
@@ -998,6 +1001,7 @@ function api_importarGesuas(p) {
           });
           if (feitos.length) { mudou = true; anotar(id, 'Dados completados a partir do GESUAS: ' + feitos.join(', ')); }
         }
+        if (vistos[id] && String(c.gesuas_visto || '') !== vistos[id]) { c.gesuas_visto = vistos[id]; mudou = true; }
         if (desligar.indexOf(id) >= 0 && c.etapa === 'acompanhamento') {
           c.etapa = 'encerrado'; c.desligamento = agora; c.desfecho = 'Desligado: saiu do GESUAS';
           c.desfecho_data = agora; c.desfecho_obs = 'Não consta no relatório ' + ((p.ges && p.ges.origem) || '') + '.';
