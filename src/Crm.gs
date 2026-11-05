@@ -16,6 +16,29 @@ var CAMPOS_CRM = ['entrada', 'processo', 'chave', 'origem', 'situacao', 'nome', 
 /* resultado do contato que muda a situação do caso */
 var RESULTADO_STATUS_CRM = { aceitou: 'acompanhamento', recusou: 'inativo' };
 
+function exigirCrm() {
+  if (!acessoAtual().crm) throw new Error('Sua conta não usa o CRM. Peça à coordenação para incluir seu e-mail na linha emails_crm da aba Config.');
+}
+
+/* contatos do CRM levam a assinatura do CRM, também para quem usa as duas partes */
+var AUTOR_CRM = 'CRM';
+
+/** Para quem usa só o CRM (e não recebe os casos do CREAS): os casos do CREAS com o mesmo CPF ou o mesmo nome
+ *  da mulher, só o número. Quem usa o CREAS confere isso no navegador, com a lista que já tem. */
+function anotarCasosCreas(lista) {
+  if (acessoAtual().creas || !lista.length) return lista;
+  var casos = lerTabela('Casos'), pessoas = {}, dig = function (v) { return String(v || '').replace(/\D/g, ''); };
+  lerTabela('Pessoas').forEach(function (p) { var k = String(p.caso_id); (pessoas[k] = pessoas[k] || []).push(String(p.nome || '')); });
+  lista.forEach(function (x) {
+    var cpf = dig(x.cpf), nome = String(x.nome || '').trim();
+    x.creas = !cpf && !nome ? [] : casos.filter(function (c) {
+      if (cpf.length === 11 && dig(c.cpf) === cpf) return true;
+      return !!nome && [String(c.responsavel || '')].concat(pessoas[String(c.id)] || []).some(function (n) { return n && mesmoNome(nome, n); });
+    }).map(function (c) { return String(c.id); });
+  });
+  return lista;
+}
+
 /** As duas abas do CRM só existem depois da primeira gravação: até lá, a leitura devolve lista vazia sem criar nada. */
 function abaCrmExiste(nome) { return !!planilhaBase().getSheetByName(nome); }
 
@@ -25,7 +48,7 @@ function lerCrm(filtroIds) {
   if (abaCrmExiste('CRM_Contatos')) lerTabela('CRM_Contatos').forEach(function (x) {
     var k = String(x.crm_id); (contatos[k] = contatos[k] || []).push(paraCliente(x));
   });
-  return lerTabela('CRM')
+  return anotarCasosCreas(lerTabela('CRM')
     .filter(function (x) { return !filtroIds || filtroIds.indexOf(String(x.id)) >= 0; })
     .map(function (x) {
       var o = paraCliente(x);
@@ -33,7 +56,7 @@ function lerCrm(filtroIds) {
       o.status = STATUS_CRM[o.status] ? o.status : 'espera';
       o.contatos = (contatos[o.id] || []).sort(function (a, b) { return a.data < b.data ? -1 : 1; });
       return o;
-    });
+    }));
 }
 
 function crmUm(id) {
@@ -42,7 +65,7 @@ function crmUm(id) {
   return c;
 }
 
-function api_crmUm(id) { exigir(['coordenacao']); return crmUm(id); }
+function api_crmUm(id) { exigirCrm(); return crmUm(id); }
 
 /** Gerador de CRM-0001, CRM-0002... Dentro da trava: relê a Config uma vez e pula número que já esteja na aba. */
 function geradorIdCrm(usados) {
@@ -58,7 +81,7 @@ function digitosProcesso(p) { return String(p || '').replace(/\D/g, ''); }
 
 /** Casos novos (vindos do e-mail ou digitados). Processo já cadastrado não entra de novo. */
 function api_crmNovos(lista) {
-  exigir(['coordenacao']);
+  exigirCrm();
   return comTrava(function () {
     var atuais = abaCrmExiste('CRM') ? lerTabela('CRM') : [], usados = {}, procs = {};
     atuais.forEach(function (x) { usados[String(x.id)] = 1; var d = digitosProcesso(x.processo); if (d) procs[d] = String(x.id); });
@@ -84,7 +107,7 @@ function api_crmNovos(lista) {
 
 /** Muda campos de um caso do CRM. Mudar a situação grava também a data dela. */
 function api_crmEditar(id, campos) {
-  exigir(['coordenacao']);
+  exigirCrm();
   return comTrava(function () {
     var x = lerTabela('CRM').filter(function (l) { return String(l.id) === String(id); })[0];
     if (!x) throw new Error('Caso do CRM ' + id + ' não encontrado. Recarregue a página.');
@@ -111,14 +134,14 @@ function api_crmEditar(id, campos) {
  *  "Aceitou" passa o caso para acompanhamento; "não quis" deixa inativo (quem registra pode mudar depois).
  *  Encerrar e reabrir também passam por aqui (resultado "situacao", com r.status): ficam na linha do tempo. */
 function api_crmContato(id, r) {
-  exigir(['coordenacao']);
+  exigirCrm();
   return comTrava(function () {
     var x = lerTabela('CRM').filter(function (l) { return String(l.id) === String(id); })[0];
     if (!x) throw new Error('Caso do CRM ' + id + ' não encontrado. Recarregue a página.');
     if (r.id && abaCrmExiste('CRM_Contatos') && jaGravado('CRM_Contatos', r.id)) return crmUm(id);
     inserirLinhas('CRM_Contatos', [{
       id: r.id || proximoIdSimples('K'), crm_id: id, data: isoParaData(r.data) || new Date(), meio: r.meio || '', resultado: r.resultado || '',
-      texto: String(r.texto || '').trim(), autor: autorAtual(), criado_em: new Date(), criado_por: emailAtual()
+      texto: String(r.texto || '').trim(), autor: AUTOR_CRM, criado_em: new Date(), criado_por: emailAtual()
     }]);
     // mudança de situação pedida (encerrar, reabrir) ou trazida pelo resultado do contato
     var st = STATUS_CRM[r.status] ? r.status : x.status === 'espera' ? RESULTADO_STATUS_CRM[r.resultado] : '';
@@ -185,7 +208,7 @@ function mapearCrmAntigo(valores, hoje) {
 
 /** Lê a aba do CRM da planilha antiga (link do Google Planilhas) e grava aqui. Só roda uma vez. */
 function api_crmMigrar(url) {
-  exigir(['coordenacao']);
+  exigirCrm();
   var m = String(url || '').match(/\/d\/([\w-]{20,})/) || String(url || '').match(/^([\w-]{20,})$/);
   if (!m) throw new Error('Cole o link da planilha (o endereço que aparece no navegador quando ela está aberta).');
   var antiga;

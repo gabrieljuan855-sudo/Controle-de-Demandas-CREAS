@@ -449,6 +449,7 @@ function configurar() {
   var eu = Session.getActiveUser().getEmail();
   if (!('emails_coordenacao' in cfg)) gravarConfig('emails_coordenacao', eu, 'E-mails com acesso de coordenação, separados por vírgula');
   if (!('emails_avaliacao' in cfg)) gravarConfig('emails_avaliacao', '', 'E-mails com acesso da avaliação social, separados por vírgula');
+  if (!('emails_crm' in cfg)) gravarConfig('emails_crm', '', OBS_EMAILS_CRM);
   if (!('planilha_antiga_id' in cfg)) gravarConfig('planilha_antiga_id', '', 'ID da planilha antiga (já convertida para Planilhas Google), usado só na migração');
   completarLimites(cfg);
   var padrao = ss.getSheetByName('Página1') || ss.getSheetByName('Sheet1');
@@ -466,17 +467,27 @@ function listaEmails(s) {
   return String(s || '').toLowerCase().split(/[,;\s]+/).filter(Boolean);
 }
 
-var PAPEL_CACHE = null, AUTOR_CACHE = null;
-/* Um sistema só: coordenação e técnicos da avaliação social têm o mesmo acesso.
-   A lista em que o e-mail está muda só a assinatura dos registros (autorAtual). */
-function papelAtual() {
-  if (PAPEL_CACHE) return PAPEL_CACHE;
+var PAPEL_CACHE = null, AUTOR_CACHE = null, ACESSO_CACHE = null;
+/* Duas partes, escolhidas pelas linhas da aba Config:
+   - CREAS: emails_coordenacao e emails_avaliacao, com o mesmo acesso (a linha muda só a assinatura dos registros);
+   - CRM (Centro de Referência da Mulher): emails_crm.
+   Quem está numa linha do CREAS e na do CRM usa os dois e troca no menu; quem está só na do CRM vê só o CRM. */
+function acessoAtual() {
+  if (ACESSO_CACHE) return ACESSO_CACHE;
   var cfg = lerConfig();
   var e = emailAtual();
   if (!e) throw new Error('Não foi possível identificar sua conta Google. Entre com a conta autorizada e recarregue.');
-  if (listaEmails(cfg.emails_coordenacao).indexOf(e) >= 0) { AUTOR_CACHE = 'Coordenação'; return PAPEL_CACHE = 'coordenacao'; }
-  if (listaEmails(cfg.emails_avaliacao).indexOf(e) >= 0) { AUTOR_CACHE = 'Avaliação social'; return PAPEL_CACHE = 'coordenacao'; }
-  throw new Error('A conta ' + e + ' não tem acesso a este sistema. Peça à coordenação para incluir este e-mail na aba Config da planilha.');
+  var coord = listaEmails(cfg.emails_coordenacao).indexOf(e) >= 0, aval = listaEmails(cfg.emails_avaliacao).indexOf(e) >= 0;
+  var crm = listaEmails(cfg.emails_crm).indexOf(e) >= 0;
+  if (!coord && !aval && !crm) throw new Error('A conta ' + e + ' não tem acesso a este sistema. Peça à coordenação para incluir este e-mail na aba Config da planilha.');
+  AUTOR_CACHE = coord ? 'Coordenação' : aval ? 'Avaliação social' : 'CRM';
+  return ACESSO_CACHE = { creas: coord || aval, crm: crm };
+}
+
+/** 'coordenacao' para quem usa o CREAS (todos com o mesmo acesso); 'crm' para quem usa só o CRM. */
+function papelAtual() {
+  if (PAPEL_CACHE) return PAPEL_CACHE;
+  return PAPEL_CACHE = acessoAtual().creas ? 'coordenacao' : 'crm';
 }
 
 function autorAtual() {
@@ -486,7 +497,7 @@ function autorAtual() {
 
 function exigir(papeis) {
   var p = papelAtual();
-  if (papeis.indexOf(p) < 0) throw new Error('Esta ação é só da coordenação.');
+  if (papeis.indexOf(p) < 0) throw new Error('Sua conta usa só o CRM. Para usar o CREAS, peça à coordenação para incluir seu e-mail numa das linhas do CREAS na aba Config.');
   return p;
 }
 
@@ -544,8 +555,9 @@ function montarCasos(filtroIds) {
     });
 }
 
+/* casos do CREAS: só para quem usa o CREAS (quem usa só o CRM não vê nenhum) */
 function visivelPara(papel, c) {
-  return papel === 'coordenacao' || c.passou_avaliacao || c.etapa === 'avaliacao';
+  return papel === 'coordenacao';
 }
 
 function buscarCaso(id) {
@@ -603,15 +615,22 @@ function completarLimites(cfg) {
   Object.keys(LIMITES_PADRAO).forEach(function (k) { if (!(k in cfg)) gravarConfig(k, LIMITES_PADRAO[k][0], LIMITES_PADRAO[k][1]); });
 }
 
+var OBS_EMAILS_CRM = 'E-mails com acesso ao CRM (Centro de Referência da Mulher), separados por vírgula. Quem também está numa linha do CREAS usa os dois';
+
 function api_iniciar() {
-  var papel = papelAtual();
+  var acesso = acessoAtual(), papel = papelAtual();
   var cfg = lerConfig();
-  var casos = montarCasos().filter(function (c) { return visivelPara(papel, c); });
-  var ges = papel === 'coordenacao' ? lerGesuas(cfg) : null;
-  var atend = papel === 'coordenacao' ? lerAtendimentos() : [];
-  // na primeira abertura depois da atualização, as linhas dos limites aparecem na Config para a coordenação ajustar
-  if (Object.keys(LIMITES_PADRAO).some(function (k) { return !(k in cfg); })) comTrava(function () { CONFIG_CACHE = null; completarLimites(lerConfig()); });
-  return { papel: papel, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, crm: lerCrm(), listas: lerListas(), limites: lerLimites(cfg), crmConsulta: String(cfg.crm_link_consulta || '') };
+  var casos = acesso.creas ? montarCasos().filter(function (c) { return visivelPara(papel, c); }) : [];
+  // o relatório e os atendimentos do GESUAS servem às duas partes: no CRM, para conferir se a mulher já está no GESUAS
+  var ges = lerGesuas(cfg);
+  var atend = lerAtendimentos();
+  // na primeira abertura depois da atualização, as linhas dos limites e a do CRM aparecem na Config para a coordenação ajustar
+  if (Object.keys(LIMITES_PADRAO).some(function (k) { return !(k in cfg); }) || !('emails_crm' in cfg)) comTrava(function () {
+    CONFIG_CACHE = null; var c2 = lerConfig(); completarLimites(c2);
+    if (!('emails_crm' in c2)) gravarConfig('emails_crm', '', OBS_EMAILS_CRM);
+  });
+  return { papel: papel, acesso: acesso, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend,
+    crm: acesso.crm ? lerCrm() : [], listas: lerListas(), limites: lerLimites(cfg), crmConsulta: String(cfg.crm_link_consulta || '') };
 }
 
 function api_novoCaso(d) {
@@ -661,7 +680,7 @@ var CAMPOS_EDITAVEIS = ['responsavel', 'cpf', 'endereco', 'bairro', 'contato', '
   'doc_tipo', 'doc_num', 'recebido', 'prazo', 'descricao', 'prioridade'];
 
 function api_editarCaso(id, campos, pessoas) {
-  var papel = papelAtual();
+  var papel = exigir(['coordenacao']);
   return comTrava(function () {
     var c = buscarCaso(id);
     if (!visivelPara(papel, paraCliente(c))) throw new Error('Sem acesso a este caso.');
@@ -712,7 +731,7 @@ function api_encaminhar(id, destino, tecnica, complexidade, codigos, prioridade,
  * Indicar acompanhamento tem função própria: exige violação e prioridade.
  */
 function api_desfecho(id, tipo, obs) {
-  papelAtual();
+  exigir(['coordenacao']);
   return comTrava(function () {
     if (tipo === 'indicar_acompanhamento') throw new Error('Atualize a página (Ctrl+F5) e indique o acompanhamento de novo.');
     var c = buscarCaso(id);
@@ -749,7 +768,7 @@ function exigirViolacaoEPrioridade(codigos, prioridade) {
  * O caso fica aguardando a coordenação escolher a técnica (etapa "repasse").
  */
 function api_indicarAcompanhamento(id, obs, codigos, prioridade, outra) {
-  papelAtual();
+  exigir(['coordenacao']);
   return comTrava(function () {
     var v = exigirViolacaoEPrioridade(codigos, prioridade), qual = exigirOutra(v.codigos, outra);
     var c = buscarCaso(id);
@@ -762,7 +781,7 @@ function api_indicarAcompanhamento(id, obs, codigos, prioridade, outra) {
 
 /** Corrige as violações e a prioridade de um caso sem mudar a etapa. */
 function api_violacao(id, codigos, prioridade, outra) {
-  papelAtual();
+  exigir(['coordenacao']);
   return comTrava(function () {
     var v = exigirViolacaoEPrioridade(codigos, prioridade), qual = exigirOutra(v.codigos, outra);
     var c = buscarCaso(id);
@@ -778,14 +797,14 @@ function jaGravado(nomeAba, idLinha) {
 
 /** Relê um caso da planilha (usado quando uma gravação da fila é descartada). */
 function api_caso(id) {
-  var papel = papelAtual();
+  var papel = exigir(['coordenacao']);
   var c = montarCasos([String(id)])[0];
   if (!c || !visivelPara(papel, c)) throw new Error('Caso ' + id + ' não encontrado.');
   return c;
 }
 
 function api_registro(id, r) {
-  var papel = papelAtual();
+  var papel = exigir(['coordenacao']);
   return comTrava(function () {
     if (!String(r.texto || '').trim()) throw new Error('Escreva o registro antes de salvar.');
     // o id vem do navegador: um reenvio da fila traz o mesmo id e não grava de novo
@@ -800,7 +819,7 @@ function api_registro(id, r) {
 
 /** Registro de um caso, conferindo se quem pede pode mexer nele. */
 function registroDoCaso(casoId, regId, soAutor) {
-  var papel = papelAtual();
+  var papel = exigir(['coordenacao']);
   var c = buscarCaso(casoId);
   if (!c || !visivelPara(papel, c)) throw new Error('Caso ' + casoId + ' não encontrado.');
   var r = lerTabela('Registros').filter(function (x) { return String(x.id) === String(regId) && String(x.caso_id) === String(casoId); })[0];
@@ -1188,6 +1207,29 @@ var CAMPOS_CRM = ['entrada', 'processo', 'chave', 'origem', 'situacao', 'nome', 
 /* resultado do contato que muda a situação do caso */
 var RESULTADO_STATUS_CRM = { aceitou: 'acompanhamento', recusou: 'inativo' };
 
+function exigirCrm() {
+  if (!acessoAtual().crm) throw new Error('Sua conta não usa o CRM. Peça à coordenação para incluir seu e-mail na linha emails_crm da aba Config.');
+}
+
+/* contatos do CRM levam a assinatura do CRM, também para quem usa as duas partes */
+var AUTOR_CRM = 'CRM';
+
+/** Para quem usa só o CRM (e não recebe os casos do CREAS): os casos do CREAS com o mesmo CPF ou o mesmo nome
+ *  da mulher, só o número. Quem usa o CREAS confere isso no navegador, com a lista que já tem. */
+function anotarCasosCreas(lista) {
+  if (acessoAtual().creas || !lista.length) return lista;
+  var casos = lerTabela('Casos'), pessoas = {}, dig = function (v) { return String(v || '').replace(/\D/g, ''); };
+  lerTabela('Pessoas').forEach(function (p) { var k = String(p.caso_id); (pessoas[k] = pessoas[k] || []).push(String(p.nome || '')); });
+  lista.forEach(function (x) {
+    var cpf = dig(x.cpf), nome = String(x.nome || '').trim();
+    x.creas = !cpf && !nome ? [] : casos.filter(function (c) {
+      if (cpf.length === 11 && dig(c.cpf) === cpf) return true;
+      return !!nome && [String(c.responsavel || '')].concat(pessoas[String(c.id)] || []).some(function (n) { return n && mesmoNome(nome, n); });
+    }).map(function (c) { return String(c.id); });
+  });
+  return lista;
+}
+
 /** As duas abas do CRM só existem depois da primeira gravação: até lá, a leitura devolve lista vazia sem criar nada. */
 function abaCrmExiste(nome) { return !!planilhaBase().getSheetByName(nome); }
 
@@ -1197,7 +1239,7 @@ function lerCrm(filtroIds) {
   if (abaCrmExiste('CRM_Contatos')) lerTabela('CRM_Contatos').forEach(function (x) {
     var k = String(x.crm_id); (contatos[k] = contatos[k] || []).push(paraCliente(x));
   });
-  return lerTabela('CRM')
+  return anotarCasosCreas(lerTabela('CRM')
     .filter(function (x) { return !filtroIds || filtroIds.indexOf(String(x.id)) >= 0; })
     .map(function (x) {
       var o = paraCliente(x);
@@ -1205,7 +1247,7 @@ function lerCrm(filtroIds) {
       o.status = STATUS_CRM[o.status] ? o.status : 'espera';
       o.contatos = (contatos[o.id] || []).sort(function (a, b) { return a.data < b.data ? -1 : 1; });
       return o;
-    });
+    }));
 }
 
 function crmUm(id) {
@@ -1214,7 +1256,7 @@ function crmUm(id) {
   return c;
 }
 
-function api_crmUm(id) { exigir(['coordenacao']); return crmUm(id); }
+function api_crmUm(id) { exigirCrm(); return crmUm(id); }
 
 /** Gerador de CRM-0001, CRM-0002... Dentro da trava: relê a Config uma vez e pula número que já esteja na aba. */
 function geradorIdCrm(usados) {
@@ -1230,7 +1272,7 @@ function digitosProcesso(p) { return String(p || '').replace(/\D/g, ''); }
 
 /** Casos novos (vindos do e-mail ou digitados). Processo já cadastrado não entra de novo. */
 function api_crmNovos(lista) {
-  exigir(['coordenacao']);
+  exigirCrm();
   return comTrava(function () {
     var atuais = abaCrmExiste('CRM') ? lerTabela('CRM') : [], usados = {}, procs = {};
     atuais.forEach(function (x) { usados[String(x.id)] = 1; var d = digitosProcesso(x.processo); if (d) procs[d] = String(x.id); });
@@ -1256,7 +1298,7 @@ function api_crmNovos(lista) {
 
 /** Muda campos de um caso do CRM. Mudar a situação grava também a data dela. */
 function api_crmEditar(id, campos) {
-  exigir(['coordenacao']);
+  exigirCrm();
   return comTrava(function () {
     var x = lerTabela('CRM').filter(function (l) { return String(l.id) === String(id); })[0];
     if (!x) throw new Error('Caso do CRM ' + id + ' não encontrado. Recarregue a página.');
@@ -1283,14 +1325,14 @@ function api_crmEditar(id, campos) {
  *  "Aceitou" passa o caso para acompanhamento; "não quis" deixa inativo (quem registra pode mudar depois).
  *  Encerrar e reabrir também passam por aqui (resultado "situacao", com r.status): ficam na linha do tempo. */
 function api_crmContato(id, r) {
-  exigir(['coordenacao']);
+  exigirCrm();
   return comTrava(function () {
     var x = lerTabela('CRM').filter(function (l) { return String(l.id) === String(id); })[0];
     if (!x) throw new Error('Caso do CRM ' + id + ' não encontrado. Recarregue a página.');
     if (r.id && abaCrmExiste('CRM_Contatos') && jaGravado('CRM_Contatos', r.id)) return crmUm(id);
     inserirLinhas('CRM_Contatos', [{
       id: r.id || proximoIdSimples('K'), crm_id: id, data: isoParaData(r.data) || new Date(), meio: r.meio || '', resultado: r.resultado || '',
-      texto: String(r.texto || '').trim(), autor: autorAtual(), criado_em: new Date(), criado_por: emailAtual()
+      texto: String(r.texto || '').trim(), autor: AUTOR_CRM, criado_em: new Date(), criado_por: emailAtual()
     }]);
     // mudança de situação pedida (encerrar, reabrir) ou trazida pelo resultado do contato
     var st = STATUS_CRM[r.status] ? r.status : x.status === 'espera' ? RESULTADO_STATUS_CRM[r.resultado] : '';
@@ -1357,7 +1399,7 @@ function mapearCrmAntigo(valores, hoje) {
 
 /** Lê a aba do CRM da planilha antiga (link do Google Planilhas) e grava aqui. Só roda uma vez. */
 function api_crmMigrar(url) {
-  exigir(['coordenacao']);
+  exigirCrm();
   var m = String(url || '').match(/\/d\/([\w-]{20,})/) || String(url || '').match(/^([\w-]{20,})$/);
   if (!m) throw new Error('Cole o link da planilha (o endereço que aparece no navegador quando ela está aberta).');
   var antiga;

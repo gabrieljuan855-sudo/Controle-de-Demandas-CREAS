@@ -10,6 +10,13 @@
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
+/* CRM (Centro de Referência da Mulher): a mesma tela em lilás e roxo */
+:root[data-sistema="crm"]{
+  --bg:#F4F0F8; --surface-2:#F5F0FA; --line:#EAE1F1; --campo:#BCAFC9;
+  --accent:#6B3FA0; --accent-ink:#FFFFFF; --accent-soft:#EEE5F8;
+  --vio:#8A3F8F; --vio-soft:#F6E6F5;
+  --shadow:0 1px 2px rgba(48,20,72,.04),0 8px 24px rgba(48,20,72,.07);
+}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   color-scheme:dark;
   --bg:#0F181B; --surface:#172328; --surface-2:#1D2B31; --line:#26363C; --campo:#4A5F66;
@@ -27,6 +34,14 @@
   --ok:#7CC89C; --ok-soft:#1D3528; --warn:#E3B061; --warn-soft:#3A2E17; --crit:#EE8A83; --crit-soft:#3E1F1D;
   --info-soft:#262B47; --info:#A8B2EC; --vio:#B7A8EE; --vio-soft:#2A2545;
   --borda-cartao:var(--line); --seg-on:var(--accent-soft); --badge-ink:#1B0F0E; --shadow:none;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"])[data-sistema="crm"]{
+  --bg:#15111B; --surface:#1D1725; --surface-2:#251D2F; --line:#33293F; --campo:#5A4C69;
+  --accent:#C7A6F2; --accent-ink:#1A1023; --accent-soft:#33254A; --vio:#E3A6E6; --vio-soft:#3A2240;
+}}
+:root[data-theme="dark"][data-sistema="crm"]{
+  --bg:#15111B; --surface:#1D1725; --surface-2:#251D2F; --line:#33293F; --campo:#5A4C69;
+  --accent:#C7A6F2; --accent-ink:#1A1023; --accent-soft:#33254A; --vio:#E3A6E6; --vio-soft:#3A2240;
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;margin:0}
