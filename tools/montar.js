@@ -1,5 +1,5 @@
 /* Junta os arquivos de src/ nos dois que vão para o Apps Script (pasta publicar/):
-   - Codigo.gs: Util, Dados, Code e Migracao, nessa ordem;
+   - Codigo.gs: Util, Dados, Code, Crm e Migracao, nessa ordem;
    - Index.html: a página com o estilo e o código da tela já dentro.
    Rode depois de mudar qualquer arquivo de src/:  node tools/montar.js
    Com --conferir, só verifica se publicar/ está em dia (usado no GitHub). */
@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path');
 const raiz = path.join(__dirname, '..'), src = f => fs.readFileSync(path.join(raiz, 'src', f), 'utf8');
 const AVISO = 'Gerado por tools/montar.js a partir da pasta src/. Não edite aqui: edite src/ e rode o script de novo.';
 
-const gs = ['Util.gs', 'Dados.gs', 'Code.gs', 'Migracao.gs'];
+const gs = ['Util.gs', 'Dados.gs', 'Code.gs', 'Crm.gs', 'Migracao.gs'];
 const codigo = `/* ${AVISO} */\n\n` + gs.map(f => `/* ======================= ${f} ======================= */\n\n${src(f).trim()}\n`).join('\n');
 
 let index = src('Index.html');

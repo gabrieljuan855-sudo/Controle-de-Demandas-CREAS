@@ -229,7 +229,7 @@ function api_iniciar() {
   var atend = papel === 'coordenacao' ? lerAtendimentos() : [];
   // na primeira abertura depois da atualização, as linhas dos limites aparecem na Config para a coordenação ajustar
   if (Object.keys(LIMITES_PADRAO).some(function (k) { return !(k in cfg); })) comTrava(function () { CONFIG_CACHE = null; completarLimites(lerConfig()); });
-  return { papel: papel, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, listas: lerListas(), limites: lerLimites(cfg) };
+  return { papel: papel, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend, crm: lerCrm(), listas: lerListas(), limites: lerLimites(cfg), crmConsulta: String(cfg.crm_link_consulta || '') };
 }
 
 function api_novoCaso(d) {
@@ -658,7 +658,7 @@ function auditarBase() {
   var ss = planilhaBase(), t = {}, avisos = [];
   Object.keys(ESQUEMA).forEach(function (nome) {
     var sh = ss.getSheetByName(nome);
-    if (!sh) { avisos.push('A aba "' + nome + '" não existe na planilha.'); return; }
+    if (!sh) { if (!/^CRM/.test(nome)) avisos.push('A aba "' + nome + '" não existe na planilha.'); return; }  // as do CRM nascem no primeiro uso
     var ult = sh.getLastColumn(), prob = problemasCabecalho(nome, ult ? sh.getRange(1, 1, 1, ult).getValues()[0] : []);
     if (prob.length) { avisos.push('A aba "' + nome + '" teve colunas mexidas à mão (' + prob.join('; ') + '). Ela não foi verificada.'); return; }
     t[nome] = lerTabela(nome);
@@ -767,6 +767,21 @@ function auditarDados(t, tecnicas) {
     var chaves = {}, atRep = [];
     t.Atendimentos.forEach(function (a) { var k = String(a.chave); if (chaves[k]) atRep.push('linha ' + a._linha); chaves[k] = 1; });
     aviso(atRep, 'Atendimento do GESUAS importado duas vezes');
+  }
+  if (t.CRM) {
+    var crmIds = {}, procs = {}, crmRep = [], procRep = [];
+    t.CRM.forEach(function (x) {
+      var id = String(x.id).trim(), p = dig(x.processo);
+      if (crmIds[id]) crmRep.push(id); crmIds[id] = 1;
+      if (p) { if (procs[p]) procRep.push(x.processo + ' (' + procs[p] + ' e ' + id + ')'); else procs[p] = id; }
+    });
+    resumo.push('CRM: ' + t.CRM.length + ' casos');
+    aviso(crmRep, 'Número de caso do CRM repetido');
+    aviso(procRep, 'Processo cadastrado em dois casos do CRM');
+    if (t.CRM_Contatos) {
+      resumo.push('Contatos do CRM: ' + t.CRM_Contatos.length);
+      aviso(t.CRM_Contatos.filter(function (k) { return !crmIds[String(k.crm_id).trim()]; }).map(function (k) { return 'linha ' + k._linha; }), 'Contato do CRM ligado a um caso que não existe');
+    }
   }
   return { resumo: resumo, avisos: avisos };
 }

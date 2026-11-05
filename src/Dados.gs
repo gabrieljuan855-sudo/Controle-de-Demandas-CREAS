@@ -16,6 +16,9 @@ var ESQUEMA = {
   Historico: ['data_hora', 'usuario', 'caso_id', 'acao'],
   GESUAS: ['tecnico', 'responsavel', 'inicio', 'servico', 'paf', 'cpf', 'nis', 'bairro', 'endereco'],
   Atendimentos: ['chave', 'tecnico', 'responsavel', 'cpf', 'nis', 'bairro', 'data'],
+  CRM: ['id', 'criado_em', 'criado_por', 'fonte', 'entrada', 'processo', 'chave', 'origem', 'situacao', 'nome', 'nascimento', 'cpf', 'telefone',
+    'endereco', 'bairro', 'tecnica', 'status', 'status_data', 'gesuas', 'caso_id', 'obs', 'atualizado_em'],
+  CRM_Contatos: ['id', 'crm_id', 'data', 'meio', 'resultado', 'texto', 'autor', 'criado_em', 'criado_por'],
   Listas: ['remetentes', 'tipos_documento', 'tecnicas', 'bairros', 'tipos_registro'],
   Config: ['chave', 'valor', 'observacao']
 };
@@ -23,7 +26,7 @@ var ESQUEMA = {
 /** Colunas guardadas como data (no navegador viram 'aaaa-mm-dd'). */
 var COLUNAS_DATA = {
   recebido: 1, prazo: 1, desfecho_data: 1, inicio_acomp: 1, desligamento: 1,
-  nascimento: 1, data: 1
+  nascimento: 1, data: 1, entrada: 1, status_data: 1
 };
 /** Colunas com data e hora gravadas pelo sistema. As demais são texto. */
 var COLUNAS_CARIMBO = { criado_em: 1, atualizado_em: 1, data_hora: 1 };
