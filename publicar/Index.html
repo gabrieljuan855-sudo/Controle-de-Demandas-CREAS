@@ -135,8 +135,8 @@ td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
 tr:last-child td{border-bottom:0}
 tbody tr{cursor:pointer}
 tbody tr:hover td{background:var(--surface-2)}
-.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.filters input{max-width:280px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.filters input{max-width:230px}
 .filters select{width:auto}
 .seg{display:inline-flex;gap:2px;padding:4px;border-radius:12px;background:var(--surface-2)}
 .seg button{all:unset;cursor:pointer;padding:6px 12px;border-radius:9px;font-size:12.5px;font-weight:500;color:var(--ink-2)}
@@ -243,7 +243,6 @@ td.calor{background:color-mix(in srgb,var(--accent) calc(var(--a,0)*55%),transpa
   .outcomes button{padding:9px 12px;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px}
   .outcomes button b{margin-bottom:0}
   .outcomes button small{font-size:12px}
-  .sub-fixo{min-height:4.5em}
   .vit{grid-template-columns:1fr 1fr}
   .hb{grid-template-columns:110px 1fr 30px}
 }
@@ -339,10 +338,7 @@ details summary{padding:4px 0}
 /* lista de casos: filtros, ordenação e contagens */
 .seg button small{font-family:var(--mono);font-size:11px;opacity:.75;margin-left:2px}
 .filters select.ativo{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
-.sub-fixo{min-height:3em}
 .filters #fPend{max-width:270px}
-.filters-fim{display:flex;gap:10px;align-items:center;margin-left:auto;flex-wrap:wrap}
-.filters-fim .resultados{min-width:7.5em;text-align:right}
 .filters.mais{padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--surface-2)}
 th .ord{all:unset;cursor:pointer;border-radius:4px}
 th .ord:hover,th .ord:focus-visible{color:var(--ink);text-decoration:underline}
@@ -434,14 +430,38 @@ th .ord.on{color:var(--accent)}
 .chip.on{background:var(--accent);color:var(--accent-ink)}
 .chip:focus-visible{outline:2px solid var(--accent)}
 .relatorio{margin:0;white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;line-height:1.55;background:var(--surface-2);border-radius:10px;padding:12px 14px;max-height:60vh;overflow:auto}
-/* lista de casos: painel lateral do clique na linha; em tela larga a lista encolhe para não ficar por baixo */
+/* ficha do caso numa página só: registro novo recolhido num botão, histórico recolhido no fim */
+details.novo-reg > summary,details.hist > summary{list-style:none;cursor:pointer;width:max-content}
+details.novo-reg > summary::-webkit-details-marker,details.hist > summary::-webkit-details-marker{display:none}
+details.novo-reg[open] > summary{opacity:.7}
+details.hist > summary h2{display:inline-flex;align-items:center;gap:8px}
+details.hist > summary h2::before{content:"▸";color:var(--ink-3);font-size:13px}
+details.hist[open] > summary h2::before{content:"▾"}
+/* a barra de ícones flutua à direita do título; o resto da tela começa abaixo dela */
+#main > .top ~ *{clear:right}
+/* Casos: busca ao lado do título; abas, técnica, situação e ícones numa linha só */
+.top-casos{justify-content:flex-start;align-items:center;gap:18px}
+.top-casos #busca{width:300px;max-width:100%}
+@media (max-width:600px){ .top-casos #busca{width:100%} }
+.tab-card .filters .seg button{padding:6px 9px}
+.tab-card .filters select{max-width:190px}
+.tab-card .filters #fPend{max-width:210px}
+.tab-card .filters.mais select{max-width:none}
+/* lista de casos: a linha clicada abre logo abaixo (resumo à esquerda, registros e atendimentos à direita) */
+tr.exp > td{background:var(--surface-2);padding:0;cursor:default}
+tbody tr.exp:hover td{background:var(--surface-2)}
+.exp-box{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:18px;padding:14px 16px 16px;border-left:3px solid var(--accent)}
+.exp-res{display:flex;flex-direction:column;gap:10px}
+.exp-res .gav-res{background:var(--surface)}
+.exp-tl{max-height:360px;overflow-y:auto}
+.ibs{display:inline-flex;gap:8px;align-items:center;margin-left:auto}
+.ibs .ib{width:38px;height:38px}
+.ib[disabled]{opacity:.45;cursor:default}
+/* ícone de copiar só aparece ao passar o mouse na linha (no celular, sempre) */
+@media (hover:hover){ tbody tr .copiar{opacity:0} tbody tr:hover .copiar,tbody tr:focus-within .copiar,.copiar:focus-visible{opacity:1} }
+@media (max-width:900px){ .exp-box{grid-template-columns:minmax(0,1fr);position:sticky;left:0;width:calc(100vw - 66px);box-sizing:border-box} .exp-tl{max-height:none} }
 tbody tr.sel td{background:var(--accent-soft)}
 tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);z-index:30;background:var(--surface);box-shadow:-1px 0 0 var(--line),-12px 0 32px rgba(16,40,48,.14);overflow-y:auto;padding:18px 20px 40px;display:flex;flex-direction:column;gap:12px}
-.gav-cab{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.gav-x{width:34px;height:34px;box-shadow:none;border:1px solid var(--line)}
-.gaveta h2{font-size:18px}
-.gaveta h3{margin-top:6px}
 .gav-res{grid-template-columns:auto minmax(0,1fr);gap:7px 12px;background:var(--surface-2);border-radius:12px;padding:12px 14px;font-size:13px}
 .gav-res dt{font-size:12px;padding-top:1px}
 .gav-res dd .pill{vertical-align:1px}
@@ -449,13 +469,12 @@ tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .gav-tl{display:flex;flex-direction:column}
 .gav-ev{padding:10px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
 .gav-ev:first-child{border-top:0}
-.gav-q{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.gav-q{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
 .gav-fonte{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:4px;background:var(--warn-soft);color:var(--warn)}
 .gav-fonte.ges{background:var(--accent-soft);color:var(--accent)}
-.gav-t{font-weight:600;font-size:13px}
+.gav-t{font-weight:600;font-size:13px;color:var(--ink)}
 .gav-ev.ges .gav-t{font-weight:500;color:var(--ink-2)}
-.gav-txt{font-size:13px;color:var(--ink-2);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
-@media (min-width:1280px){ .main:has(.gaveta){padding-right:448px} }
+.gav-txt{font-size:13px;color:var(--ink-2);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 /* computador: o menu fica recolhido numa faixa de ícones e abre por cima do conteúdo ao passar o mouse
    (ou ao navegar pelo teclado); celular e tablet, sem mouse, seguem com o menu de sempre */
 @media (min-width:901px) and (hover:hover){
@@ -470,6 +489,17 @@ tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   .side:not(:hover):not(:has(:focus-visible)) :is(.brand div,.nav-sec,nav .lbl,nav .count,.who){opacity:0;pointer-events:none}
   .side:not(:hover):not(:has(:focus-visible)) nav button.sub{display:none}
 }
+.nota{font-size:12px;color:var(--ink-3)}
+/* ⓘ: explicação que só aparece quando pedida */
+.info-wrap{position:relative;display:inline-flex;vertical-align:middle;margin-left:6px}
+.info{all:unset;cursor:pointer;color:var(--ink-3);display:inline-flex;border-radius:50%}
+.info:hover,.info:focus-visible,.info-wrap.on .info{color:var(--accent)}
+.info:focus-visible{outline:2px solid var(--accent)}
+.info-txt{display:none;position:absolute;top:calc(100% + 6px);left:-8px;z-index:25;width:max-content;max-width:min(320px,80vw);background:var(--ink);color:var(--bg);font-size:12.5px;font-weight:400;line-height:1.45;letter-spacing:0;text-transform:none;padding:9px 11px;border-radius:8px;box-shadow:var(--shadow);white-space:normal;text-align:left}
+.info-txt b{color:inherit}
+.info-wrap.on .info-txt{display:block}
+.info-wrap.dir .info-txt{left:auto;right:-8px}
+@media (hover:hover){ .info-wrap:hover .info-txt{display:block} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
   <script>try { var t = localStorage.getItem('tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
@@ -1054,6 +1084,7 @@ function alertasCalc(){
 
 /* ================= ícones (traço, 24×24) ================= */
 const ICONES = {
+  info:'<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="11"/><circle cx="12" cy="8" r=".6" fill="currentColor"/>',
   mais:'<line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>',
   fechar:'<line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>',
   painel:'<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
@@ -1080,6 +1111,23 @@ const ICONES = {
   bandeira:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>'
 };
 const ic = (k, t=18) => `<svg width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[k]||''}</svg>`;
+
+/* explicação de um número ou bloco: um ícone ⓘ; o texto aparece ao passar o mouse ou ao tocar */
+const infoBtn = t => `<span class="info-wrap"><button type="button" class="info" aria-label="Sobre isto" aria-expanded="false">${ic('info',15)}</button><span class="info-txt" role="tooltip">${t}</span></span>`;
+/* notas de rodapé (class "nota") viram o ícone ⓘ no título do cartão */
+function notasEmIcone(m){
+  m.querySelectorAll('.nota').forEach(n => { const h = (n.closest('.panel')||m).querySelector('h2'); if (!h) return;
+    const w = h.querySelector('.info-txt');
+    if (w) w.insertAdjacentHTML('beforeend', '<br>' + n.innerHTML); else h.insertAdjacentHTML('beforeend', infoBtn(n.innerHTML));
+    n.remove(); });
+  // perto da borda direita, o texto abre para a esquerda (sem rolagem lateral)
+  m.querySelectorAll('.info-wrap').forEach(w => w.classList.toggle('dir', w.getBoundingClientRect().left > window.innerWidth - 340));
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.info');
+  document.querySelectorAll('.info-wrap.on').forEach(w => { if (!b || w!==b.parentNode){ w.classList.remove('on'); w.firstChild.setAttribute('aria-expanded','false'); } });
+  if (b){ e.preventDefault(); e.stopPropagation(); const w = b.parentNode, on = !w.classList.contains('on'); w.classList.toggle('on', on); b.setAttribute('aria-expanded', String(on)); }
+}, true);
 
 /* ================= navegação ================= */
 /* menu em duas seções; Casos é um grupo com Avaliação social e, logo abaixo, cada técnica com as famílias que acompanha */
@@ -1204,10 +1252,10 @@ function iniciarCopiar(){
     });
   }, true);
   document.addEventListener('keydown', e => { if ((e.key==='Enter' || e.key===' ') && e.target.closest && e.target.closest('[data-copiar]')) e.stopPropagation(); }, true);
-  // Esc fecha o painel lateral da lista de casos (sem janela aberta por cima)
+  // Esc fecha a linha aberta da lista de casos (sem janela aberta por cima)
   document.addEventListener('keydown', e => {
     if (e.key!=='Escape' || e.defaultPrevented || S.view!=='casos' || !S.sel || $('#layer').innerHTML) return;
-    S.sel = null; atualizarGaveta();
+    S.sel = null; atualizarExpansao();
   });
   // "/" em qualquer tela (fora de um campo de texto) vai para a busca de casos
   document.addEventListener('keydown', e => {
@@ -1386,13 +1434,6 @@ function vCasos(){
   const L = ordenar(listaCasos(f), S.ordem || (fila ? 'fila' : ''));
   const segs = [['ativos','Em atendimento'],['triagem','Triagem'],['avaliacao','Avaliação'],['repasse','Repasse'],['acompanhamento','Acompanhamento'],['encerrado','Encerrados'],['todos','Todos']].filter(s => coord() || !['triagem','repasse'].includes(s[0]));
   const nSeg = k => k===f.etapa ? L.length : listaCasos({...f, etapa:k}).length;
-  // textos curtos e do mesmo tamanho: trocar de aba não pode mudar a altura do cabeçalho
-  const sub = {ativos:'Todos os casos em atendimento: triagem, avaliação, repasse e acompanhamento, com as famílias que estão só no GESUAS.',
-    triagem:'Aguardando decisão de destino, por prioridade e depois pelo mais antigo.',
-    avaliacao:'Fila da avaliação social, por prioridade e depois pelo mais antigo.',
-    repasse:'Aguardando a escolha da técnica ou a inclusão da família no GESUAS, por prioridade e depois pelo mais antigo.',
-    acompanhamento:temGes() ? `Famílias em acompanhamento no GESUAS: casos daqui vinculados a elas e as incluídas direto lá. Relatório de ${fmt(refGes())}.` : 'Casos repassados à técnica. Importe o relatório do GESUAS para conferir quem está em acompanhamento lá.',
-    encerrado:'Casos encerrados, com o desfecho registrado.'}[f.etapa] || 'Todos os encaminhamentos deste sistema, inclusive os encerrados (sem as famílias que estão só no GESUAS).';
   const tecs = coord() ? tecnicasGes() : [];
   const pends = pendDisponiveis();
   const temMSE = coord() && temGes() && DB.ges.linhas.some(ehMSE);
@@ -1414,28 +1455,27 @@ function vCasos(){
   const ultimaCol = c => {
     if (fila){ const u = ultimaMov(c), d = dias(u); return `<td class="mono"${c.etapa==='avaliacao'&&d>LIM().avaliacao?' style="color:var(--warn);font-weight:600"':''}>${fmt(u)}<div class="muted" style="font-size:12px;font-weight:400">há ${d} dia${d===1?'':'s'}</div></td>`; }
     return `<td>${pill(c)}${c.etapa==='acompanhamento'?`<div class="muted" style="font-size:12px">${esc(tecnicaRef(c))}</div>`:c.etapa==='encerrado'&&c.desfecho?`<div class="muted" style="font-size:12px">${esc(c.desfecho)}</div>`:''}</td>`; };
-  const rows = V.map(c => c.ges ? (acomp ? linhaGes(c.ges) : linhaGesAtend(c.ges)) : repasse
+  const comExp = (it, html) => html + (mesmoSel(S.sel, it.ges ? {fam:it.ges.responsavel} : {caso:it.id}) ? expansaoHtml() : '');
+  const rows = V.map(c => comExp(c, c.ges ? (acomp ? linhaGes(c.ges) : linhaGesAtend(c.ges)) : repasse
     ? `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(respDif(c))}</div>`:''}${pendTag(c)}</td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${c.etapa==='repasse'?'<span class="pill p-repasse">Escolha da técnica</span>':saiuGes(c)?'<span class="pill p-encerrado" title="A família já esteve no GESUAS e não aparece no último relatório">Saiu do GESUAS</span>':'<span class="pill p-repasse" title="Repassado à técnica e ainda não encontrado no relatório do GESUAS">Inclusão no GESUAS</span>'}</td><td>${c.tecnica?esc(c.tecnica):'<span class="muted">—</span>'}</td>${desdeCel(c)}<td>${c.etapa==='repasse'?'<span class="muted">—</span>':gesSit(c)}</td></tr>`
     : acomp
     ? `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)?`<div class="muted" style="font-size:12px">Resp.: ${comCopia(respDif(c))}</div>`:''}${pendTag(c)}</td><td>${esc(tecnicaRef(c))}</td><td class="mono">${fmt(c.inicio_acomp)}</td><td>${COMPLEX[c.complexidade]||'—'}</td>${gesCells(c)}</tr>`
-    : `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)||bairroDe(c)?`<div class="muted" style="font-size:12px">${respDif(c)?'Resp.: '+comCopia(respDif(c)):''}${respDif(c)&&bairroDe(c)?' · ':''}${esc(bairroDe(c))}</div>`:''}${pendTag(c)}</td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${esc(c.remetente||'—')}<div class="muted" style="font-size:12px">${esc(c.doc_tipo||'')} ${esc(c.doc_num||'')}</div></td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`).join('');
+    : `<tr data-lc="${c.id}" tabindex="0"${selCls({caso:c.id})}><td class="mono">${c.id}</td><td><div class="nm">${vitimasComCopia(c)}</div>${respDif(c)||bairroDe(c)?`<div class="muted" style="font-size:12px">${respDif(c)?'Resp.: '+comCopia(respDif(c)):''}${respDif(c)&&bairroDe(c)?' · ':''}${esc(bairroDe(c))}</div>`:''}${pendTag(c)}</td><td>${prio(c.prioridade)||'<span class="muted">—</span>'}</td><td>${esc(c.remetente||'—')}</td><td class="mono">${fmt(c.recebido)}</td><td class="mono">${prazoCell(c)}</td>${ultimaCol(c)}</tr>`)).join('');
   const sel = (id, rot, vazio, ops, atual) => `<select id="${id}" aria-label="${rot}" class="${atual?'ativo':''}"><option value="">${vazio}</option>${ops.map(([v,l]) => `<option value="${esc(v)}" ${atual===v?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
   const violOps = VIOLACOES.map(([k,l]) => `<option value="${k}" ${f.viol===k?'selected':''}>${esc(l)}</option>`).join('');
   // em Em atendimento e Acompanhamento, estes filtros deixam de fora as famílias que estão só no GESUAS
   const avisoGes = comGes && coord() && temGes() && (f.per || f.rem || f.viol || f.prio);
-  return `<div class="top"><div><h1>Casos</h1><p class="sub-fixo">${sub}</p></div></div>
+  return `<div class="top top-casos"><h1>Casos</h1><input id="busca" type="search" placeholder="Buscar nome, nº, CPF, bairro…" value="${esc(f.busca)}" title="Busca por nome, nº do caso, CPF, bairro, endereço, remetente, ofício e técnica (atalho: tecla /)"></div>
   <div class="tab-card">
-  <div class="filters"><input id="busca" type="search" placeholder="Buscar nome, nº, CPF, bairro, remetente, ofício, técnica" value="${esc(f.busca)}" title="Atalho: tecla /">
-    <div class="seg">${segs.map(([k,l]) => `<button class="${f.etapa===k?'on':''}" data-seg="${k}"${k==='ativos'?' title="Triagem, avaliação, repasse e acompanhamento, com as famílias que estão só no GESUAS"':k==='todos'?' title="Todos os encaminhamentos deste sistema, inclusive os encerrados"':''}>${l} <small>${nSeg(k)}</small></button>`).join('')}</div></div>
   <div class="filters">
+    <div class="seg">${segs.map(([k,l]) => `<button class="${f.etapa===k?'on':''}" data-seg="${k}"${k==='ativos'?' title="Triagem, avaliação, repasse e acompanhamento, com as famílias que estão só no GESUAS"':k==='todos'?' title="Todos os encaminhamentos deste sistema, inclusive os encerrados"':''}>${l} <small>${nSeg(k)}</small></button>`).join('')}</div>
     ${tecs.length?sel('fTec','Técnica','Todas as técnicas', tecs.map(t => [t.k, nomeTecnica(t.nome)]), f.tec):''}
     ${pends.length?sel('fPend','Situação','Qualquer situação', pends.map(k => [k, pendRot(k)]), f.pend):''}
     ${temMSE?`<select id="fServ" aria-label="Serviço" class="${comGes&&f.serv!=='paefi'?'ativo':''}"${comGes?'':' style="visibility:hidden" tabindex="-1" aria-hidden="true" disabled'}><option value="paefi" ${f.serv==='paefi'?'selected':''}>PAEFI</option><option value="mse" ${f.serv==='mse'?'selected':''}>MSE (LA/PSC)</option><option value="todos" ${f.serv==='todos'?'selected':''}>PAEFI e MSE</option></select>`:''}
-    <button type="button" class="btn small" data-mais aria-expanded="${abrir}">${ic('filtro',14)}${abrir?'Menos filtros':'Mais filtros'}${nMais?` (${nMais})`:''}</button>
-    <span class="filters-fim">
-      <span class="muted resultados">${total} ${total===1?'resultado':'resultados'}</span>
-      <button type="button" class="btn small" data-limpar${algum?'':' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}>Limpar filtros</button>
-      <button type="button" class="btn small" data-csv title="Baixa a lista filtrada para abrir no Excel ou no Planilhas"${total?'':' disabled'}>${ic('baixar',15)}Baixar lista (.csv)</button>
+    <span class="ibs">
+      <button type="button" class="ib${abrir?' on':''}" data-mais aria-expanded="${abrir}" title="${abrir?'Menos filtros':'Mais filtros: período, remetente, bairro, violação e prioridade'}" aria-label="Mais filtros">${ic('filtro')}${nMais?`<span class="badge warn">${nMais}</span>`:''}</button>
+      ${algum?`<button type="button" class="ib" data-limpar title="Limpar filtros e busca" aria-label="Limpar filtros">${ic('fechar')}</button>`:''}
+      <button type="button" class="ib" data-csv title="Baixar a lista filtrada (.csv, abre no Excel ou no Planilhas)" aria-label="Baixar lista"${total?'':' disabled'}>${ic('baixar')}</button>
     </span>
   </div>
   ${abrir?`<div class="filters mais">
@@ -1447,8 +1487,7 @@ function vCasos(){
   </div>`:''}
   ${avisoGes?'<p class="muted" style="margin:-4px 0 10px;font-size:12.5px">Com período, remetente, violação ou prioridade, a lista mostra só os casos deste sistema: as famílias que estão só no GESUAS não têm esses dados.</p>':''}
   <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div></div>
-  ${total>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${total}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, total-LIM_LISTA)}</button></div>`:''}
-  ${gavetaHtml()}`;
+  ${total>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${total}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, total-LIM_LISTA)}</button></div>`:''}`;
 }
 /* baixa a lista filtrada, na ordem da tela; ; e BOM para o Excel em português abrir certo */
 function baixarCsv(){
@@ -1496,93 +1535,84 @@ function alterarPrazo(c){
       salvar(c, v ? 'Prazo alterado' : 'Prazo removido', 'api_alterarPrazo', [c.id, v]); return c; }, 'Salvar');
 }
 
-/* ================= lista de casos: painel lateral (um clique) =================
-   Mostra um resumo e os últimos registros do sistema junto com os atendimentos do GESUAS;
+/* ================= lista de casos: um clique abre o caso para baixo =================
+   A linha ganha logo abaixo um resumo e os últimos registros do sistema junto com os atendimentos do GESUAS;
    dois cliques na linha (ou "Abrir") levam à tela completa do caso ou da família. */
 const mesmoSel = (a, b) => !!a && !!b && (a.caso ? a.caso===b.caso : !!a.fam && a.fam===b.fam);
-const selCls = sel => ` title="Um clique: resumo e últimos registros ao lado · Dois cliques: abrir"${mesmoSel(S.sel, sel) ? ' class="sel" aria-selected="true"' : ''}`;
+const selCls = sel => ` title="Um clique: abre o resumo abaixo · Dois cliques: abre o caso"${mesmoSel(S.sel, sel) ? ' class="sel" aria-expanded="true"' : ' aria-expanded="false"'}`;
 /* atendimentos do GESUAS sem repetir o mesmo dia com a mesma técnica */
 const atendUnicos = L => { const vistos = new Set(); return L.filter(a => { const k = a.data+'|'+norm(a.tecnico); if (vistos.has(k)) return false; vistos.add(k); return true; }); };
 const haDias = d => { const n = dias(d); return n<=0 ? 'hoje' : n===1 ? 'ontem' : `há ${n} dias`; };
+const MAX_TL = 8;
 function linhaTempo(regs, atend){
   const L = [...regs.map(r => ({data:String(r.data||'').slice(0,10), reg:r})), ...atendUnicos(atend).map(a => ({data:a.data, at:a}))]
     .sort((a,b) => a.data < b.data ? 1 : a.data > b.data ? -1 : 0);
-  if (!L.length) return '<div class="empty">Nenhum registro no sistema nem atendimento importado do GESUAS.</div>';
-  return `<div class="gav-tl">${L.slice(0, 15).map(x => x.reg
-    ? `<div class="gav-ev"><div class="gav-q"><span class="mono">${fmt(x.data)}</span><span class="gav-fonte">Sistema</span></div><div class="gav-t">${esc(x.reg.tipo)} · ${esc(x.reg.autor)}</div><div class="gav-txt">${esc(x.reg.texto)}</div>${x.reg.pendencias&&!x.reg.pendencia_ok?`<div class="pend-tag">⚑ ${esc(x.reg.pendencias)}</div>`:''}</div>`
-    : `<div class="gav-ev ges"><div class="gav-q"><span class="mono">${fmt(x.data)}</span><span class="gav-fonte ges">GESUAS</span></div><div class="gav-t">Atendimento com ${esc(nomeTecnica(x.at.tecnico))}</div></div>`).join('')}</div>
-    ${L.length>15?`<div class="muted" style="font-size:12.5px">Mostrando os 15 mais recentes de ${L.length}.</div>`:''}`;
+  if (!L.length) return '<div class="empty">Nenhum registro aqui nem atendimento no GESUAS.</div>';
+  return `<div class="gav-tl">${L.slice(0, MAX_TL).map(x => x.reg
+    ? `<div class="gav-ev"><div class="gav-q"><span class="mono">${fmt(x.data)}</span><span class="gav-fonte">Sistema</span><span class="gav-t">${esc(x.reg.tipo)} · ${esc(x.reg.autor)}</span></div><div class="gav-txt">${esc(x.reg.texto)}</div>${x.reg.pendencias&&!x.reg.pendencia_ok?`<div class="pend-tag">⚑ ${esc(x.reg.pendencias)}</div>`:''}</div>`
+    : `<div class="gav-ev ges"><div class="gav-q"><span class="mono">${fmt(x.data)}</span><span class="gav-fonte ges">GESUAS</span><span class="gav-t">Atendimento com ${esc(nomeTecnica(x.at.tecnico))}</span></div></div>`).join('')}</div>
+    ${L.length>MAX_TL?`<div class="muted" style="font-size:12.5px">Mais ${L.length-MAX_TL} no caso completo.</div>`:''}`;
 }
-function gavetaHtml(){
+/* conteúdo da linha aberta: resumo à esquerda, registros e atendimentos à direita */
+function expansaoHtml(){
   const sel = S.sel; if (!sel) return '';
   const c = sel.caso ? DB.casos.find(x => x.id===sel.caso) : null, g = sel.fam ? familiaGes(sel.fam) : null;
   if (!c && !g){ S.sel = null; return ''; }
-  const fechar = `<button type="button" class="ib gav-x" data-gfechar title="Fechar (Esc)" aria-label="Fechar">${ic('fechar')}</button>`;
   const lin = (rot, val) => val ? `<dt>${rot}</dt><dd>${val}</dd>` : '';
+  const caixa = (res, acoes, tl) => `<tr class="exp"><td colspan="7"><div class="exp-box"><div class="exp-res"><dl class="gav-res">${res}</dl><div class="row gav-acoes">${acoes}</div></div><div class="exp-tl">${tl}</div></div></td></tr>`;
   if (g){
     const at = temAtend() ? atendimentosDaFamilia(g) : [], u = at.length ? at[at.length-1].data : '';
     const caso = DB.casos.find(x => { const s = statusGes(x); return s && s.tipo==='ok' && s.g===g; });
-    return `<aside class="gaveta" aria-label="Resumo da família">
-      <div class="gav-cab"><div class="row" style="gap:6px"><span class="pill p-acompanhamento">Família no GESUAS</span>${ehMSE(g)?'<span class="pill p-encerrado">MSE</span>':''}</div>${fechar}</div>
-      <h2>${comCopiaComo(TIT(g.responsavel), g.responsavel)}</h2>
-      <dl class="gav-res">
-        ${lin('Técnica', esc(nomeTecnica(g.tecnico)) + (g.inicio?` <span class="muted">· desde ${esc(g.inicio)}</span>`:''))}
-        ${lin('Último atend.', !temAtend() ? '<span class="muted">importe as Famílias Atendidas na Conferência</span>' : u ? `${haDias(u)} <span class="muted">· ${fmt(u)}</span>${semAtendimento(g)?' <span class="pill p-avaliacao">parado</span>':''}` : '<span class="muted">nenhum importado</span>')}
-        ${lin('PAF', `<span class="pill ${g.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(g.paf||'Em branco')}</span>`)}
-        ${lin('Bairro', g.bairro ? esc(TIT(g.bairro)) : '')}
-        ${lin('Caso aqui', caso ? `<span class="mono">${caso.id}</span>` : '<span class="muted">incluída direto no GESUAS</span>')}
-      </dl>
-      <div class="row gav-acoes"><button type="button" class="btn primary small" data-gabrir>Abrir família</button></div>
-      <h3>Atendimentos no GESUAS</h3>${temAtend() ? linhaTempo([], at) : '<div class="empty">Nenhum relatório de atendimentos importado.</div>'}
-    </aside>`;
+    return caixa(`
+      ${lin('Técnica', esc(nomeTecnica(g.tecnico)) + (g.inicio?` <span class="muted">· desde ${esc(g.inicio)}</span>`:''))}
+      ${lin('Último atend.', !temAtend() ? '<span class="muted">sem atendimentos importados</span>' : u ? `${haDias(u)} <span class="muted">· ${fmt(u)}</span>${semAtendimento(g)?' <span class="pill p-avaliacao">parado</span>':''}` : '<span class="muted">nenhum importado</span>')}
+      ${lin('PAF', `<span class="pill ${g.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(g.paf||'Em branco')}</span>`)}
+      ${lin('Caso aqui', caso ? `<span class="mono">${caso.id}</span>` : '<span class="muted">incluída direto no GESUAS</span>')}`,
+      `<button type="button" class="btn primary small" data-gabrir>${ic('casos',15)}Abrir família</button>`,
+      temAtend() ? linhaTempo([], at) : '<div class="empty">Sem atendimentos importados.</div>');
   }
   const regs = c.registros, at = temAtend() ? atendCaso(c) : [];
   const uReg = regs.length ? String(regs[regs.length-1].data).slice(0,10) : '', uAt = at.length ? at[at.length-1].data : '';
   const pa = pendAbertas(c), sg = statusGes(c);
-  const tec = ['repasse','acompanhamento'].includes(c.etapa) || c.tecnica ? (c.etapa==='acompanhamento' ? tecnicaRef(c) : c.tecnica) : '';
+  const tec = c.etapa==='acompanhamento' ? tecnicaRef(c) : c.tecnica;
   const podePrazo = coord() && c.prazo && !c.prazo_respondido && c.etapa!=='encerrado';
-  return `<aside class="gaveta" aria-label="Resumo do caso">
-    <div class="gav-cab"><div class="row" style="gap:6px"><span class="mono muted">Caso ${c.id}</span>${pill(c)}${prio(c.prioridade)}</div>${fechar}</div>
-    <h2>${comCopia(nomeCaso(c))}</h2>${respDif(c)?`<div class="muted" style="font-size:12.5px">Resp.: ${comCopia(respDif(c))}</div>`:''}
-    <dl class="gav-res">
+  const corPrazo = c.prazo_respondido ? 'inherit' : -dias(c.prazo)<0 ? 'var(--crit)' : -dias(c.prazo)<=7 ? 'var(--warn)' : 'inherit';
+  return caixa(`
       ${lin('Etapa', esc(etapaRot(c)) + (c.etapa==='avaliacao' ? ` <span class="muted">· sem movimento ${haDias(ultimaMov(c))}</span>` : '') + (tec ? ` <span class="muted">· ${esc(tec)}</span>` : ''))}
       ${lin('Último registro', uReg ? `${haDias(uReg)} <span class="muted">· ${fmt(uReg)}</span>` : '<span class="muted">nenhum ainda</span>')}
       ${uAt ? lin('Último atend.', `${haDias(uAt)} <span class="muted">· ${fmt(uAt)} · GESUAS</span>`) : ''}
-      ${c.prazo ? lin('Prazo', `<span style="color:${!c.prazo_respondido&&-dias(c.prazo)<0?'var(--crit)':!c.prazo_respondido&&-dias(c.prazo)<=7?'var(--warn)':'inherit'};font-weight:600">${esc(prazoTxt(c))}</span>${podePrazo?` <button type="button" class="lnk" data-prazoalt="${c.id}">alterar</button>`:''}`) : ''}
+      ${c.prazo ? lin('Prazo', `<span style="color:${corPrazo};font-weight:600">${esc(prazoTxt(c))}</span>${podePrazo?` <button type="button" class="lnk" data-prazoalt="${c.id}">alterar</button>`:''}`) : ''}
       ${sg ? lin('No GESUAS', gesSitCurta(sg)) : ''}
-      ${lin('Origem', `${esc(remDe(c))}${c.doc_num?` <span class="muted">· ${esc(c.doc_tipo||'')} ${esc(c.doc_num)}</span>`:''} <span class="muted">· recebido ${fmt(c.recebido)}</span>`)}
-      ${pa.length ? lin('Pendências', `<span style="color:var(--warn);font-weight:600">${pa.length} em aberto</span>`) : ''}
-    </dl>
-    <div class="row gav-acoes"><button type="button" class="btn primary small" data-gabrir>Abrir caso</button><button type="button" class="btn small" data-gregistrar>Novo registro</button></div>
-    <h3>Últimos registros e atendimentos</h3>
-    <div class="muted" style="font-size:12.5px;margin-top:-6px">${regs.length} registro${regs.length===1?'':'s'} no sistema${temAtend()?` · ${atendUnicos(at).length} atendimento${atendUnicos(at).length===1?'':'s'} no GESUAS`:''}</div>
-    ${linhaTempo(regs, at)}
-  </aside>`;
+      ${lin('Origem', `${esc(remDe(c))}${c.doc_num?` <span class="muted">· ${esc(c.doc_tipo||'')} ${esc(c.doc_num)}</span>`:''}`)}
+      ${pa.length ? lin('Pendências', `<span style="color:var(--warn);font-weight:600">⚑ ${pa.length} em aberto</span>`) : ''}`,
+    `<button type="button" class="btn primary small" data-gabrir>${ic('casos',15)}Abrir caso</button><button type="button" class="btn small" data-gregistrar>${ic('caneta',15)}Novo registro</button>`,
+    linhaTempo(regs, at));
 }
-/* um clique escolhe a linha (fecha no X ou com Esc); só o painel e o destaque da linha mudam, para o duplo clique continuar funcionando */
+/* um clique abre a linha (de novo, fecha); só a linha aberta muda, para o duplo clique continuar funcionando */
 function selecionarLinha(sel){
-  if (mesmoSel(S.sel, sel)) return;
-  S.sel = sel; atualizarGaveta();
+  S.sel = mesmoSel(S.sel, sel) ? null : sel;
+  atualizarExpansao();
 }
-function atualizarGaveta(){
-  const m = $('#main'), velha = m.querySelector('.gaveta'), html = gavetaHtml();
-  if (velha) velha.remove();
-  if (html) m.insertAdjacentHTML('beforeend', html);
-  m.querySelectorAll('tr.sel').forEach(tr => { tr.classList.remove('sel'); tr.removeAttribute('aria-selected'); });
+function atualizarExpansao(){
+  const m = $('#main');
+  m.querySelectorAll('tr.exp').forEach(tr => tr.remove());
+  m.querySelectorAll('tr.sel').forEach(tr => { tr.classList.remove('sel'); tr.setAttribute('aria-expanded','false'); });
   const tr = S.sel && [...m.querySelectorAll('tr[data-lc],tr[data-lf]')].find(t => mesmoSel(S.sel, t.dataset.lc ? {caso:t.dataset.lc} : {fam:t.dataset.lf}));
-  if (tr){ tr.classList.add('sel'); tr.setAttribute('aria-selected','true'); }
-  bindGaveta();
+  if (!tr){ S.sel = null; return; }
+  tr.classList.add('sel'); tr.setAttribute('aria-expanded','true');
+  tr.insertAdjacentHTML('afterend', expansaoHtml());
+  bindExpansao();
 }
 function abrirSel(sel, extra={}){
-  S.rolagem = window.scrollY;
+  // ao voltar, a mesma linha aparece aberta
+  S.sel = sel; S.rolagem = window.scrollY;
   if (sel.caso) go('caso', {caso:sel.caso, tab:'dados', prev:'casos', ...extra}); else go('familia', {fam:sel.fam, prev:'casos'});
 }
-function bindGaveta(){
-  const gv = $('#main .gaveta'); if (!gv) return;
-  const fx = gv.querySelector('[data-gfechar]'); if (fx) fx.onclick = () => { S.sel = null; atualizarGaveta(); };
-  const ab = gv.querySelector('[data-gabrir]'); if (ab) ab.onclick = () => abrirSel(S.sel);
-  const rg = gv.querySelector('[data-gregistrar]'); if (rg) rg.onclick = () => abrirSel(S.sel, {tab:'registros'});
-  gv.querySelectorAll('[data-prazoalt]').forEach(el => el.onclick = () => alterarPrazo(DB.casos.find(x => x.id===el.dataset.prazoalt)));
+function bindExpansao(){
+  const ex = $('#main tr.exp'); if (!ex) return;
+  const ab = ex.querySelector('[data-gabrir]'); if (ab) ab.onclick = () => abrirSel(S.sel);
+  const rg = ex.querySelector('[data-gregistrar]'); if (rg) rg.onclick = () => abrirSel(S.sel, {tab:'registros'});
+  ex.querySelectorAll('[data-prazoalt]').forEach(el => el.onclick = () => alterarPrazo(DB.casos.find(x => x.id===el.dataset.prazoalt)));
 }
 
 /* ================= novo / editar ================= */
@@ -1624,7 +1654,7 @@ function atualizarDup(){ const box = $('#dupBox'); if (box){ box.innerHTML = dup
 function opcoes(lista, atual){ const l = lista.slice(); if (atual && !l.includes(atual)) l.push(atual); return l.map(v => `<option ${v===atual?'selected':''}>${esc(v)}</option>`).join(''); }
 function vNovo(){
   const Dd = draft(); const edit = !!S.editando;
-  return `<div class="top"><div><h1>${edit?'Editar dados do caso '+esc(S.editando):'Novo encaminhamento'}</h1><p>${edit?'Corrija os dados de identificação e origem.':'Registre ao receber o ofício, requisição ou denúncia. Estes dados seguem para a avaliação e o acompanhamento sem precisar digitar de novo.'}</p></div></div>
+  return `<div class="top"><div><h1>${edit?'Editar dados do caso '+esc(S.editando):'Novo encaminhamento'}</h1></div></div>
   <form id="fNovo" class="stack">
   <section class="panel stack"><h2>Vítima(s)</h2>
     <div class="stack" style="gap:8px">
@@ -1708,10 +1738,8 @@ function vCaso(){
   const pulouAval = !['triagem','avaliacao'].includes(c.etapa) && !c.passou_avaliacao;
   const stepsArr = [['Entrada',true],['Triagem',c.etapa!=='triagem'],['Avaliação social', c.passou_avaliacao],['Desfecho',!!c.desfecho],['Acompanhamento',c.etapa==='acompanhamento'||!!c.inicio_acomp],['Desligamento',!!c.desligamento]];
   const nowIdx = {triagem:1,avaliacao:2,repasse:3,acompanhamento:4,encerrado:-1}[c.etapa];
-  const tabs=[['dados','Dados do caso'],['registros',`Registros (${c.registros.length})`]];
-  if (c.inicio_acomp && coord()) tabs.push(['acomp','Acompanhamento']);
-  tabs.push(['hist','Histórico']);
-  if (!tabs.find(t => t[0]===S.tab)) S.tab='dados';
+  // uma página só, com rolagem: dados, registros, acompanhamento e, recolhido no fim, o histórico
+  const comAcomp = !!(c.inicio_acomp && coord());
   return `<div class="row" style="margin-bottom:10px"><button class="btn small" data-back>← Voltar</button>${coord()?'<button class="btn small" data-editar>Editar dados</button>':''}<button class="btn small" data-imprimir>Imprimir ficha</button></div>
   <div class="top"><div><div class="row" style="gap:8px"><span class="mono muted">Caso ${c.id}</span>${pill(c)}${prio(c.prioridade)}${String(c.origem||'').startsWith('migra')?'<span class="pill p-encerrado">migrado</span>':''}</div><h1 style="margin-top:6px">${comCopia(nomeCaso(c))}</h1>
   <p>${esc(c.descricao)}</p></div></div>
@@ -1733,10 +1761,12 @@ function vCaso(){
       </dl>`; })()}
       ${(() => { const o = outrosCasos(c); return o.length ? `<div><span class="label">Outros casos desta família</span>${o.map(x => `<div class="outro" data-caso="${x.id}" tabindex="0"><span class="mono">${x.id}</span> · ${esc(nomeCaso(x))}<div class="muted" style="font-size:12px">${fmt(x.recebido)} · ${esc(x.etapa==='encerrado' ? (x.desfecho||'Encerrado') : ETAPAS[x.etapa]||x.etapa)}</div></div>`).join('')}</div>` : ''; })()}
     </aside>
-    <section class="panel">
-      <div class="tabs">${tabs.map(([k,l]) => `<button class="${S.tab===k?'on':''}" data-tab="${k}">${l}</button>`).join('')}</div>
-      ${S.tab==='dados'?tabDados(c): S.tab==='registros'?tabReg(c): S.tab==='acomp'?tabAcomp(c): tabHist(c)}
-    </section>
+    <div class="stack">
+      <section class="panel stack">${tabDados(c)}</section>
+      <section class="panel stack" id="sec-reg"><h2>Registros <span class="muted" style="font-weight:500">${c.registros.length}</span></h2>${tabReg(c)}</section>
+      ${comAcomp?`<section class="panel stack"><h2>Acompanhamento</h2>${tabAcomp(c)}</section>`:''}
+      <section class="panel"><details class="hist"><summary><h2>Histórico <span class="muted" style="font-weight:500">${c.historico.length}</span></h2></summary>${tabHist(c)}</details></section>
+    </div>
   </div>`;
 }
 /* casos com a mesma vítima ou o mesmo responsável (pelo nome ou pelo CPF), do mais novo ao mais antigo */
@@ -1806,7 +1836,6 @@ function tabDados(c){
   <div><div class="row" style="justify-content:space-between"><span class="label">Violação vivenciada</span>${['repasse','acompanhamento','encerrado'].includes(c.etapa)?'<button type="button" class="btn small" data-editviol>Editar violações e prioridade</button>':''}</div>
     <div class="row" style="margin-top:6px">${c.diagnostico.length?c.diagnostico.map(k => `<span class="pill p-encerrado" style="white-space:normal">${esc(violRot(c, k))}</span>`).join(''):'<span class="muted">Marcada por quem avalia, ao indicar acompanhamento.</span>'}</div></div>
   ${c.desfecho&&c.etapa!=='encerrado'?`<div><span class="label">Desfecho</span><div>${esc(c.desfecho)} em ${fmt(c.desfecho_data)}</div></div>`:''}
-  <div><span class="label">Último registro</span>${c.registros.length?evHtml(c.registros[c.registros.length-1], c, {semPend:true}):'<div class="muted">Nenhum registro ainda.</div>'}</div>
   ${coord()&&c.etapa==='acompanhamento'?gesBox(c):''}</div>`;
 }
 /* violação vivenciada (a lista do quadro de avaliação) e prioridade: abrem no modal de indicar acompanhamento */
@@ -1910,12 +1939,14 @@ function editarRegistro(c, r){
     }, 'Salvar');
 }
 function tabReg(c){
-  return `<form id="fReg" class="stack" style="margin-bottom:14px">
+  // o formulário fica recolhido num botão; abre sozinho com rascunho guardado ou vindo de "Novo registro"
+  const aberto = S.tab==='registros' || lsGet('creas:rascunho:'+c.id) || lsGet('creas:rascunho-pend:'+c.id);
+  return `<details class="novo-reg"${aberto?' open':''}><summary class="btn primary small">${ic('caneta',15)}Novo registro</summary><form id="fReg" class="stack" style="margin:12px 0 14px">
     <div class="grid2"><label class="field"><span>Data</span><input id="r_data" type="date" value="${iso(HOJE)}"></label>
     <label class="field"><span>Tipo</span><select id="r_tipo">${opcoes(DB.listas.tipos_registro||['Atendimento'], 'Atendimento')}</select></label></div>
     <label class="field"><span>Evolução</span><textarea id="r_txt" placeholder="O que aconteceu, combinações e próximos passos">${esc(lsGet('creas:rascunho:'+c.id)||'')}</textarea></label>
     <label class="field"><span>Pendências</span><textarea id="r_pend" style="min-height:76px" placeholder="O que ficou pendente: documentos, retornos, providências (opcional)">${esc(lsGet('creas:rascunho-pend:'+c.id)||'')}</textarea></label>
-    <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${esc(autorTxt())}</span></div></form>
+    <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${esc(autorTxt())}</span></div></form></details>
   ${(() => { const n = c.registros.filter(r => !r.gesuas_em && cobraGes(r)).length; return n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não foi marcado como lançado':`${n} registros ainda não foram marcados como lançados`} no GESUAS.</div>` : ''; })()}
   <div class="timeline">${[...c.registros].reverse().map(r => evHtml(r, c)).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
 }
@@ -1928,14 +1959,14 @@ function tabAcomp(c){
       <label class="field"><span>Complexidade</span><select id="a_cx">${[0.5,1,1.5].map(v => `<option value="${v}" ${c.complexidade===v?'selected':''}>${COMPLEX[v]}</option>`).join('')}</select></label>
     </div>`:''}
     ${noGes&&c.tecnica&&primeiroNome(c.tecnica)!==primeiroNome(tec)?`<div class="muted" style="font-size:12.5px">Indicada no repasse: ${esc(c.tecnica)}. No GESUAS a família está com ${esc(tec)}.</div>`:''}
-    <div><h3 style="margin-bottom:6px">Discussões de caso</h3><div class="muted" style="font-size:12.5px;margin-bottom:8px">Cada reunião vira um registro com data.</div>
+    <div><h3 style="margin-bottom:6px" title="Cada reunião vira um registro com data">Discussões de caso</h3>
     <form id="fDisc" class="row" style="align-items:flex-end"><label class="field" style="width:150px"><span>Data</span><input id="disc_data" type="date" value="${iso(HOJE)}"></label><label class="field" style="flex:1;min-width:220px"><span>Plano definido na reunião</span><input id="disc_txt" placeholder="Ex.: Reavaliar em 3 meses; contato com escola"></label><button class="btn" type="submit">Registrar discussão</button></form>
     <div class="timeline" style="margin-top:8px">${[...c.discussoes].reverse().map(x => evHtml({data:x.data,tipo:'Discussão de caso',autor:'Equipe',texto:x.texto})).join('')||'<div class="empty">Nenhuma discussão registrada.</div>'}</div></div>
   </div>`;
 }
 function tabHist(c){
   const h = [...c.historico].sort((a,b) => String(a.data_hora).localeCompare(String(b.data_hora)));
-  return `<div class="muted" style="font-size:12.5px;margin-bottom:6px">Registro automático de cada mudança no caso.</div><div class="timeline">${h.map(x => `<div class="ev"><div class="when">${fmt(String(x.data_hora).slice(0,10))}</div><div>${esc(x.acao)} <span class="muted">· ${esc(x.usuario)}</span></div></div>`).join('')||'<div class="empty">Sem histórico.</div>'}</div>`;
+  return `<div class="timeline" style="margin-top:8px">${h.map(x => `<div class="ev"><div class="when">${fmt(String(x.data_hora).slice(0,10))}</div><div>${esc(x.acao)} <span class="muted">· ${esc(x.usuario)}</span></div></div>`).join('')||'<div class="empty">Sem histórico.</div>'}</div>`;
 }
 
 /* ================= modais ================= */
@@ -2097,14 +2128,14 @@ function vGesuas(){
   const nAnt = temGes() ? listaCasos({etapa:'repasse', pend:'antigo'}).length : 0;
   const nSemFam = temGes() ? listaCasos({etapa:'acompanhamento', pend:'semfam'}).length : 0;
   const salvavel = prev && (prev.ges || prev.atendimentos.length);
-  return `<div class="top"><div><h1>Conferência com o GESUAS</h1><p>Importe dois relatórios do GESUAS em .xls, de uma vez: <b>Famílias Acompanhadas por Técnico</b> (quem está em acompanhamento, técnica, início e PAF; também aceito em PDF) e <b>Famílias Atendidas por Técnico</b> (cada atendimento, com CPF, bairro e endereço da família). O sistema cruza com os casos e monta as pendências de cada técnica.</p></div></div>
+  return `<div class="top"><div><h1>Conferência com o GESUAS</h1></div></div>
   <section class="panel stack" style="margin-bottom:16px">
     <div class="row" style="justify-content:space-between">
       <div><span class="label">Relatório em uso</span><div style="font-weight:600">${temGes()?esc(DB.ges.origem):'Nenhum relatório importado'}</div>${temGes()?`<div class="muted" style="font-size:12.5px">${DB.ges.linhas.length} famílias${DB.ges.periodo?' · período '+esc(DB.ges.periodo):''}${DB.ges.importado_em?' · importado em '+esc(DB.ges.importado_em):''}</div>`:''}
         ${temAtend()?`<div class="muted" style="font-size:12.5px">${DB.atend.length} atendimento${DB.atend.length===1?'':'s'} do GESUAS de ${fmt(atendIdx().min)} até hoje</div>`:''}</div>
-      <div class="row"><label class="btn primary" for="gFile" style="cursor:pointer">Importar relatórios do GESUAS</label><input id="gFile" type="file" accept=".xls,.html,.htm,.pdf,application/pdf" multiple hidden></div>
+      <div class="row"><label class="btn primary" for="gFile" style="cursor:pointer">Importar relatórios do GESUAS</label>${infoBtn('Importe de uma vez os dois relatórios do GESUAS em .xls: <b>Famílias Acompanhadas por Técnico</b> (quem está em acompanhamento, técnica, início e PAF; também aceito em PDF) e <b>Famílias Atendidas por Técnico</b> (cada atendimento, com CPF, bairro e endereço). Atendidas: na primeira vez, os últimos 12 meses; depois, o mês novo. Os arquivos são lidos neste navegador; na planilha ficam só técnico, responsável, CPF/NIS, bairro, endereço e datas (telefone não é guardado).')}<input id="gFile" type="file" accept=".xls,.html,.htm,.pdf,application/pdf" multiple hidden></div>
     </div>
-    <div id="gStatus" class="muted" style="font-size:12.5px">Os arquivos são lidos neste navegador. Na planilha ficam só técnico, responsável, CPF/NIS, bairro, endereço e datas; telefone não é guardado. Atendidas: na primeira vez, exporte os últimos 12 meses; depois, o mês novo.</div>
+    <div id="gStatus" class="muted" style="font-size:12.5px"></div>
     ${prev?`<div class="dup stack" style="gap:6px"><div><b>Lido:</b></div>
       <ul style="margin:0;padding-left:18px">${prev.arquivos.map(a => a.tipo==='dispensado'
         ? `<li>${TIPOS_REL.dispensado}: não precisa mais ser importado (as mesmas famílias e dados vêm no ${TIPOS_REL.atendimentos}). Arquivo deixado de lado.</li>`
@@ -2121,7 +2152,7 @@ function vGesuas(){
   </section>
   ${temGes()?`
   <section class="panel stack" style="margin-bottom:16px">
-    <div><h2>Por técnica</h2><div class="muted" style="font-size:12.5px">Situação no relatório de ${fmt(refGes())}. Clique num número para abrir a lista.</div></div>
+    <div><h2>Por técnica <span class="muted" style="font-weight:500;font-size:13px">relatório de ${fmt(refGes())}</span></h2><div class="nota">Clique num número para abrir a lista.</div></div>
     ${tabelaTecnicas(R)}
     ${nAnt?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nAnt} caso${nAnt>1?'s':''} em acompanhamento aqui não aparece${nAnt>1?'m':''} no GESUAS</b> (já estiveram lá e saíram, ou repasse há mais de 90 dias). Provavelmente ${nAnt>1?'foram desligados':'foi desligado'} lá: abra para desligar ou vincular à família.</span><button type="button" class="btn small" ${linkLista({etapa:'repasse', pend:'antigo'})}>Ver a lista</button></div>`:''}
     ${nSemFam?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nSemFam} caso${nSemFam>1?'s':''} confirmado${nSemFam>1?'s':''} à mão sem a família do GESUAS escolhida.</b> Escolha a família em cada um, uma vez só, para o sistema perceber quando ela sair do GESUAS.</span><button type="button" class="btn small" ${linkLista({etapa:'acompanhamento', pend:'semfam'})}>Ver a lista</button></div>`:''}
@@ -2215,7 +2246,7 @@ function evoPainel(titulo, serie, link, nota, aviso){
       <button type="button" class="btn small" ${link} style="margin-left:auto">Ver a lista de hoje</button></div>
     <div><div class="vbars">${serie.map(x => `<div class="vbar" title="${x.l}/${String(x.ano).slice(2)}: ${x.n===null ? 'sem dados' : x.n+(x.base?` de ${x.base} famílias (${pct(x.n, x.base)}%)`:'')}">${x.n===null ? '<em>—</em>' : `<em>${x.n}</em><i style="height:${x.n/mx*100}%"></i>`}</div>`).join('')}</div>
       <div class="xl">${serie.map(x => `<span>${x.l}</span>`).join('')}</div></div>
-    <div class="muted" style="font-size:12px">${nota}<br>${aviso}</div></section>`;
+    <div class="nota">${nota}<br>${aviso}</div></section>`;
 }
 function vInd(){
   const P = periodoInd();
@@ -2303,7 +2334,7 @@ function vInd(){
   const per = [['12m','Últimos 12 meses'],['ano',`${HOJE.getFullYear()}`],['anoAnt',`${HOJE.getFullYear()-1}`],['tudo','Tudo']];
   const fd = n => n===null ? semDados : `${n} <small>dia${n===1?'':'s'}</small>`;
 
-  return `<div class="top"><div><h1>Indicadores</h1><p>Calculados só com o que já é registrado no trabalho do dia a dia e no relatório do GESUAS, ${P.rot}.</p></div>
+  return `<div class="top"><div><h1>Indicadores</h1></div>
     <div class="seg">${per.map(([k,l]) => `<button class="${(S.indPer||'12m')===k?'on':''}" data-per="${k}">${l}</button>`).join('')}</div></div>
   <div class="kpis">
     <button class="kpi" ${linkLista(lk({}))}><span>Encaminhamentos recebidos</span><b>${C.length}</b></button>
@@ -2320,41 +2351,41 @@ function vInd(){
       <div><div class="vbars">${porMes.map(x => `<div class="vbar" title="${x.l}/${String(x.ano).slice(2)}: ${x.n} · mesmo mês de ${x.ano-1}: ${x.ant}"><em>${x.n}</em><i style="height:${x.n/maxM*100}%"></i>${x.ant?`<s style="bottom:${x.ant/maxM*100}%"></s>`:''}</div>`).join('')}</div>
       <div class="xl">${porMes.map(x => `<span>${x.l}</span>`).join('')}</div></div>
       <div class="legenda"><span><i class="lg-barra"></i>Mês</span><span><i class="lg-ref"></i>Mesmo mês do ano anterior</span></div></section>
-    <section class="panel stack"><h2>Caminho dos encaminhamentos</h2>${hb(funil, C.length)}<div class="muted" style="font-size:12px">Do total recebido no período. Casos enviados direto para o acompanhamento não passam pela avaliação.</div></section>
+    <section class="panel stack"><h2>Caminho dos encaminhamentos</h2>${hb(funil, C.length)}<div class="nota">Do total recebido no período. Casos enviados direto para o acompanhamento não passam pela avaliação.</div></section>
     <section class="panel stack"><h2>Tempo em cada etapa</h2>
       <table style="min-width:0"><thead><tr><th>Etapa</th><th style="text-align:right">Mediana</th><th style="text-align:right">Casos</th></tr></thead><tbody>
       ${tempos.map(([l,v]) => { const n = v.filter(x => x!==null && x>=0).length, m = mediana(v); return `<tr style="cursor:default"><td>${l}</td><td class="mono" style="text-align:right">${m===null?'—':m+' dias'}</td><td class="mono" style="text-align:right">${n}</td></tr>`; }).join('')}</tbody></table>
-      <div class="muted" style="font-size:12px">Mediana: metade dos casos levou menos que isso. Casos migrados da planilha antiga ficam de fora.</div></section>
+      <div class="nota">Mediana: metade dos casos levou menos que isso. Casos migrados da planilha antiga ficam de fora.</div></section>
     <section class="panel stack"><h2>Desfecho das avaliações concluídas</h2>${hb(desf, aval.length)}</section>
     <section class="panel stack" style="grid-column:1/-1"><h2>Por remetente</h2>
       ${rems.length?`<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Remetente</th><th style="text-align:right">Recebidos</th><th style="text-align:right">Avaliações concluídas</th><th style="text-align:right">Indicaram acompanhamento</th><th style="text-align:right">Não confirmados</th></tr></thead><tbody>
       ${rems.map(x => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))} title="Abrir a lista">${esc(x.r)}</button></td><td class="mono" style="text-align:right"><button type="button" class="num-link" ${linkLista(lk({rem:x.r}))}>${x.n}</button></td><td class="mono" style="text-align:right">${x.av}</td><td class="mono" style="text-align:right">${x.acomp===null?'—':x.acomp+'%'}</td><td class="mono" style="text-align:right">${x.nc===null?'—':x.nc+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem dados no período.</div>'}
-      <div class="muted" style="font-size:12px">Mostra quanto do que cada órgão encaminha se confirma como violação que justifica acompanhamento.</div></section>
-    <section class="panel stack"><h2>Por violação</h2>${hb(viol, 0, k => lk({viol:k}))}${(() => { const o = cont(C.filter(c => c.diagnostico.includes('out')).map(c => String(c.violacao_outra||'').trim() || 'Não informada')); return o.length ? `<div style="font-size:12.5px"><span class="label">Dentro de "Outra"</span><div>${o.map(([t,n]) => `${esc(t)} <b>${n}</b>`).join(' · ')}</div></div>` : ''; })()}<div class="muted" style="font-size:12px">Casos recebidos no período, pela violação marcada ao indicar acompanhamento (a mesma lista do GESUAS). Um caso pode ter mais de uma. Clique numa barra para ver os casos.</div></section>
+      <div class="nota">Mostra quanto do que cada órgão encaminha se confirma como violação que justifica acompanhamento.</div></section>
+    <section class="panel stack"><h2>Por violação</h2>${hb(viol, 0, k => lk({viol:k}))}${(() => { const o = cont(C.filter(c => c.diagnostico.includes('out')).map(c => String(c.violacao_outra||'').trim() || 'Não informada')); return o.length ? `<div style="font-size:12.5px"><span class="label">Dentro de "Outra"</span><div>${o.map(([t,n]) => `${esc(t)} <b>${n}</b>`).join(' · ')}</div></div>` : ''; })()}<div class="nota">Casos recebidos no período, pela violação marcada ao indicar acompanhamento (a mesma lista do GESUAS). Um caso pode ter mais de uma. Clique numa barra para ver os casos.</div></section>
     <section class="panel stack"><h2>Registros de atendimento</h2>
       <div class="row" style="gap:18px"><div><span class="label">Por avaliação concluída</span><div style="font-size:20px;font-weight:700">${mediaReg===null?'—':mediaReg}</div></div><div><span class="label">Avaliações com visita domiciliar</span><div style="font-size:20px;font-weight:700">${comVD===null?'—':comVD+'%'}</div></div></div>
       ${hb(regTipo)}</section>
     ${temAtend()?`<section class="panel stack"><h2>Atendimentos registrados no GESUAS</h2>
       <div><div class="vbars">${atMes.map(x => `<div class="vbar" title="${x.l}/${String(x.ano).slice(2)}: ${x.n} atendimentos"><em>${x.n}</em><i style="height:${x.n/maxA*100}%"></i></div>`).join('')}</div>
       <div class="xl">${atMes.map(x => `<span>${x.l}</span>`).join('')}</div></div>
-      <div class="muted" style="font-size:12px">Do relatório Famílias Atendidas por Técnico. Meses antes de ${fmt(atendIdx().min)} não foram importados.</div></section>
+      <div class="nota">Do relatório Famílias Atendidas por Técnico. Meses antes de ${fmt(atendIdx().min)} não foram importados.</div></section>
     <section class="panel stack"><h2>Produção por técnica</h2>
       ${prod.length?`<div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">Atend.</th><th style="text-align:right">Famílias</th></tr></thead><tbody>
       ${prod.map(x => `<tr style="cursor:default" title="${(x.n/x.fams).toFixed(1).replace('.',',')} atendimentos por família"><td>${esc(x.t)}</td><td class="mono" style="text-align:right">${x.n}</td><td class="mono" style="text-align:right">${x.fams}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem atendimentos no período.</div>'}
-      <div class="muted" style="font-size:12px">Atendimentos registrados no GESUAS no período, e famílias diferentes atendidas. Passe o mouse na linha para ver a média por família.</div></section>`:''}
+      <div class="nota">Atendimentos registrados no GESUAS no período, e famílias diferentes atendidas. Passe o mouse na linha para ver a média por família.</div></section>`:''}
     ${evo.aguard ? evoPainel('Famílias aguardando inclusão no GESUAS', evo.aguard, linkLista({etapa:'repasse', pend:'nreg'}), 'Repassadas para a técnica e ainda não registradas no GESUAS, no último dia de cada mês (no mês atual, hoje).', 'Os meses antigos só consideram quem ainda está em acompanhamento ou na lista do GESUAS; quem já saiu não entra na conta.') : ''}
     ${evo.sem60 ? evoPainel(`Famílias sem atendimento há mais de ${LIM().atendimento} dias`, evo.sem60, linkLista({etapa:'acompanhamento', pend:'sematend'}), `Famílias PAEFI no GESUAS sem atendimento registrado nos ${LIM().atendimento} dias anteriores ao último dia do mês. A % é sobre as famílias PAEFI do GESUAS naquele mês.`, `Só aparecem os meses com ${LIM().atendimento} dias de atendimentos importados (desde ${fmt(atendIdx().min)}). Famílias que já saíram do GESUAS não entram nos meses antigos.`) : ''}
     <section class="panel stack"><h2>Por território</h2>${hb(terr.filter(x => x[0]).slice(0,10), 0, b => lk({bairro:b}))}
-      <div class="muted" style="font-size:12px">Encaminhamentos recebidos no período, pelo bairro do caso ou, se vazio, pelo do GESUAS.${semBairro?` ${semBairro} sem bairro.`:''}</div></section>
+      <div class="nota">Encaminhamentos recebidos no período, pelo bairro do caso ou, se vazio, pelo do GESUAS.${semBairro?` ${semBairro} sem bairro.`:''}</div></section>
     ${topViol.length && terrViol.some(x => x.b)?`<section class="panel stack" style="grid-column:1/-1"><h2>Território × violação</h2>
       <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Bairro</th>${topViol.map(([l]) => `<th style="text-align:right">${esc(l)}</th>`).join('')}</tr></thead><tbody>
       ${terrViol.filter(x => x.b).map(x => `<tr style="cursor:default"><td>${esc(x.b)}</td>${x.n.map((n,i) => `<td class="mono calor" style="text-align:right;--a:${n/maxTV}" title="${esc(x.b)} · ${esc(topViol[i][0])}: ${n}">${n?`<button type="button" class="num-link" ${linkLista(lk({bairro:x.b, viol:topViol[i][2]}))}>${n}</button>`:''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-      <div class="muted" style="font-size:12px">Casos recebidos no período, nos bairros com mais encaminhamentos. As 6 violações mais frequentes do período; um caso pode ter mais de uma. Cor mais forte, mais casos.</div></section>`:''}
-    ${terrGes.some(x => x[0])?`<section class="panel stack"><h2>Famílias em acompanhamento por território</h2>${hb(terrGes.filter(x => x[0]))}<div class="muted" style="font-size:12px">Bairro das famílias no GESUAS, tirado dos atendimentos importados. Situação atual.</div></section>`:''}
+      <div class="nota">Casos recebidos no período, nos bairros com mais encaminhamentos. As 6 violações mais frequentes do período; um caso pode ter mais de uma. Cor mais forte, mais casos.</div></section>`:''}
+    ${terrGes.some(x => x[0])?`<section class="panel stack"><h2>Famílias em acompanhamento por território</h2>${hb(terrGes.filter(x => x[0]))}<div class="nota">Bairro das famílias no GESUAS, tirado dos atendimentos importados. Situação atual.</div></section>`:''}
     ${carga.length?`<section class="panel stack" style="grid-column:1/-1"><h2>Carga por técnica</h2>
       <div style="overflow-x:auto"><table style="min-width:0"><thead><tr><th>Técnica</th><th style="text-align:right">Famílias</th><th style="text-align:right">Carga</th></tr></thead><tbody>
       ${carga.map(t => `<tr style="cursor:default"><td><button type="button" class="num-link" ${linkLista(t.f)} title="Abrir as famílias desta técnica">${esc(t.nome)}</button></td><td class="mono" style="text-align:right">${t.fam}</td><td class="mono" style="text-align:right">${String(t.peso).replace('.',',')}</td></tr>`).join('')}</tbody></table></div>
-      <div class="muted" style="font-size:12px">Famílias PAEFI registradas no GESUAS (ou confirmadas à mão na conferência), as mesmas da lista que abre ao clicar no nome. Carga soma a complexidade de cada família (baixa 0,5 · média 1 · alta 1,5); as que estão só no GESUAS contam como média. Situação atual, não depende do período. PAF em branco e famílias aguardando inclusão estão na Conferência GESUAS.</div></section>`:''}
+      <div class="nota">Famílias PAEFI registradas no GESUAS (ou confirmadas à mão na conferência), as mesmas da lista que abre ao clicar no nome. Carga soma a complexidade de cada família (baixa 0,5 · média 1 · alta 1,5); as que estão só no GESUAS contam como média. Situação atual, não depende do período. PAF em branco e famílias aguardando inclusão estão na Conferência GESUAS.</div></section>`:''}
     <section class="panel stack"><h2>Famílias que já tinham caso</h2>
       ${reinc.length?`<div class="muted" style="font-size:12.5px">${reinc.length} dos ${C.length} encaminhamentos do período são de vítimas ou famílias com caso anterior.</div>
       <div class="alist">${reinc.slice(0,8).map(x => `<div class="aitem" data-caso="${x.c.id}" tabindex="0"><div class="sev info"></div><div><div class="nm">${esc(nomeCaso(x.c))} <span class="mono muted">${x.c.id}</span></div><div class="muted" style="font-size:12.5px">Caso anterior: ${x.ant.id} · ${esc(x.ant.desfecho||ETAPAS[x.ant.etapa]||'')}</div></div><span></span></div>`).join('')}</div>`:'<div class="empty">Nenhum encaminhamento de família já conhecida no período.</div>'}</section>
@@ -2480,6 +2511,7 @@ function render(){
 let BUSCA_T = null;
 function bind(){
   const m = $('#main');
+  notasEmIcone(m);
   // caso e família do GESUAS abrem por cima da lista; "Voltar" retorna a ela no mesmo ponto
   const detalhe = ['caso','familia'].includes(S.view);
   const abrir = (el, view, extra) => { const open = e => { e.preventDefault(); if (!detalhe) S.rolagem = window.scrollY; go(view, {...extra, prev: detalhe ? S.prev : S.view}); }; el.onclick = open; el.onkeydown = e => { if (e.key==='Enter') open(e); }; };
@@ -2490,7 +2522,7 @@ function bind(){
     tr.onclick = () => selecionarLinha(sel);
     tr.ondblclick = () => abrirSel(sel);
     tr.onkeydown = e => { if (e.target!==tr) return; if (e.key==='Enter'){ e.preventDefault(); abrirSel(sel); } else if (e.key===' '){ e.preventDefault(); selecionarLinha(sel); } }; });
-  bindGaveta();
+  bindExpansao();
   m.querySelectorAll('[data-list]').forEach(el => el.onclick = e => { e.stopPropagation(); const f = JSON.parse(el.dataset.list);
     LIM_LISTA = 300; go('casos', {f:{...FILTRO_VAZIO, ...f}, ordem:'', maisFiltros:false}); });
   // filtros da lista: qualquer mudança volta ao começo da lista
@@ -2512,7 +2544,8 @@ function bind(){
   const back = m.querySelector('[data-back]'); if (back) back.onclick = () => { go(S.prev||'casos'); if (S.rolagem) window.scrollTo(0, S.rolagem); };
   const ed = m.querySelector('[data-editar]'); if (ed) ed.onclick = () => { S.editando=S.caso; S.draft=null; go('novo'); };
   const ip = m.querySelector('[data-imprimir]'); if (ip) ip.onclick = () => imprimirFicha(DB.casos.find(x => x.id===S.caso));
-  m.querySelectorAll('[data-tab]').forEach(el => el.onclick = () => { S.tab=el.dataset.tab; render(); });
+  // "Novo registro" (da lista ou do painel) desce até os registros com o formulário aberto
+  if (S.view==='caso' && S.tab==='registros'){ S.tab = 'dados'; setTimeout(() => { const r = $('#sec-reg'); if (r){ r.scrollIntoView({block:'start'}); const t = $('#r_txt'); if (t) t.focus({preventScroll:true}); } }, 0); }
   const c = DB.casos.find(x => x.id===S.caso);
   m.querySelectorAll('[data-out]').forEach(el => el.onclick = () => acao(c, el.dataset.out));
   // caso desligado (à mão ou pela importação do GESUAS) pode voltar ao acompanhamento com a mesma técnica e data de início
