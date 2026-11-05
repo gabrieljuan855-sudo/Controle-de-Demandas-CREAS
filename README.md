@@ -6,7 +6,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
 ## O que o sistema faz
 
-- **Novo encaminhamento** (coordenação). A vítima é o dado principal e obrigatório; o responsável familiar é opcional. Remetente, documento e prazo vêm de listas. O sistema avisa quando a vítima ou a família já tem registro.
+- **Novo encaminhamento** (coordenação), pelo botão **+** da barra no topo. A vítima é o dado principal e obrigatório; o responsável familiar é opcional. Remetente, documento e prazo vêm de listas. O sistema avisa quando a vítima ou a família já tem registro. O prazo de resposta pode ser alterado depois (prorrogação ou data corrigida) ou retirado, pelo botão **Alterar prazo** na tela do caso ou **alterar** no resumo da lista; a mudança fica no histórico do caso ("Prazo de resposta alterado de 30/10/2026 para 15/11/2026").
 - **Vítima como nome do caso.** Listas, painel e ficha mostram o nome da vítima. A conferência com o GESUAS continua cruzando pelo responsável familiar e pelas demais pessoas do caso.
 - **Salvamento em segundo plano.** Ao salvar (registro, violações, desfecho, repasse, edição, conferência do GESUAS etc.), a tela atualiza na hora e a gravação segue por trás. Um painel no canto mostra cada alteração até ficar salva. Se falhar, o sistema tenta de novo sozinho por cerca de 2 minutos; se continuar falhando, a linha fica em vermelho com "Tentar de novo" ou "Descartar", e quando a internet volta tenta outra vez sozinho. Fechar a aba com algo pendente pede confirmação. O único cadastro que ainda espera o servidor é o **novo encaminhamento**, porque o número do caso é gerado pela planilha; a importação do PDF do GESUAS também espera.
   - **Nada do que foi digitado se perde.** Registros e discussões que ainda não chegaram à planilha ficam guardados no navegador: se a aba fechar, a página recarregar ou o computador desligar, eles voltam para a fila na próxima abertura (sem duplicar). O registro em digitação e o novo encaminhamento em digitação também ficam guardados: sair da tela, clicar de novo em "Novo encaminhamento" ou recarregar não apaga; só "Limpar" (com confirmação) e o registro apagam.
@@ -26,12 +26,14 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - **Importante:** abra o sistema no celular **com internet, antes de sair**, e deixe a aba aberta. O Google não permite abrir o sistema do zero sem internet. Se a aba fechar, os registros guardados são enviados na próxima vez que o sistema abrir com internet.
   - No iPhone, o Safari pode apagar dados de sites pouco usados; prefira enviar os registros no mesmo dia.
   - "Abrir a versão completa" leva ao sistema inteiro; "Modo de campo", no menu, volta.
-- **Visual.** Menu lateral com ícones, em duas seções (Menu principal e Outros), cartões sem borda com cantos arredondados, e a lista de casos com busca, abas, filtros e tabela num cartão só. O texto cinza tem contraste de pelo menos 4,5:1 nos dois temas, e a etapa "aguardando repasse" tem cor própria (não a vermelha de alerta).
+- **Visual.** Menu lateral com ícones, em duas seções (Menu principal e Outros). No computador ele fica recolhido numa faixa estreita só com os ícones, para sobrar espaço para o conteúdo, e abre por cima da tela, com o nome e o número de cada item, ao passar o mouse (ou ao navegar com o teclado); no celular e no tablet segue aberto como antes. Cartões sem borda com cantos arredondados, cartões sem borda com cantos arredondados, e a lista de casos com busca, abas, filtros e tabela num cartão só. O texto cinza tem contraste de pelo menos 4,5:1 nos dois temas, e a etapa "aguardando repasse" tem cor própria (não a vermelha de alerta).
 - **Barra no topo, à direita do título de cada tela:**
+  - **+**: novo encaminhamento;
   - **busca** (o mesmo que a tecla **/**);
   - **tema**: cada clique troca entre Automático (segue o aparelho), Claro e Escuro, e a escolha fica salva no navegador;
-  - **sino**: o número é o de prazos de resposta vencidos ou que vencem em 7 dias (vermelho quando há algum vencido), e o clique abre essa lista;
-  - as iniciais de quem está usando (o nome e o e-mail aparecem ao passar o mouse).
+  - **sino**: o número é o de prazos de resposta vencidos ou que vencem em 7 dias (vermelho quando há algum vencido), e o clique abre essa lista.
+
+  Quem está usando aparece no pé do menu lateral.
 
   No celular, a barra fica numa linha própria, acima do título.
 - **Avaliação social.** O técnico registra as visitas e atendimentos com data e, ao concluir, escolhe o desfecho entre as opções prontas:
@@ -70,7 +72,7 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   Um botão copia a mensagem pronta para cada técnica.
 - **Painel: o andamento dos casos.** Abre com a saudação e a data. Cada número abre a lista filtrada e é contado por ela:
   - **Andamento dos casos:** as quatro etapas lado a lado, na ordem do fluxo (aguardando triagem, em avaliação social, aguardando técnica ou inclusão no GESUAS, em acompanhamento no GESUAS). Elas somam o total "Em atendimento";
-  - **Em atendimento:** o total (o mesmo número do menu), os urgentes (prioridade 1) na avaliação e três atalhos. **Novo** abre o cadastro do encaminhamento. **Registrar** abre uma busca de caso (sem digitar nada, mostra a fila da avaliação) e leva direto à aba de registros. **Buscar** vai para a busca de casos;
+  - **Em atendimento:** o total (o mesmo número do menu) e os urgentes (prioridade 1) na avaliação;
   - **Mais urgentes:** as 8 mais urgentes, com um ícone por tipo e os dias à direita; "Ver todas" mostra a lista completa ("Tudo o que precisa de atenção"). Acima da lista, um botão por tipo, com a contagem, mostra só aquele tipo. Os avisos, na ordem em que aparecem (vermelho antes de amarelo e de azul; no mesmo tipo, o mais atrasado primeiro):
     - **prazo de resposta** vencido (vermelho) ou que vence em até 7 dias;
     - **escolher a técnica:** a avaliação indicou acompanhamento e falta o repasse;
@@ -93,8 +95,9 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - **Filtros:** etapa (cada aba mostra quantos casos tem), técnica, pendência e serviço. Em **Mais filtros**: período de recebimento, remetente, bairro, violação (as do GESUAS) e prioridade. O filtro ativo fica destacado, e **Limpar filtros** volta tudo ao normal.
   - **Busca:** procura por palavras em qualquer ordem ("silva maria" acha "Maria da Silva") em nome, nº do caso, CPF (com ou sem pontos), bairro, endereço, remetente, ofício e técnica. Se o caso estiver em outra etapa, o número na aba mostra onde. A tecla **/** leva à busca de qualquer tela, e **Esc** limpa.
   - **Ordenar:** clique no título da coluna (uma vez sobe, outra desce, outra volta ao normal). Na fila de triagem, avaliação e repasse, a última coluna mostra a última movimentação e há quantos dias.
+  - **Um clique numa linha** abre, ao lado da lista, um resumo do caso: etapa e técnica, há quantos dias foi o último registro e o último atendimento no GESUAS, prazo de resposta (com **alterar**), situação no GESUAS, origem e pendências em aberto. Abaixo, numa linha do tempo só, os últimos registros feitos aqui (avaliação social e acompanhamento) e os atendimentos importados do GESUAS, do mais novo ao mais antigo. Para as famílias que estão só no GESUAS, técnica, PAF e os atendimentos. **Dois cliques** (ou **Abrir caso**, ou Enter) abrem a tela completa, como antes; **Novo registro** abre direto a aba de registros. O X ou **Esc** fecha o resumo.
   - **Baixar lista (.csv):** baixa a lista filtrada, na ordem da tela, para abrir no Excel ou no Planilhas.
-  - **Menu lateral:** o número ao lado de **Casos** é o da lista que ele abre (**Em atendimento**). Logo abaixo, sempre à vista, ficam **Avaliação social** e o nome de cada técnica, com o número de famílias que ela acompanha (somados, dão o total da aba Acompanhamento); cada um abre a lista já filtrada. Casos continua abrindo a lista geral. Em **Outros** fica **Verificar a base**.
+  - **Menu lateral:** o número ao lado de **Casos** é o da lista que ele abre (**Em atendimento**). Logo abaixo (com o menu aberto) ficam **Avaliação social** e o nome de cada técnica, com o número de famílias que ela acompanha (somados, dão o total da aba Acompanhamento); cada um abre a lista já filtrada. Casos continua abrindo a lista geral. Em **Outros** fica **Verificar a base**.
   - **Famílias que estão só no GESUAS** também abrem, para consulta: técnica, início, serviço, PAF, CPF, NIS, bairro, endereço, a lista de atendimentos importados e os casos deste sistema com o mesmo nome. Abrem pela lista de Acompanhamento e pelas tabelas da Conferência GESUAS.
   - Ao voltar de um caso, a lista abre no mesmo ponto em que estava. O caso mostra também os **outros casos da mesma família** (mesmo nome ou CPF).
 - **Situação no GESUAS de cada caso em acompanhamento**, sempre em relação à data do relatório importado:
