@@ -636,7 +636,11 @@ function renderNav(){
     : tec(k) ? naTec && S.f.tec===tec(k)
     : k==='casos' ? naLista && !(S.view==='casos' && S.f.etapa==='avaliacao') && !naTec : S.view===k;
   const botao = ([k,l,c,t,i]) => `<button class="${ligado(k)?'on':''}${sub(k)||tec(k)?' sub':''}" data-go="${esc(k)}"${t?` title="${esc(t)}"`:''}${ligado(k)?' aria-current="page"':''}>${i?ic(i):''}<span class="lbl">${esc(l)}</span>${c!==''?`<span class="count">${c}</span>`:''}</button>`;
-  $('#nav').innerHTML = `<div class="nav-sec">Menu principal</div>${principal.map(botao).join('')}${outros.length?`<div class="nav-sec">Outros</div>${outros.map(botao).join('')}`:''}`;
+  // os subitens de Casos ficam num bloco próprio: no computador, com o menu recolhido, ele se fecha deslizando
+  const subs = principal.filter(([k]) => sub(k) || tec(k)), resto = principal.filter(([k]) => !sub(k) && !tec(k));
+  const iCasos = resto.findIndex(([k]) => k==='casos') + 1;
+  const blocoSub = subs.length ? `<div class="nav-sub"><div>${subs.map(botao).join('')}</div></div>` : '';
+  $('#nav').innerHTML = `<div class="nav-sec">Menu principal</div>${resto.slice(0, iCasos).map(botao).join('')}${blocoSub}${resto.slice(iCasos).map(botao).join('')}${outros.length?`<div class="nav-sec">Outros</div>${outros.map(botao).join('')}`:''}`;
   $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => {
     const k = b.dataset.go;
     if (k==='auditoria') return verificarBase();
@@ -1018,12 +1022,19 @@ const selCls = sel => ` title="Um clique: abre o resumo abaixo · Dois cliques: 
 const atendUnicos = L => { const vistos = new Set(); return L.filter(a => { const k = a.data+'|'+norm(a.tecnico); if (vistos.has(k)) return false; vistos.add(k); return true; }); };
 const haDias = d => { const n = dias(d); return n<=0 ? 'hoje' : n===1 ? 'ontem' : `há ${n} dias`; };
 const MAX_TL = 8;
+/* registros daqui e atendimentos do GESUAS numa lista só, do mais novo ao mais antigo. Atendimento do GESUAS
+   no mesmo dia de um registro daqui é o mesmo atendimento: entra no registro (ges) e não se repete */
+function mesclarAtend(regs, atend){
+  const porDia = new Map(); atendUnicos(atend).forEach(a => { if (!porDia.has(a.data)) porDia.set(a.data, []); porDia.get(a.data).push(a); });
+  const L = regs.map(r => { const d = String(r.data||'').slice(0,10), g = porDia.get(d); if (g) porDia.delete(d); return {data:d, reg:r, ges:g ? g[0] : null}; });
+  porDia.forEach(g => g.forEach(a => L.push({data:a.data, at:a})));
+  return L.sort((a,b) => a.data < b.data ? 1 : a.data > b.data ? -1 : 0);
+}
 function linhaTempo(regs, atend){
-  const L = [...regs.map(r => ({data:String(r.data||'').slice(0,10), reg:r})), ...atendUnicos(atend).map(a => ({data:a.data, at:a}))]
-    .sort((a,b) => a.data < b.data ? 1 : a.data > b.data ? -1 : 0);
+  const L = mesclarAtend(regs, atend);
   if (!L.length) return '<div class="empty">Nenhum registro aqui nem atendimento no GESUAS.</div>';
   return `<div class="gav-tl">${L.slice(0, MAX_TL).map(x => x.reg
-    ? `<div class="gav-ev"><div class="gav-q"><span class="mono">${fmt(x.data)}</span><span class="gav-fonte">Sistema</span><span class="gav-t">${esc(x.reg.tipo)} · ${esc(x.reg.autor)}</span></div><div class="gav-txt">${esc(x.reg.texto)}</div>${x.reg.pendencias&&!x.reg.pendencia_ok?`<div class="pend-tag">⚑ ${esc(x.reg.pendencias)}</div>`:''}</div>`
+    ? `<div class="gav-ev"><div class="gav-q"><span class="mono">${fmt(x.data)}</span><span class="gav-fonte">Sistema</span>${x.ges?`<span class="gav-fonte ges" title="Atendimento com ${esc(nomeTecnica(x.ges.tecnico))} registrado no GESUAS no mesmo dia">+ GESUAS</span>`:''}<span class="gav-t">${esc(x.reg.tipo)} · ${esc(x.reg.autor)}</span></div><div class="gav-txt">${esc(x.reg.texto)}</div>${x.reg.pendencias&&!x.reg.pendencia_ok?`<div class="pend-tag">⚑ ${esc(x.reg.pendencias)}</div>`:''}</div>`
     : `<div class="gav-ev ges"><div class="gav-q"><span class="mono">${fmt(x.data)}</span><span class="gav-fonte ges">GESUAS</span><span class="gav-t">Atendimento com ${esc(nomeTecnica(x.at.tecnico))}</span></div></div>`).join('')}</div>
     ${L.length>MAX_TL?`<div class="muted" style="font-size:12.5px">Mais ${L.length-MAX_TL} no caso completo.</div>`:''}`;
 }
@@ -1053,8 +1064,8 @@ function expansaoHtml(){
   const corPrazo = c.prazo_respondido ? 'inherit' : -dias(c.prazo)<0 ? 'var(--crit)' : -dias(c.prazo)<=7 ? 'var(--warn)' : 'inherit';
   return caixa(`
       ${lin('Etapa', esc(etapaRot(c)) + (c.etapa==='avaliacao' ? ` <span class="muted">· sem movimento ${haDias(ultimaMov(c))}</span>` : '') + (tec ? ` <span class="muted">· ${esc(tec)}</span>` : ''))}
-      ${lin('Último registro', uReg ? `${haDias(uReg)} <span class="muted">· ${fmt(uReg)}</span>` : '<span class="muted">nenhum ainda</span>')}
-      ${uAt ? lin('Último atend.', `${haDias(uAt)} <span class="muted">· ${fmt(uAt)} · GESUAS</span>`) : ''}
+      ${(() => { const u = uReg > uAt ? uReg : uAt, onde = uReg===uAt ? 'aqui e no GESUAS' : u===uReg ? 'aqui' : 'no GESUAS';
+        return lin('Último atend.', u ? `${haDias(u)} <span class="muted">· ${fmt(u)} · ${onde}</span>` : '<span class="muted">nenhum ainda</span>'); })()}
       ${c.prazo ? lin('Prazo', `<span style="color:${corPrazo};font-weight:600">${esc(prazoTxt(c))}</span>${podePrazo?` <button type="button" class="lnk" data-prazoalt="${c.id}">alterar</button>`:''}`) : ''}
       ${sg ? lin('No GESUAS', gesSitCurta(sg)) : ''}
       ${lin('Origem', `${esc(remDe(c))}${c.doc_num?` <span class="muted">· ${esc(c.doc_tipo||'')} ${esc(c.doc_num)}</span>`:''}`)}
@@ -1237,7 +1248,7 @@ function vCaso(){
     </aside>
     <div class="stack">
       <section class="panel stack">${tabDados(c)}</section>
-      <section class="panel stack" id="sec-reg"><h2>Registros <span class="muted" style="font-weight:500">${c.registros.length}</span></h2>${tabReg(c)}</section>
+      <section class="panel stack" id="sec-reg"><h2>Registros e atendimentos <span class="muted" style="font-weight:500;font-size:13px">${c.registros.length} aqui${temAtend()?` · ${atendUnicos(atendCaso(c)).length} no GESUAS`:''}</span></h2>${tabReg(c)}</section>
       ${comAcomp?`<section class="panel stack"><h2>Acompanhamento</h2>${tabAcomp(c)}</section>`:''}
       <section class="panel"><details class="hist"><summary><h2>Histórico <span class="muted" style="font-weight:500">${c.historico.length}</span></h2></summary>${tabHist(c)}</details></section>
     </div>
@@ -1387,7 +1398,8 @@ function evHtml(r, c, op={}){
       ${r.pendencias&&!op.semPend?`<button type="button" class="btn small" data-copiar="${esc(r.pendencias)}" title="Copiar as pendências">Copiar pendências</button>`:''}
       ${podeEditarReg(r)?`<button type="button" class="btn small" data-redit="${esc(r.id)}">Editar</button>`:''}
       ${r.pendencias && !op.semPend ? (r.pendencia_ok ? `<button type="button" class="lnk" data-rpend="${esc(r.id)}" data-v="0">reabrir pendência</button>` : `<button type="button" class="btn small" data-rpend="${esc(r.id)}" data-v="1">Pendência resolvida</button>`) : ''}
-      ${r.gesuas_em ? `<span class="pill p-ok" title="${esc(r.gesuas_por||'')}">✓ Lançado no GESUAS em ${fmtC(r.gesuas_em)}</span><button type="button" class="lnk" data-rges="${esc(r.id)}" data-v="0">desfazer</button>`
+      ${op.ges ? `<span class="pill p-ok" title="Atendimento importado do relatório Famílias Atendidas por Técnico">✓ No GESUAS: atendimento com ${esc(nomeTecnica(op.ges.tecnico))}</span>`
+        : r.gesuas_em ? `<span class="pill p-ok" title="${esc(r.gesuas_por||'')}">✓ Lançado no GESUAS em ${fmtC(r.gesuas_em)}</span><button type="button" class="lnk" data-rges="${esc(r.id)}" data-v="0">desfazer</button>`
         : cobraGes(r) ? `<button type="button" class="btn small" data-rges="${esc(r.id)}" data-v="1">Marcar como lançado no GESUAS</button>` : ''}
     </div>` : '';
   return `<div class="ev"><div class="when">${fmt(r.data)}</div><div><div class="tag">${esc(r.tipo)} · ${esc(r.autor)}${r.editado_em?` <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· editado em ${fmtC(r.editado_em)}</span>`:''}</div><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias&&!op.semPend?`<div class="ev-pend${r.pendencia_ok?' ok':''}"><span class="label">Pendências${r.pendencia_ok?` · resolvida em ${fmtC(r.pendencia_ok)}`:''}</span><div style="white-space:pre-wrap">${esc(r.pendencias)}</div></div>`:''}${acoes}</div></div>`;
@@ -1421,8 +1433,11 @@ function tabReg(c){
     <label class="field"><span>Evolução</span><textarea id="r_txt" placeholder="O que aconteceu, combinações e próximos passos">${esc(lsGet('creas:rascunho:'+c.id)||'')}</textarea></label>
     <label class="field"><span>Pendências</span><textarea id="r_pend" style="min-height:76px" placeholder="O que ficou pendente: documentos, retornos, providências (opcional)">${esc(lsGet('creas:rascunho-pend:'+c.id)||'')}</textarea></label>
     <div class="row"><button class="btn primary" type="submit">Adicionar registro</button><span class="muted" style="font-size:12.5px">Assinado como: ${esc(autorTxt())}</span></div></form></details>
-  ${(() => { const n = c.registros.filter(r => !r.gesuas_em && cobraGes(r)).length; return n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não foi marcado como lançado':`${n} registros ainda não foram marcados como lançados`} no GESUAS.</div>` : ''; })()}
-  <div class="timeline">${[...c.registros].reverse().map(r => evHtml(r, c)).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`;
+  ${(() => { const L = mesclarAtend(c.registros, temAtend() ? atendCaso(c) : []);
+    const n = L.filter(x => x.reg && !x.ges && !x.reg.gesuas_em && cobraGes(x.reg)).length;
+    return `${n ? `<div class="muted" style="font-size:12.5px;margin-bottom:4px">${n===1?'1 registro ainda não está':`${n} registros ainda não estão`} no GESUAS (sem atendimento lá no mesmo dia nem marcação de lançado).</div>` : ''}
+  <div class="timeline">${L.map(x => x.reg ? evHtml(x.reg, c, {ges:x.ges})
+    : `<div class="ev ev-ges"><div class="when">${fmt(x.data)}</div><div><span class="gav-fonte ges">GESUAS</span> Atendimento com ${esc(nomeTecnica(x.at.tecnico))}</div></div>`).join('')||'<div class="empty">Nenhum registro ainda.</div>'}</div>`; })()}`;
 }
 function tabAcomp(c){
   const s = statusGes(c), noGes = !!(s && s.tipo==='ok'), tec = tecnicaRef(c);
