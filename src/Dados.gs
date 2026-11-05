@@ -18,7 +18,8 @@ var ESQUEMA = {
   Atendimentos: ['chave', 'tecnico', 'responsavel', 'cpf', 'nis', 'bairro', 'data'],
   CRM: ['id', 'criado_em', 'criado_por', 'fonte', 'entrada', 'processo', 'chave', 'origem', 'situacao', 'nome', 'nascimento', 'cpf', 'telefone',
     'endereco', 'bairro', 'tecnica', 'status', 'status_data', 'gesuas', 'caso_id', 'obs', 'atualizado_em'],
-  CRM_Contatos: ['id', 'crm_id', 'data', 'meio', 'resultado', 'texto', 'autor', 'criado_em', 'criado_por'],
+  CRM_Contatos: ['id', 'crm_id', 'data', 'meio', 'resultado', 'texto', 'autor', 'criado_em', 'criado_por',
+    'pendencias', 'pendencia_ok', 'pendencia_ok_por', 'gesuas_em', 'gesuas_por'],
   Listas: ['remetentes', 'tipos_documento', 'tecnicas', 'bairros', 'tipos_registro'],
   Config: ['chave', 'valor', 'observacao']
 };
