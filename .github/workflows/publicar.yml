@@ -1,0 +1,15 @@
+# Confere se os dois arquivos de publicar/ batem com src/ (alguém mudou src/ e esqueceu de rodar o script)
+name: Arquivos para o Apps Script
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tools/montar.js --conferir

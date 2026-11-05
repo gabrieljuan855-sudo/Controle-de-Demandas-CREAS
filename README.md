@@ -139,9 +139,9 @@ O site roda com a conta Google de quem acessa. Por isso, só entra quem tem aces
 
 1. No Google Drive, crie uma planilha nova chamada **Controle de Demandas CREAS – Base**.
 2. Na planilha, abra **Extensões > Apps Script**.
-3. Crie no editor os arquivos abaixo e cole o conteúdo de cada um, que está na pasta `src/`:
-   - Arquivos de **script**: `Code`, `Dados`, `Util`, `Migracao` (sem a extensão `.gs`).
-   - Arquivos **HTML**: `Index`, `Estilo`, `App`.
+3. No editor ficam só dois arquivos, que estão prontos na pasta `publicar/`:
+   - o arquivo de **script** `Codigo` (sem a extensão `.gs`): apague o conteúdo do `Código.gs` que o editor cria, ou renomeie-o, e cole o de `publicar/Codigo.gs`;
+   - o arquivo **HTML** `Index`: crie e cole o de `publicar/Index.html`.
    - Em **Configurações do projeto**, marque "Mostrar arquivo de manifesto appsscript.json" e substitua o conteúdo dele pelo de `src/appsscript.json`.
 4. Selecione a função `configurar` e clique em **Executar**. Autorize o acesso quando o Google pedir. As abas da base são criadas e o seu e-mail entra como coordenação.
 5. Na aba **Config** da planilha, preencha `emails_avaliacao` com o e-mail da avaliação social.
@@ -175,7 +175,11 @@ Com os dados de 24/09/2026, o resultado esperado é de 349 casos: 98 em acompanh
 
 ### Atualizar o sistema depois
 
-Cole os arquivos novos no editor. Depois abra **Implantar > Gerenciar implantações**, edite a implantação e escolha **Nova versão**. A URL continua a mesma.
+1. Abra `publicar/Codigo.gs` no GitHub, copie tudo (botão **Copy raw file**), e no editor do Apps Script selecione todo o conteúdo de `Codigo` (Ctrl+A) e cole por cima.
+2. Faça o mesmo com `publicar/Index.html` no arquivo `Index`.
+3. Salve e abra **Implantar > Gerenciar implantações**, edite a implantação e escolha **Nova versão**. A URL continua a mesma.
+
+**Uma vez só, ao passar dos 7 arquivos para os 2:** no editor, apague `Code`, `Dados`, `Util`, `Migracao`, `Estilo` e `App` (menu ⋮ ao lado de cada um > Excluir) e crie `Codigo` com o conteúdo de `publicar/Codigo.gs`. `Index` continua com o mesmo nome; só cole o conteúdo novo. Se sobrar algum arquivo antigo, o Apps Script acusa função repetida ao salvar ou abrir. Dados, planilha e URL não mudam.
 
 ### Verificar a base (sinais de dado perdido)
 
@@ -196,11 +200,18 @@ No menu, **Outros > Verificar a base** (ou, no editor do Apps Script, a função
 - ao editar as vítimas, as novas são gravadas antes de apagar as antigas;
 - a lista nova do GESUAS é gravada por cima da anterior antes de limpar a sobra.
 
-Quem preferir a linha de comando pode usar o [clasp](https://github.com/google/clasp) (`clasp clone <scriptId>` e `clasp push`) com a pasta `src/` como `rootDir`.
+Quem preferir a linha de comando pode usar o [clasp](https://github.com/google/clasp) (`clasp clone <scriptId>` e `clasp push`) com a pasta `publicar/` como `rootDir` (copie para ela o `src/appsscript.json`).
 
 ## Estrutura
 
+O código é escrito e revisado em `src/`, separado por assunto. `publicar/` tem os dois arquivos que vão para o Apps Script, montados a partir de `src/` com `node tools/montar.js`; quem muda `src/` roda o script e faz o commit dos dois juntos. Uma verificação no GitHub (Actions) falha quando `publicar/` não bate com `src/`.
+
 ```
+publicar/
+  Codigo.gs         Util + Dados + Code + Migracao, num arquivo só
+  Index.html        página com o estilo e o código da tela dentro
+tools/
+  montar.js         monta publicar/ a partir de src/
 src/
   appsscript.json   manifesto (fuso, publicação como web app)
   Code.gs           web app, instalação, perfis, funções chamadas pelo navegador (api_*) e verificação da base
