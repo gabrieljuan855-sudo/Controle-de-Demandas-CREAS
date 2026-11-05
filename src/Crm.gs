@@ -141,13 +141,46 @@ function api_crmContato(id, r) {
     if (r.id && abaCrmExiste('CRM_Contatos') && jaGravado('CRM_Contatos', r.id)) return crmUm(id);
     inserirLinhas('CRM_Contatos', [{
       id: r.id || proximoIdSimples('K'), crm_id: id, data: isoParaData(r.data) || new Date(), meio: r.meio || '', resultado: r.resultado || '',
-      texto: String(r.texto || '').trim(), autor: AUTOR_CRM, criado_em: new Date(), criado_por: emailAtual()
+      texto: String(r.texto || '').trim(), autor: AUTOR_CRM, criado_em: new Date(), criado_por: emailAtual(),
+      pendencias: String(r.pendencias || '').trim()
     }]);
     // mudança de situação pedida (encerrar, reabrir) ou trazida pelo resultado do contato
     var st = STATUS_CRM[r.status] ? r.status : x.status === 'espera' ? RESULTADO_STATUS_CRM[r.resultado] : '';
     if (st && st !== x.status) { x.status = st; x.status_data = new Date(); }
     x.atualizado_em = new Date();
     atualizarLinha('CRM', x._linha, x);
+    return crmUm(id);
+  });
+}
+
+/** Contato de um caso do CRM, conferindo o caso. */
+function contatoCrmLinha(id, kid) {
+  var k = abaCrmExiste('CRM_Contatos') ? lerTabela('CRM_Contatos').filter(function (x) { return String(x.id) === String(kid) && String(x.crm_id) === String(id); })[0] : null;
+  if (!k) throw new Error('Contato não encontrado. Recarregue a página.');
+  return k;
+}
+
+/** Marca (ou desmarca) que o contato foi lançado no GESUAS. */
+function api_crmGesuas(id, kid, feito) {
+  exigirCrm();
+  return comTrava(function () {
+    var k = contatoCrmLinha(id, kid);
+    k.gesuas_em = feito ? Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd HH:mm') : '';
+    k.gesuas_por = feito ? emailAtual() : '';
+    atualizarLinha('CRM_Contatos', k._linha, k);
+    return crmUm(id);
+  });
+}
+
+/** Marca (ou reabre) a pendência anotada no contato. */
+function api_crmPendencia(id, kid, feito) {
+  exigirCrm();
+  return comTrava(function () {
+    var k = contatoCrmLinha(id, kid);
+    if (!String(k.pendencias || '').trim()) throw new Error('Este contato não tem pendência.');
+    k.pendencia_ok = feito ? Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd HH:mm') : '';
+    k.pendencia_ok_por = feito ? emailAtual() : '';
+    atualizarLinha('CRM_Contatos', k._linha, k);
     return crmUm(id);
   });
 }

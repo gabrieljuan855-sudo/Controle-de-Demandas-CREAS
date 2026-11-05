@@ -544,7 +544,7 @@ a.btn{text-decoration:none;color:inherit}
 .seg-mini button{padding:3px 10px;font-size:12px}
 .crm-ct{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .crm-ct input,.crm-ct select{width:auto;padding:6px 9px;border-radius:8px;font-size:13px}
-.crm-ct #ct_txt{flex:1 1 160px}
+.crm-ct #ct_txt,.crm-ct #ct_pend{flex:1 1 160px}
 .crm-achados{display:flex;flex-direction:column;gap:4px;font-size:13px;background:var(--surface-2);border-radius:10px;padding:10px 12px}
 @media (max-width:900px){ .crm-box{grid-template-columns:minmax(0,1fr)} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -764,7 +764,7 @@ const DESFECHOS_AVAL = [
 
 /* ================= estado ================= */
 let DB = { papel:'', email:'', casos:[], ges:null, listas:{} };
-const S = { view:'painel', caso:null, tab:'dados', f:{etapa:'ativos', tec:'', pend:'', serv:'paefi', per:'', rem:'', bairro:'', viol:'', prio:'', busca:''}, ordem:'', maisFiltros:false, crm:{seg:'fazer', busca:'', tec:''}, crmSel:null, draft:null, editando:null, gTec:'', gPrevia:null, prev:'painel' };
+const S = { view:'painel', caso:null, tab:'dados', f:{etapa:'ativos', tec:'', pend:'', serv:'paefi', per:'', rem:'', bairro:'', viol:'', prio:'', busca:''}, ordem:'', maisFiltros:false, crm:{seg:'fazer', busca:'', tec:'', pend:''}, crmSel:null, draft:null, editando:null, gTec:'', gPrevia:null, prev:'painel' };
 const coord = () => DB.papel === 'coordenacao';
 /* assinatura de quem está usando: todos têm o mesmo acesso, muda só o nome nos registros */
 const autorTxt = () => DB.autor || 'Coordenação';
@@ -2573,6 +2573,15 @@ const RES_CRM = [['nao_atendeu','Não atendeu'],['recado','Deixou recado'],['num
   ['aceitou','Aceitou o atendimento'],['recusou','Não quis o atendimento'],['atendimento','Atendimento realizado']];
 const RES_CRM_ROT = {...Object.fromEntries(RES_CRM), situacao:'Situação'};
 const SEM_RETORNO = new Set(['nao_atendeu','recado','numero']);
+/* lançamento no GESUAS: cobrado dos contatos em que se falou com ela (não das tentativas sem retorno nem das mudanças
+   de situação), a partir de quando o recurso entrou; o que veio da planilha antiga não é cobrado */
+const CRM_GES_DESDE = '2026-11-05';
+const lancavelCrm = k => !SEM_RETORNO.has(k.resultado) && k.resultado!=='situacao' && k.autor!=='Planilha antiga'
+  && (String(k.data||'').slice(0,10) >= CRM_GES_DESDE || String(k.criado_em||'').slice(0,10) >= CRM_GES_DESDE);
+const aLancarCrm = x => (x.contatos||[]).filter(k => lancavelCrm(k) && !k.gesuas_em);
+const pendCrm = x => (x.contatos||[]).filter(k => String(k.pendencias||'').trim() && !k.pendencia_ok);
+const tagsCrm = x => { const p = pendCrm(x).length, g = aLancarCrm(x).length;
+  return (p ? `<div class="pend-tag">⚑ ${p} pendência${p>1?'s':''} em aberto</div>` : '') + (g ? `<div class="pend-tag" style="color:var(--accent)">${g} a lançar no GESUAS</div>` : ''); };
 const MEIOS_CRM = ['Telefone','WhatsApp','Visita domiciliar','No CREAS','Carta / convocação'];
 const ORIGENS_CRM = ['2ª Vara Criminal','1ª Vara Criminal','Delegacia','CRAS','Conselho Tutelar','Saúde','Espontânea','Denúncia 180'];
 const SITUACOES_CRM = ['Violência doméstica','Violência intrafamiliar','Abuso sexual','Pessoa idosa','Negligência'];
@@ -2619,6 +2628,7 @@ const SEGS_CRM = [['fazer','A fazer', x => x.status==='espera'],['acomp','Em aco
 function listaCrm(seg){
   const f = S.crm, s = SEGS_CRM.find(z => z[0]===(seg||f.seg)) || SEGS_CRM[0];
   const L = crmLista().filter(x => s[2](x) && (!f.tec || primeiroNome(x.tecnica)===f.tec)
+    && (!f.pend || (f.pend==='pend' ? pendCrm(x).length : aLancarCrm(x).length))
     && (!f.busca || casaBusca(norm([x.id, x.nome, x.processo, soDig(x.processo), x.cpf, soDig(x.cpf), x.telefone, soDig(x.telefone), x.bairro, x.endereco, x.origem, x.tecnica].join(' ')), f.busca)));
   // a fazer: quem chegou primeiro, primeiro; nas outras abas, os mais novos em cima
   const ent = x => String(x.entrada||'');
@@ -2629,7 +2639,7 @@ function linhaCrm(x){
   const sub = [x.bairro, x.origem].filter(Boolean).map(esc).join(' · ');
   return `<tr data-crm="${esc(x.id)}" tabindex="0" title="Clique para abrir"${sel?' class="sel" aria-expanded="true"':' aria-expanded="false"'}>
     <td class="mono">${fmt(x.entrada)}<div class="muted" style="font-size:12px;font-weight:400">${x.status==='espera' && x.entrada ? haDias(x.entrada) : esc(x.id)}</div></td>
-    <td>${x.nome ? `<div class="nm">${comCopia(TIT(x.nome))}</div>` : '<span class="muted">Nome no processo</span>'}${sub?`<div class="muted" style="font-size:12px">${sub}</div>`:''}</td>
+    <td>${x.nome ? `<div class="nm">${comCopia(TIT(x.nome))}</div>` : '<span class="muted">Nome no processo</span>'}${sub?`<div class="muted" style="font-size:12px">${sub}</div>`:''}${tagsCrm(x)}</td>
     <td class="mono" style="font-size:12.5px">${x.processo ? `<span class="nw">${esc(x.processo)}${cp(x.processo)}</span>` : '<span class="muted">—</span>'}</td>
     <td class="mono">${x.telefone ? `<span class="nw">${esc(x.telefone)}${cp(x.telefone)}</span>` : '<span class="muted">—</span>'}</td>
     <td>${p==='processo' && !x.cpf ? '<span class="muted">—</span>' : gesCelCrm(x)}</td>
@@ -2645,9 +2655,10 @@ function vCrm(){
   <div class="tab-card">
   <div class="filters">
     <div class="seg">${SEGS_CRM.map(([k,l]) => `<button class="${f.seg===k?'on':''}" data-cseg="${k}">${l} <small>${k===f.seg ? L.length : listaCrm(k).length}</small></button>`).join('')}</div>
+    <select id="cPend" aria-label="Pendências" class="${f.pend?'ativo':''}"><option value="">Qualquer situação</option><option value="pend" ${f.pend==='pend'?'selected':''}>Com pendência em aberto</option><option value="ges" ${f.pend==='ges'?'selected':''}>A lançar no GESUAS</option></select>
     ${tecs.length?`<select id="cTec" aria-label="Técnica" class="${f.tec?'ativo':''}"><option value="">Todas as técnicas</option>${tecs.map(t => `<option value="${esc(t)}" ${f.tec===t?'selected':''}>${esc(nomeTecnica(t))}</option>`).join('')}</select>`:''}
     <span class="ibs">
-      ${f.tec||f.busca?`<button type="button" class="ib" data-climpar title="Limpar filtros e busca" aria-label="Limpar filtros">${ic('fechar')}</button>`:''}
+      ${f.tec||f.busca||f.pend?`<button type="button" class="ib" data-climpar title="Limpar filtros e busca" aria-label="Limpar filtros">${ic('fechar')}</button>`:''}
       <button type="button" class="ib" data-ccsv title="Baixar a lista (.csv)" aria-label="Baixar lista"${L.length?'':' disabled'}>${ic('baixar')}</button>
     </span>
   </div>
@@ -2682,6 +2693,7 @@ function expCrm(x){
       <select id="ct_meio" aria-label="Meio">${MEIOS_CRM.map(m => `<option>${m}</option>`).join('')}</select>
       <select id="ct_res" aria-label="Resultado"><option value="">Resultado…</option>${RES_CRM.filter(([k]) => x.status==='acompanhamento' ? !['aceitou','recusou'].includes(k) : true).map(([k,l]) => `<option value="${k}">${l}</option>`).join('')}</select>
       <input id="ct_txt" placeholder="Anotação (opcional)" aria-label="Anotação">
+      <input id="ct_pend" placeholder="Pendência (opcional)" aria-label="Pendência" title="O que ficou para fazer depois deste contato. Fica em aberto até ser marcada como resolvida.">
       <button class="btn primary small" type="submit">Registrar contato</button></form>` : ''}
     ${linhaCrmTempo(x)}
     <div class="row gav-acoes">
@@ -2702,7 +2714,13 @@ function gesBoxCrm(x){
 function linhaCrmTempo(x){
   const L = [...(x.contatos||[])].reverse();
   if (!L.length) return '<div class="empty" style="padding:14px 0">Nenhum contato registrado.</div>';
-  return `<div class="gav-tl">${L.map(k => `<div class="gav-ev${k.resultado==='situacao'?' ges':''}"><div class="gav-q"><span class="mono">${fmt(k.data)}</span>${k.meio?`<span class="gav-fonte ges">${esc(k.meio)}</span>`:''}<span class="gav-t">${esc(RES_CRM_ROT[k.resultado]||k.resultado||'')}</span><span class="muted">${esc(k.autor||'')}</span></div>${k.texto?`<div class="gav-txt">${esc(k.texto)}</div>`:''}</div>`).join('')}</div>`;
+  const id = x.id;
+  const acoes = k => { const p = String(k.pendencias||'').trim(), b = [];
+    if (p) b.push(k.pendencia_ok ? `<button type="button" class="lnk" data-kpend="${esc(k.id)}" data-v="0">reabrir pendência</button>` : `<button type="button" class="btn small" data-kpend="${esc(k.id)}" data-v="1">Pendência resolvida</button>`);
+    if (k.gesuas_em) b.push(`<span class="pill p-ok" title="${esc(k.gesuas_por||'')}">✓ Lançado no GESUAS em ${fmtC(k.gesuas_em)}</span><button type="button" class="lnk" data-kges="${esc(k.id)}" data-v="0">desfazer</button>`);
+    else if (lancavelCrm(k)) b.push(`<button type="button" class="btn small" data-copiar="${esc([RES_CRM_ROT[k.resultado], k.texto].filter(Boolean).join('. '))}" title="Copiar para colar no GESUAS">Copiar</button><button type="button" class="btn small" data-kges="${esc(k.id)}" data-v="1">Marcar como lançado no GESUAS</button>`);
+    return b.length ? `<div class="ev-acoes">${b.join('')}</div>` : ''; };
+  return `<div class="gav-tl" data-kcaso="${esc(id)}">${L.map(k => `<div class="gav-ev${k.resultado==='situacao'?' ges':''}"><div class="gav-q"><span class="mono">${fmt(k.data)}</span>${k.meio?`<span class="gav-fonte ges">${esc(k.meio)}</span>`:''}<span class="gav-t">${esc(RES_CRM_ROT[k.resultado]||k.resultado||'')}</span><span class="muted">${esc(k.autor||'')}</span></div>${k.texto?`<div class="gav-txt">${esc(k.texto)}</div>`:''}${String(k.pendencias||'').trim()?`<div class="ev-pend${k.pendencia_ok?' ok':''}"><span class="label">Pendência${k.pendencia_ok?` · resolvida em ${fmtC(k.pendencia_ok)}`:''}</span>${esc(k.pendencias)}</div>`:''}${acoes(k)}</div>`).join('')}</div>`;
 }
 /* o que muda na tela na hora; a gravação segue pela fila */
 function editarCrm(x, k, v, rot){
@@ -2742,7 +2760,8 @@ function bindCrm(){
   bindLinhasCrm();
   m.querySelectorAll('[data-cseg]').forEach(el => el.onclick = () => { S.crm.seg = el.dataset.cseg; LIM_LISTA = 300; render(); });
   const ct = $('#cTec'); if (ct) ct.onchange = () => { S.crm.tec = ct.value; render(); };
-  const cl = m.querySelector('[data-climpar]'); if (cl) cl.onclick = () => { S.crm.tec = ''; S.crm.busca = ''; render(); };
+  const cl = m.querySelector('[data-climpar]'); if (cl) cl.onclick = () => { S.crm.tec = ''; S.crm.busca = ''; S.crm.pend = ''; render(); };
+  const cp2 = $('#cPend'); if (cp2) cp2.onchange = () => { S.crm.pend = cp2.value; LIM_LISTA = 300; render(); };
   const cc = m.querySelector('[data-ccsv]'); if (cc) cc.onclick = baixarCsvCrm;
   const mg = m.querySelector('[data-cmigrar]'); if (mg) mg.onclick = migrarCrm;
   const b = $('#busca'); if (b){ b.oninput = () => { S.crm.busca = b.value; LIM_LISTA = 300; clearTimeout(BUSCA_T); BUSCA_T = setTimeout(() => { const pos = b.selectionStart; render(); const nb = $('#busca'); if (nb){ nb.focus(); nb.setSelectionRange(pos,pos); } }, 150); };
@@ -2770,9 +2789,15 @@ function bindCrm(){
   const fc = $('#crmCt'); if (fc) fc.onsubmit = e => { e.preventDefault(); const x = X();
     const res = $('#ct_res').value; if (!res){ toast('Escolha o resultado do contato.'); $('#ct_res').focus(); return; }
     const antes = x.status;
-    contatoCrm(x, {data:$('#ct_data').value || iso(HOJE), meio:$('#ct_meio').value, resultado:res, texto:$('#ct_txt').value.trim()});
+    contatoCrm(x, {data:$('#ct_data').value || iso(HOJE), meio:$('#ct_meio').value, resultado:res, texto:$('#ct_txt').value.trim(), pendencias:$('#ct_pend').value.trim(), criado_em:iso(HOJE)});
     toast(x.status!==antes ? `Contato registrado. Situação: ${ST_CRM[x.status].toLowerCase()}.` : tentativasCrm(x)>=3 ? `${tentativasCrm(x)} tentativas sem retorno. Se não houver outro meio, encerre como inativo.` : 'Contato registrado.');
     render(); };
+  ex.querySelectorAll('[data-kpend],[data-kges]').forEach(el => el.onclick = () => { const x = X(); if (!x) return;
+    const pend = 'kpend' in el.dataset, kid = pend ? el.dataset.kpend : el.dataset.kges, k = (x.contatos||[]).find(y => y.id===kid); if (!k) return;
+    const feito = el.dataset.v==='1', quando = feito ? iso(HOJE) : '';
+    if (pend){ k.pendencia_ok = quando; k.pendencia_ok_por = feito ? DB.email : ''; salvar(x, feito ? 'CRM: pendência resolvida' : 'CRM: pendência reaberta', 'api_crmPendencia', [x.id, kid, feito], 'kpend:'+kid); }
+    else { k.gesuas_em = quando; k.gesuas_por = feito ? DB.email : ''; salvar(x, feito ? 'CRM: lançado no GESUAS' : 'CRM: lançamento no GESUAS desfeito', 'api_crmGesuas', [x.id, kid, feito], 'kges:'+kid); }
+    novaVersao(); render(); });
   const enc = ex.querySelector('[data-cencerrar]'); if (enc) enc.onclick = () => modal(`<h2>Encerrar caso do CRM</h2><p class="muted" style="margin:0">${esc(X().nome ? TIT(X().nome) : X().processo || id)}</p>
     <div class="choice" style="grid-template-columns:minmax(0,1fr)">
       <label class="opt"><input type="radio" name="m_enc" value="inativo" checked><div><b>Inativo</b><small>Não quis o atendimento ou não foi possível contato.</small></div></label>
@@ -2855,10 +2880,10 @@ function migrarCrm(){
 }
 function baixarCsvCrm(){
   const L = listaCrm();
-  const cab = ['Nº','Entrada','Processo','Nome','CPF','Nascimento','Telefone','Endereço','Bairro','Origem','Situação','Técnica','Status','No GESUAS','Último contato','Resultado','Tentativas sem retorno','Caso no sistema','Observações'];
+  const cab = ['Nº','Entrada','Processo','Nome','CPF','Nascimento','Telefone','Endereço','Bairro','Origem','Situação','Técnica','Status','No GESUAS','Último contato','Resultado','Tentativas sem retorno','Pendências em aberto','A lançar no GESUAS','Observações'];
   const linhas = L.map(x => { const u = ultContatoCrm(x), g = crmGes(x);
     return [x.id, fmt(x.entrada), x.processo, x.nome, x.cpf, x.nascimento?fmt(x.nascimento):'', x.telefone, x.endereco, x.bairro, x.origem, x.situacao, x.tecnica, ST_CRM[x.status],
-      g.ges ? 'Acompanhada' : g.atend.length ? 'Atendida' : x.gesuas==='sim' ? 'Tem cadastro' : x.gesuas==='nao' ? 'Sem cadastro' : '', u?fmt(u.data):'', u?RES_CRM_ROT[u.resultado]||'':'', tentativasCrm(x)||'', x.caso_id, x.obs]; });
+      g.ges ? 'Acompanhada' : g.atend.length ? 'Atendida' : x.gesuas==='sim' ? 'Tem cadastro' : x.gesuas==='nao' ? 'Sem cadastro' : '', u?fmt(u.data):'', u?RES_CRM_ROT[u.resultado]||'':'', tentativasCrm(x)||'', pendCrm(x).map(k => k.pendencias).join(' | '), aLancarCrm(x).length||'', x.obs]; });
   const cel = v => { v = String(v ?? '').replace(/"/g,'""'); return /^[=+\-@]/.test(v) ? `"'${v}"` : `"${v}"`; };
   const csv = '﻿' + [cab, ...linhas].map(l => l.map(cel).join(';')).join('\r\n');
   try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
