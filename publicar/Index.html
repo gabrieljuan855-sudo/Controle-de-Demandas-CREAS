@@ -20,6 +20,13 @@
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
+/* CRM (Centro de Referência da Mulher): a mesma tela em lilás e roxo */
+:root[data-sistema="crm"]{
+  --bg:#F4F0F8; --surface-2:#F5F0FA; --line:#EAE1F1; --campo:#BCAFC9;
+  --accent:#6B3FA0; --accent-ink:#FFFFFF; --accent-soft:#EEE5F8;
+  --vio:#8A3F8F; --vio-soft:#F6E6F5;
+  --shadow:0 1px 2px rgba(48,20,72,.04),0 8px 24px rgba(48,20,72,.07);
+}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   color-scheme:dark;
   --bg:#0F181B; --surface:#172328; --surface-2:#1D2B31; --line:#26363C; --campo:#4A5F66;
@@ -37,6 +44,14 @@
   --ok:#7CC89C; --ok-soft:#1D3528; --warn:#E3B061; --warn-soft:#3A2E17; --crit:#EE8A83; --crit-soft:#3E1F1D;
   --info-soft:#262B47; --info:#A8B2EC; --vio:#B7A8EE; --vio-soft:#2A2545;
   --borda-cartao:var(--line); --seg-on:var(--accent-soft); --badge-ink:#1B0F0E; --shadow:none;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"])[data-sistema="crm"]{
+  --bg:#15111B; --surface:#1D1725; --surface-2:#251D2F; --line:#33293F; --campo:#5A4C69;
+  --accent:#C7A6F2; --accent-ink:#1A1023; --accent-soft:#33254A; --vio:#E3A6E6; --vio-soft:#3A2240;
+}}
+:root[data-theme="dark"][data-sistema="crm"]{
+  --bg:#15111B; --surface:#1D1725; --surface-2:#251D2F; --line:#33293F; --campo:#5A4C69;
+  --accent:#C7A6F2; --accent-ink:#1A1023; --accent-soft:#33254A; --vio:#E3A6E6; --vio-soft:#3A2240;
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;margin:0}
@@ -540,7 +555,7 @@ a.btn{text-decoration:none;color:inherit}
   <div class="carregando" id="carregando">Carregando os casos…</div>
   <div class="app" id="app" hidden>
     <aside class="side">
-      <div class="brand"><svg class="brand-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg><div><b>CREAS Taquara</b><span>Controle de demandas · PSE</span></div></div>
+      <div class="brand"><svg class="brand-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg><div><b id="marca">CREAS Taquara</b><span id="marcaSub">Controle de demandas · PSE</span></div></div>
       <nav id="nav" aria-label="Menu"></nav>
       <div class="who"><div class="whoami" id="whoami"></div></div>
     </aside>
@@ -753,6 +768,11 @@ const S = { view:'painel', caso:null, tab:'dados', f:{etapa:'ativos', tec:'', pe
 const coord = () => DB.papel === 'coordenacao';
 /* assinatura de quem está usando: todos têm o mesmo acesso, muda só o nome nos registros */
 const autorTxt = () => DB.autor || 'Coordenação';
+/* duas partes, escolhidas na aba Config: CREAS (coord()) e CRM, o Centro de Referência da Mulher.
+   Quem tem as duas troca no menu; a tela do CRM fica em lilás. */
+const temCrm = () => !!(DB.acesso && DB.acesso.crm);
+const modoCrm = () => S.view==='crm';
+const SISTEMA_KEY = 'creas:sistema';
 const TECNICAS = () => (DB.listas.tecnicas || []);
 function substituir(c){ const i = DB.casos.findIndex(x => x.id === c.id); if (i >= 0) DB.casos[i] = c; else DB.casos.unshift(c); }
 function go(view, extra={}){ Object.assign(S, {view}, extra); render(); window.scrollTo(0,0); }
@@ -1141,7 +1161,9 @@ const ICONES = {
   prazo:'<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
   caneta:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   escudo:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/>',
-  crm:'<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+  /* CRM: escudo com o símbolo feminino (proteção à mulher); CREAS: o prédio do serviço */
+  mulher:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><circle cx="12" cy="9.2" r="2.7"/><path d="M12 11.9v4.6"/><path d="M10.1 14.4h3.8"/>',
+  creas:'<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
   email:'<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   bandeira:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>'
 };
@@ -1175,40 +1197,58 @@ function tecnicasAcomp(){
   return [...m.values()].sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 function renderNav(){
-  const nAval = DB.casos.filter(c => c.etapa==='avaliacao').length;
-  // o número de Casos é o da lista que ele abre (Em atendimento): as quatro etapas e as famílias só do GESUAS
-  const nAtivos = listaCasos({etapa:'ativos'}).length;
-  const naLista = ['casos','caso','familia'].includes(S.view);
-  const tecs = coord() ? tecnicasAcomp() : [];
-  const principal = [
-    ['painel','Painel','','','painel'],
-    ['casos','Casos', coord() ? nAtivos : nAval, coord() ? 'Em atendimento: triagem, avaliação social, repasse e acompanhamento, com as famílias que estão só no GESUAS' : 'Casos em avaliação social','casos'],
-    ['sub:avaliacao','Avaliação social', nAval, 'Fila da avaliação social'],
-    ...tecs.map(t => ['tec:'+t.k, t.nome, t.n, `Famílias em acompanhamento com ${t.nome}`]),
-    ['crm','CRM', crmLista().filter(x => x.status==='espera').length || '', 'Casos do Fórum e da rede: abrir o processo, conferir no GESUAS e fazer o primeiro contato','crm'],
-    ['gesuas','Conferência GESUAS','','','gesuas'],
-    ['indicadores','Indicadores','','','indicadores']
-  ].filter(i => coord() || !['novo','gesuas','crm'].includes(i[0]));
-  const outros = [...(CELULAR ? [['campo','Modo de campo','','','campo']] : []),
-    ...(coord() ? [['auditoria','Verificar a base','','Procura na planilha sinais de dado perdido ou estragado (não muda nada)','escudo']] : [])];
   const sub = k => k.startsWith('sub:') ? k.slice(4) : '';
   const tec = k => k.startsWith('tec:') ? k.slice(4) : '';
+  const cseg = k => k.startsWith('cseg:') ? k.slice(5) : '';
+  let principal, pai, outros = [];
+  if (modoCrm()){
+    // CRM: os casos, com Em acompanhamento e Encerrados logo abaixo
+    const n = k => crmLista().filter(SEGS_CRM.find(z => z[0]===k)[2]).length;
+    principal = [['crm','Casos', n('fazer') || '', 'A fazer: casos que esperam a abertura do processo ou o primeiro contato', coord() ? 'casos' : 'mulher'],
+      ['cseg:acomp','Em acompanhamento', n('acomp'), ''], ['cseg:fim','Encerrados', n('fim'), '']];
+    pai = 'crm';
+  } else {
+    const nAval = DB.casos.filter(c => c.etapa==='avaliacao').length;
+    // o número de Casos é o da lista que ele abre (Em atendimento): as quatro etapas e as famílias só do GESUAS
+    const nAtivos = listaCasos({etapa:'ativos'}).length;
+    const tecs = tecnicasAcomp();
+    principal = [
+      ['painel','Painel','','','painel'],
+      ['casos','Casos', nAtivos, 'Em atendimento: triagem, avaliação social, repasse e acompanhamento, com as famílias que estão só no GESUAS','casos'],
+      ['sub:avaliacao','Avaliação social', nAval, 'Fila da avaliação social'],
+      ...tecs.map(t => ['tec:'+t.k, t.nome, t.n, `Famílias em acompanhamento com ${t.nome}`]),
+      ['gesuas','Conferência GESUAS','','','gesuas'],
+      ['indicadores','Indicadores','','','indicadores']
+    ];
+    pai = 'casos';
+    outros = [...(CELULAR ? [['campo','Modo de campo','','','campo']] : []),
+      ['auditoria','Verificar a base','','Procura na planilha sinais de dado perdido ou estragado (não muda nada)','escudo']];
+  }
+  // troca de parte, para quem usa as duas
+  const sistemas = coord() && temCrm() ? [['sis:creas','CREAS','','CREAS: Centro de Referência Especializado de Assistência Social','creas'],['sis:crm','CRM','','CRM: Centro de Referência da Mulher','mulher']] : [];
+  const naLista = ['casos','caso','familia'].includes(S.view);
   const naTec = S.view==='casos' && S.f.etapa==='acompanhamento' && S.f.tec;
-  const ligado = k => sub(k) ? S.view==='casos' && S.f.etapa===sub(k)
+  const ligado = k => k==='sis:crm' ? modoCrm() : k==='sis:creas' ? !modoCrm()
+    : cseg(k) ? modoCrm() && S.crm.seg===cseg(k)
+    : k==='crm' ? modoCrm() && ['fazer','todos'].includes(S.crm.seg)
+    : sub(k) ? S.view==='casos' && S.f.etapa===sub(k)
     : tec(k) ? naTec && S.f.tec===tec(k)
     : k==='casos' ? naLista && !(S.view==='casos' && S.f.etapa==='avaliacao') && !naTec : S.view===k;
-  const botao = ([k,l,c,t,i]) => `<button class="${ligado(k)?'on':''}${sub(k)||tec(k)?' sub':''}" data-go="${esc(k)}"${t?` title="${esc(t)}"`:''}${ligado(k)?' aria-current="page"':''}>${i?ic(i):''}<span class="lbl">${esc(l)}</span>${c!==''?`<span class="count">${c}</span>`:''}</button>`;
-  // os subitens de Casos ficam num bloco próprio: no computador, com o menu recolhido, ele se fecha deslizando
-  const subs = principal.filter(([k]) => sub(k) || tec(k)), resto = principal.filter(([k]) => !sub(k) && !tec(k));
-  const iCasos = resto.findIndex(([k]) => k==='casos') + 1;
+  const filho = k => sub(k) || tec(k) || cseg(k);
+  const botao = ([k,l,c,t,i]) => `<button class="${ligado(k)?'on':''}${filho(k)?' sub':''}" data-go="${esc(k)}"${t?` title="${esc(t)}"`:''}${ligado(k)?' aria-current="page"':''}>${i?ic(i):''}<span class="lbl">${esc(l)}</span>${c!==''?`<span class="count">${c}</span>`:''}</button>`;
+  // os subitens ficam num bloco próprio: no computador, com o menu recolhido, ele se fecha deslizando
+  const subs = principal.filter(([k]) => filho(k)), resto = principal.filter(([k]) => !filho(k));
+  const iPai = resto.findIndex(([k]) => k===pai) + 1;
   const blocoSub = subs.length ? `<div class="nav-sub"><div>${subs.map(botao).join('')}</div></div>` : '';
-  $('#nav').innerHTML = `<div class="nav-sec">Menu principal</div>${resto.slice(0, iCasos).map(botao).join('')}${blocoSub}${resto.slice(iCasos).map(botao).join('')}${outros.length?`<div class="nav-sec">Outros</div>${outros.map(botao).join('')}`:''}`;
+  $('#nav').innerHTML = `${sistemas.length?`<div class="nav-sec">Sistema</div>${sistemas.map(botao).join('')}`:''}<div class="nav-sec">Menu principal</div>${resto.slice(0, iPai).map(botao).join('')}${blocoSub}${resto.slice(iPai).map(botao).join('')}${outros.length?`<div class="nav-sec">Outros</div>${outros.map(botao).join('')}`:''}`;
   $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => {
     const k = b.dataset.go;
     if (k==='auditoria') return verificarBase();
+    if (k==='sis:crm' || k==='sis:creas'){ if (ligado(k)) return; return go(k==='sis:crm' ? 'crm' : 'painel'); }
+    if (k==='crm' || cseg(k)){ LIM_LISTA = 300; S.crm.seg = cseg(k) || 'fazer'; S.crmSel = null; return go('crm'); }
     if (k==='campo') lsSet(COMPLETO_KEY, null);
     if (k==='casos' || sub(k) || tec(k)){ LIM_LISTA = 300; S.ordem = ''; S.maisFiltros = false;
-      S.f = tec(k) ? {...FILTRO_VAZIO, etapa:'acompanhamento', tec:tec(k)} : {...FILTRO_VAZIO, etapa: sub(k) || (coord() ? 'ativos' : 'avaliacao')}; }
+      S.f = tec(k) ? {...FILTRO_VAZIO, etapa:'acompanhamento', tec:tec(k)} : {...FILTRO_VAZIO, etapa: sub(k) || 'ativos'}; }
     go(sub(k) || tec(k) ? 'casos' : k);
   });
   renderBarra();
@@ -1225,13 +1265,14 @@ const TEMAS = [['','Automático (segue o aparelho)','auto'],['light','Claro','so
 const temaAtual = () => document.documentElement.dataset.theme || '';
 function renderBarra(){
   const el = $('#barra'); if (!el) return;
-  const nPrazo = coord() ? listaCasos({etapa:'ativos', pend:'prazo'}).length : 0, vencido = nPrazo && alertas().some(a => a.sev==='crit');
+  const crm = modoCrm(), nPrazo = coord() && !crm ? listaCasos({etapa:'ativos', pend:'prazo'}).length : 0, vencido = nPrazo && alertas().some(a => a.sev==='crit');
   const t = TEMAS.find(x => x[0]===temaAtual()) || TEMAS[0];
-  el.innerHTML = `${coord()?`<button type="button" class="ib${S.view==='novo'&&!S.editando?' on':''}" data-bnovo title="Novo encaminhamento" aria-label="Novo encaminhamento">${ic('mais')}</button>`:''}
+  el.innerHTML = `${crm ? `<button type="button" class="ib" data-bnovo title="Casos novos do CRM: colar o e-mail do Fórum ou digitar o processo" aria-label="Casos novos do CRM">${ic('mais')}</button>`
+      : coord()?`<button type="button" class="ib${S.view==='novo'&&!S.editando?' on':''}" data-bnovo title="Novo encaminhamento" aria-label="Novo encaminhamento">${ic('mais')}</button>`:''}
     <button type="button" class="ib" data-bbusca title="Buscar casos (tecla /)" aria-label="Buscar casos">${ic('busca')}</button>
     <button type="button" class="ib" data-btema title="Tema: ${t[1]}. Clique para trocar." aria-label="Tema: ${t[1]}. Trocar tema">${ic(t[2])}</button>
-    ${coord()?`<button type="button" class="ib" data-bprazo title="Prazos de resposta vencidos ou em 7 dias: ${nPrazo}" aria-label="Prazos de resposta vencidos ou em 7 dias: ${nPrazo}">${ic('sino')}${nPrazo?`<span class="badge${vencido?'':' warn'}">${nPrazo}</span>`:''}</button>`:''}`;
-  const bn = el.querySelector('[data-bnovo]'); if (bn) bn.onclick = novoEncaminhamento;
+    ${coord() && !crm?`<button type="button" class="ib" data-bprazo title="Prazos de resposta vencidos ou em 7 dias: ${nPrazo}" aria-label="Prazos de resposta vencidos ou em 7 dias: ${nPrazo}">${ic('sino')}${nPrazo?`<span class="badge${vencido?'':' warn'}">${nPrazo}</span>`:''}</button>`:''}`;
+  const bn = el.querySelector('[data-bnovo]'); if (bn) bn.onclick = crm ? novosCrm : novoEncaminhamento;
   el.querySelector('[data-bbusca]').onclick = irParaBusca;
   el.querySelector('[data-btema]').onclick = () => {
     const prox = TEMAS[(TEMAS.findIndex(x => x[0]===temaAtual()) + 1) % TEMAS.length];
@@ -1245,7 +1286,7 @@ function renderBarra(){
   };
 }
 /* abre a lista de casos com o cursor na busca (ícone da barra, tecla / e atalho do painel) */
-function irParaBusca(){ if (S.view!=='casos') go('casos'); const b = $('#busca'); if (b){ b.focus(); b.select(); } }
+function irParaBusca(){ if (!modoCrm() && S.view!=='casos') go('casos'); const b = $('#busca'); if (b){ b.focus(); b.select(); } }
 /* Acompanhamento mostra só quem está vinculado a uma família do GESUAS (achado no relatório ou confirmado à mão).
    Quem já foi repassado à técnica e ainda não foi achado lá aparece em Repasse, junto com quem aguarda a escolha
    da técnica. Sem relatório importado, vale a etapa gravada. */
@@ -1849,8 +1890,7 @@ async function salvarNovo(){
     } else {
       const c = await run('api_novoCaso', Dd);
       substituir(c);
-      // caso aberto a partir do CRM: o caso do CRM fica ligado ao número novo
-      const xc = Dd.crm_id && crmPorId(Dd.crm_id); if (xc) editarCrm(xc, 'caso_id', c.id, 'caso no sistema'); S.draft=null; apagarRascunhoNovo(); toast(`Caso ${c.id} registrado`); go('caso',{caso:c.id,tab:'dados',prev:'painel'});
+      S.draft=null; apagarRascunhoNovo(); toast(`Caso ${c.id} registrado`); go('caso',{caso:c.id,tab:'dados',prev:'painel'});
     }
   } catch(e){ btn.disabled = false; }
 }
@@ -2558,7 +2598,7 @@ const crmGes = porVersao(x => {
   const cpf = soDig(x.cpf), nome = String(x.nome||'').trim(), r = {casos:[], ges:null, atend:[]};
   if (!cpf && !nome) return r;
   const bate = (c2, n2) => (cpf.length===11 && soDig(c2)===cpf) || (!!nome && !!n2 && mesmoNome(nome, n2));
-  r.casos = DB.casos.filter(c => bate(c.cpf, c.responsavel) || c.pessoas.some(p => nome && mesmoNome(nome, p.nome)));
+  r.casos = coord() ? DB.casos.filter(c => bate(c.cpf, c.responsavel) || c.pessoas.some(p => nome && mesmoNome(nome, p.nome))) : (x.creas||[]).map(id => ({id}));
   if (temGes()) r.ges = DB.ges.linhas.find(g => bate(g.cpf, g.responsavel)) || null;
   if (temAtend()){ const I = atendIdx(), vistos = new Set();
     r.atend = [...(cpf.length===11 ? I.porCpf.get(cpf)||[] : []), ...(nome ? I.porNome.get(norm(nome))||[] : [])]
@@ -2570,7 +2610,7 @@ function gesCelCrm(x){
   if (r.ges) return `<span class="pill p-ok" title="No relatório do GESUAS, com ${esc(nomeTecnica(r.ges.tecnico))}">Acompanhada</span>`;
   if (r.atend.length) return `<span class="pill p-ok" title="Último atendimento no GESUAS: ${fmt(r.atend[r.atend.length-1].data)}">Atendida</span>`;
   if (x.gesuas==='sim') return '<span class="pill p-ok">Tem cadastro</span>';
-  if (r.casos.length) return `<span class="pill p-acompanhamento" title="Caso ${esc(r.casos.map(c => c.id).join(', '))} neste sistema">Caso aqui</span>`;
+  if (r.casos.length) return `<span class="pill p-acompanhamento" title="Caso ${esc(r.casos.map(c => c.id).join(', '))} no CREAS">Caso no CREAS</span>`;
   if (x.gesuas==='nao') return '<span class="muted">Sem cadastro</span>';
   return '<span class="muted">—</span>';
 }
@@ -2607,13 +2647,12 @@ function vCrm(){
     <div class="seg">${SEGS_CRM.map(([k,l]) => `<button class="${f.seg===k?'on':''}" data-cseg="${k}">${l} <small>${k===f.seg ? L.length : listaCrm(k).length}</small></button>`).join('')}</div>
     ${tecs.length?`<select id="cTec" aria-label="Técnica" class="${f.tec?'ativo':''}"><option value="">Todas as técnicas</option>${tecs.map(t => `<option value="${esc(t)}" ${f.tec===t?'selected':''}>${esc(nomeTecnica(t))}</option>`).join('')}</select>`:''}
     <span class="ibs">
-      <button type="button" class="ib" data-cnovo title="Casos novos: colar o e-mail do CRM ou digitar o processo" aria-label="Casos novos do e-mail">${ic('email')}</button>
       ${f.tec||f.busca?`<button type="button" class="ib" data-climpar title="Limpar filtros e busca" aria-label="Limpar filtros">${ic('fechar')}</button>`:''}
       <button type="button" class="ib" data-ccsv title="Baixar a lista (.csv)" aria-label="Baixar lista"${L.length?'':' disabled'}>${ic('baixar')}</button>
     </span>
   </div>
   <div class="tablewrap"><table><thead><tr><th>Entrada</th><th>Mulher</th><th>Processo</th><th>Telefone</th><th>No GESUAS</th><th>Último contato</th><th>Situação</th></tr></thead>
-  <tbody>${rows || `<tr><td colspan="7" class="empty">${crmLista().length ? 'Nenhum caso com esses filtros.' : 'Nenhum caso do CRM ainda. Use o envelope para colar o e-mail do Fórum.'}</td></tr>`}</tbody></table></div></div>
+  <tbody>${rows || `<tr><td colspan="7" class="empty">${crmLista().length ? 'Nenhum caso com esses filtros.' : 'Nenhum caso do CRM ainda. Use o + no alto para colar o e-mail do Fórum.'}</td></tr>`}</tbody></table></div></div>
   ${L.length>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${L.length}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, L.length-LIM_LISTA)}</button></div>`:''}
   ${migrado?'':'<p class="muted" style="font-size:12.5px;margin:12px 2px 0">Os casos da aba "Casos CRM" da planilha antiga podem vir para cá: <button type="button" class="lnk" data-cmigrar>trazer da planilha antiga</button>.</p>'}`;
 }
@@ -2647,8 +2686,6 @@ function expCrm(x){
     ${linhaCrmTempo(x)}
     <div class="row gav-acoes">
       ${x.status==='espera' || x.status==='acompanhamento' ? '<button type="button" class="btn small" data-cencerrar>Encerrar…</button>' : '<button type="button" class="btn small" data-creabrir>Reabrir</button>'}
-      ${x.caso_id ? `<button type="button" class="btn small" data-caso="${esc(x.caso_id)}">${ic('casos',15)}Caso ${esc(x.caso_id)}</button>`
-        : x.status==='acompanhamento' && coord() ? `<button type="button" class="btn small" data-cparacaso title="Abre o Novo encaminhamento já preenchido com os dados dela">${ic('mais',15)}Abrir caso no sistema</button>` : ''}
     </div>
   </div></div></td></tr>`;
 }
@@ -2657,8 +2694,8 @@ function gesBoxCrm(x){
   if (!String(x.nome||'').trim() && soDig(x.cpf).length!==11) return '<div class="crm-ges muted">Com o nome ou o CPF, o sistema confere se ela já está no GESUAS ou tem caso aqui.</div>';
   if (r.ges) linhas.push(`✓ No GESUAS: acompanhada por <b>${esc(nomeTecnica(r.ges.tecnico))}</b>${r.ges.inicio?` desde ${esc(r.ges.inicio)}`:''}`);
   if (r.atend.length) linhas.push(`✓ Atendida no GESUAS: ${r.atend.length} atendimento${r.atend.length>1?'s':''}, o último em ${fmt(r.atend[r.atend.length-1].data)}`);
-  r.casos.forEach(c => linhas.push(`Caso aqui: <button type="button" class="lnk" data-caso="${esc(c.id)}">${esc(c.id)}</button> <span class="muted">· ${esc(etapaRot(c))}</span>`));
-  if (!linhas.length) linhas.push(`<span class="muted">Não achei ${temGes()||temAtend() ? 'nos relatórios do GESUAS importados nem ' : ''}nos casos daqui. Confira no GESUAS:</span>`);
+  r.casos.forEach(c => linhas.push(coord() ? `Caso no CREAS: <button type="button" class="lnk" data-caso="${esc(c.id)}">${esc(c.id)}</button> <span class="muted">· ${esc(etapaRot(c))}</span>` : `Tem caso no CREAS: <span class="mono">${esc(c.id)}</span>`));
+  if (!linhas.length) linhas.push(`<span class="muted">Não achei ${temGes()||temAtend() ? 'nos relatórios do GESUAS importados nem ' : ''}nos casos do CREAS. Confira no GESUAS:</span>`);
   const b = (v, l) => `<button type="button" class="${x.gesuas===v?'on':''}" data-cges="${v}">${l}</button>`;
   return `<div class="crm-ges">${linhas.map(l => `<div>${l}</div>`).join('')}<div class="row" style="gap:8px;margin-top:4px"><span style="font-size:12.5px;font-weight:600">Cadastro no GESUAS</span><div class="seg seg-mini">${b('sim','Tem')}${b('nao','Não tem')}</div></div></div>`;
 }
@@ -2674,7 +2711,7 @@ function editarCrm(x, k, v, rot){
   salvar(x, 'CRM: ' + rot, 'api_crmEditar', [x.id, {[k]:v}], 'crm:'+x.id+':'+k);
 }
 function contatoCrm(x, r){
-  r = {id:idUnico(), autor:autorTxt(), ...r};
+  r = {id:idUnico(), autor:'CRM', ...r};
   (x.contatos = x.contatos || []).push(r); x.contatos.sort((a,b) => a.data < b.data ? -1 : 1);
   if (r.status && r.status!==x.status){ x.status = r.status; x.status_data = iso(HOJE); }
   else if (x.status==='espera' && r.resultado==='aceitou'){ x.status = 'acompanhamento'; x.status_data = iso(HOJE); }
@@ -2706,7 +2743,6 @@ function bindCrm(){
   m.querySelectorAll('[data-cseg]').forEach(el => el.onclick = () => { S.crm.seg = el.dataset.cseg; LIM_LISTA = 300; render(); });
   const ct = $('#cTec'); if (ct) ct.onchange = () => { S.crm.tec = ct.value; render(); };
   const cl = m.querySelector('[data-climpar]'); if (cl) cl.onclick = () => { S.crm.tec = ''; S.crm.busca = ''; render(); };
-  const cn = m.querySelector('[data-cnovo]'); if (cn) cn.onclick = novosCrm;
   const cc = m.querySelector('[data-ccsv]'); if (cc) cc.onclick = baixarCsvCrm;
   const mg = m.querySelector('[data-cmigrar]'); if (mg) mg.onclick = migrarCrm;
   const b = $('#busca'); if (b){ b.oninput = () => { S.crm.busca = b.value; LIM_LISTA = 300; clearTimeout(BUSCA_T); BUSCA_T = setTimeout(() => { const pos = b.selectionStart; render(); const nb = $('#busca'); if (nb){ nb.focus(); nb.setSelectionRange(pos,pos); } }, 150); };
@@ -2748,8 +2784,6 @@ function bindCrm(){
       $('#layer').innerHTML = ''; render(); return null; }, 'Encerrar');
   const rb = ex.querySelector('[data-creabrir]'); if (rb) rb.onclick = () => {
     contatoCrm(X(), {data:iso(HOJE), meio:'', resultado:'situacao', status:'espera', texto:'Caso reaberto'}); toast('Caso reaberto: volta para A fazer.'); render(); };
-  ex.querySelectorAll('.gav-acoes [data-caso]').forEach(el => el.onclick = () => { S.rolagem = window.scrollY; go('caso', {caso:el.dataset.caso, tab:'dados', prev:'crm'}); });
-  const pc = ex.querySelector('[data-cparacaso]'); if (pc) pc.onclick = () => crmParaCaso(X());
   const si = $('#crmSint'); if (si) si.onchange = async () => { const f = si.files[0]; si.value = ''; if (!f) return;
     try { if (typeof pdfjsLib==='undefined') throw new Error('O leitor de PDF não carregou. Recarregue a página.'); toast('Lendo o relatório…'); const R = await lerSintetico(f); sinteticoCrm(X(), R); }
     catch(err){ toast(err && err.message ? err.message : 'Não foi possível ler o arquivo.'); } };
@@ -2809,16 +2843,6 @@ function sinteticoCrm(x, R){
       Object.assign(x, campos); novaVersao();
       if (Object.keys(campos).length) salvar(x, 'CRM: dados do Relatório Sintético', 'api_crmEditar', [x.id, campos]);
       $('#layer').innerHTML = ''; render(); toast(m.ref ? 'Preenchido.' : 'Preenchido. CPF e telefone do relatório são da pessoa de referência: confira os dela.'); return null; }, 'Preencher');
-}
-/* aceitou o acompanhamento: o Novo encaminhamento abre preenchido com os dados dela */
-function crmParaCaso(x){
-  if (rascunhoNovoGuardado() && !confirm('Há um novo encaminhamento em digitação. Trocar pelos dados deste caso do CRM?')) return;
-  apagarRascunhoNovo(); S.draft = null; S.editando = null;
-  const Dd = draft();
-  Object.assign(Dd, {pessoas:[{nome:TIT(x.nome||''), nascimento:String(x.nascimento||'').slice(0,10), sexo:'F'}], responsavel:TIT(x.nome||''), cpf:x.cpf||'',
-    endereco:x.endereco||'', bairro:x.bairro||'', contato:x.telefone||'', remetente:x.origem||'', doc_tipo:'Processo', doc_num:x.processo||'',
-    recebido:String(x.entrada||'').slice(0,10) || iso(HOJE), descricao:`Caso do CRM ${x.id}${x.situacao?' · '+x.situacao:''}.${x.obs?'\n'+x.obs:''}`, crm_id:x.id});
-  guardarRascunhoNovo(); go('novo');
 }
 function migrarCrm(){
   modal(`<h2>Trazer da planilha antiga</h2>
@@ -2944,10 +2968,18 @@ function iniciarCampo(){
 /* ================= render + eventos ================= */
 function render(){
   novaVersao();
-  renderNav();
   const m = $('#main');
   if (['avaliacao','acompanhamento'].includes(S.view)){ S.f.etapa = S.view; S.view = 'casos'; }
-  if (!coord() && ['novo','gesuas','familia','crm'].includes(S.view)) S.view='painel';
+  // quem usa só o CRM fica no CRM; quem não usa o CRM não chega a ele
+  if (!coord() && S.view!=='crm') S.view = 'crm';
+  if (!temCrm() && S.view==='crm') S.view = 'painel';
+  const crm = modoCrm();
+  if (crm) document.documentElement.dataset.sistema = 'crm'; else delete document.documentElement.dataset.sistema;
+  if (coord() && temCrm()) lsSet(SISTEMA_KEY, crm ? 'crm' : null);
+  const mc = $('#marca'), ms = $('#marcaSub');
+  if (mc){ mc.textContent = crm ? 'CRM Taquara' : 'CREAS Taquara'; ms.textContent = crm ? 'Centro de Referência da Mulher' : 'Controle de demandas · PSE'; }
+  document.title = crm ? 'CRM · Centro de Referência da Mulher' : 'Controle de Demandas CREAS';
+  renderNav();
   document.body.classList.toggle('modo-campo', S.view==='campo');
   document.documentElement.classList.toggle('modo-campo', S.view==='campo');
   m.innerHTML = S.view==='campo'?vCampo(): S.view==='painel'?vPainel(): S.view==='novo'?vNovo(): S.view==='casos'?vCasos(): S.view==='caso'?vCaso(): S.view==='gesuas'?vGesuas(): S.view==='familia'?vFamilia(): S.view==='crm'?vCrm(): vInd();
@@ -3108,8 +3140,8 @@ function iniciar(){
       DB = r; DB.atend = atendObj(r.atend); const h = D(r.hoje); if (h) HOJE = h;
       $('#carregando').remove(); $('#app').hidden = false;
       $('#whoami').innerHTML = `<b>${esc(autorTxt())}</b>${esc(r.email)}`;
-      if (!coord()) S.f.etapa = 'avaliacao';
-      if (querCampo()) S.view = 'campo';
+      if (!coord() || (temCrm() && lsGet(SISTEMA_KEY)==='crm')) S.view = 'crm';
+      else if (querCampo()) S.view = 'campo';
       render(); enviarPendentes(); recuperarFila();
     })
     .withFailureHandler(e => {

@@ -130,25 +130,32 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
 
   Os números de recebidos, remetentes, violações, situações, territórios e da carga por técnica são clicáveis: abrem a lista de casos com o mesmo filtro e o mesmo período, e a contagem bate (em "Tudo", inclusive os casos migrados sem data de recebimento).
 
-- **CRM (casos do Fórum e da rede).** Menu CRM (ícone da balança). O e-mail do CRM traz só o nº do processo e a chave de acesso; o caminho de cada caso fica na tela:
-  1. **Chegou o e-mail:** o envelope no alto da lista abre um campo para colar o texto do e-mail (pode ser mais de um). O sistema acha cada nº de processo e a chave de acesso e mostra antes de gravar; processo que já está no CRM não entra de novo. Também dá para digitar o processo e a chave.
+- **CRM, Centro de Referência da Mulher (casos do Fórum e da rede).** Parte própria do sistema, com acesso próprio (ver "Quem acessa"), símbolo de escudo com o símbolo feminino e a tela em lilás e roxo. Quem usa o CREAS e o CRM troca de parte no alto do menu ("Sistema"); quem usa só o CRM abre direto nele e não vê nada do CREAS. O CRM não passa pela avaliação social: o caso segue do e-mail ao contato e ao acompanhamento dentro do próprio CRM. O e-mail do CRM traz só o nº do processo e a chave de acesso; o caminho de cada caso fica na tela:
+  1. **Chegou o e-mail:** o + no alto da tela do CRM abre um campo para colar o texto do e-mail (pode ser mais de um). O sistema acha cada nº de processo e a chave de acesso e mostra antes de gravar; processo que já está no CRM não entra de novo. Também dá para digitar o processo e a chave.
   2. **Abrir o processo:** um clique na linha abre os dados para baixo. Os ícones ao lado do processo e da chave copiam os dois, e "Abrir a consulta do processo" abre a consulta pública do eproc (o endereço pode ser trocado na aba Config, chave `crm_link_consulta`). Nome, CPF, nascimento, telefone, endereço e bairro anotados ali gravam ao sair do campo.
-  3. **Conferir no GESUAS:** com o nome ou o CPF, o sistema procura sozinho no relatório do GESUAS importado (famílias acompanhadas), nos atendimentos importados e nos casos daqui, e mostra o que achou. Quem não aparece é conferido no GESUAS e marcado em "Cadastro no GESUAS: Tem / Não tem". Se ela tem cadastro, o Relatório Sintético da Família do GESUAS preenche os dados (escolhendo qual pessoa é ela).
+  3. **Conferir no GESUAS:** com o nome ou o CPF, o sistema procura sozinho no relatório do GESUAS importado (famílias acompanhadas), nos atendimentos importados e nos casos do CREAS, e mostra o que achou (quem usa só o CRM vê apenas o número do caso do CREAS, sem abrir). Quem não aparece é conferido no GESUAS e marcado em "Cadastro no GESUAS: Tem / Não tem". Se ela tem cadastro, o Relatório Sintético da Família do GESUAS preenche os dados (escolhendo qual pessoa é ela).
   4. **Primeiro contato:** cada tentativa é registrada com data, meio (telefone, WhatsApp, visita...) e resultado. "Aceitou o atendimento" passa o caso para Em acompanhamento; "Não quis" deixa inativo; tentativas sem retorno aparecem na lista ("Tentar de novo · 2").
-  5. **Acompanhamento ou encerramento:** "Encerrar…" marca como inativo, reencaminhado ou arquivado (fica na linha do tempo, e "Reabrir" volta para A fazer). No acompanhamento, "Abrir caso no sistema" leva ao Novo encaminhamento já preenchido com os dados dela, e o caso do CRM fica ligado ao número novo.
+  5. **Acompanhamento ou encerramento:** os atendimentos do acompanhamento são registrados como contatos ("Atendimento realizado"). "Encerrar…" marca como inativo, reencaminhado ou arquivado (fica na linha do tempo, e "Reabrir" volta para A fazer). Contatos do CRM levam a assinatura "CRM".
 
-  A lista separa **A fazer** (o mais antigo primeiro), **Em acompanhamento**, **Encerrados** e **Todos**, com busca por nome, processo, CPF ou telefone, filtro por técnica e download em .csv. O número no menu é o de casos em A fazer.
+  A lista separa **A fazer** (o mais antigo primeiro), **Em acompanhamento**, **Encerrados** e **Todos**, com busca por nome, processo, CPF ou telefone, filtro por técnica e download em .csv. No menu do CRM, Casos mostra quantos estão em A fazer, com Em acompanhamento e Encerrados logo abaixo.
 
   **Casos da planilha antiga:** enquanto nada tiver vindo dela, o fim da lista oferece "trazer da planilha antiga". Cole o link da planilha Controle (salva como Planilhas Google) e o sistema traz a aba "Casos CRM": status, entrada, origem (Demandas), situação, nome, técnica e bairro; idade, trabalho, composição familiar, encaminhamento e CadÚnico vão para Observações, e a data do último atendimento vira um contato. Linhas sem nome ficam de fora. Só roda uma vez.
 
 ## Quem acessa
 
-Todos usam o mesmo sistema, com o mesmo acesso: entrada, triagem, avaliação, repasse, registros (inclusive editar), GESUAS e indicadores. O e-mail de cada pessoa vai na aba **Config** da planilha base, em uma das duas linhas, e a linha só muda a assinatura dos registros e do histórico:
+O sistema tem duas partes: o **CREAS** (entrada, triagem, avaliação, repasse, registros, GESUAS e indicadores) e o **CRM**, Centro de Referência da Mulher. Quem usa cada parte é escolhido na aba **Config** da planilha base, pelas linhas em que o e-mail está (vários e-mails na mesma linha, separados por vírgula):
 
-| Linha da Config | Assinatura |
-|---|---|
-| `emails_coordenacao` | Coordenação |
-| `emails_avaliacao` | Avaliação social |
+| Linha da Config | Acesso | Assinatura |
+|---|---|---|
+| `emails_coordenacao` | CREAS | Coordenação |
+| `emails_avaliacao` | CREAS (o mesmo acesso da coordenação) | Avaliação social |
+| `emails_crm` | CRM | CRM |
+
+- E-mail numa linha do CREAS **e** em `emails_crm`: usa os dois e troca no alto do menu. O sistema abre na última parte usada.
+- E-mail só em `emails_crm`: vê só o CRM. Os casos do CREAS não chegam ao navegador dessa pessoa.
+- E-mail só numa linha do CREAS: vê só o CREAS.
+
+A linha `emails_crm` aparece sozinha na Config na primeira abertura depois da atualização, vazia: até alguém ser incluído nela, ninguém vê o CRM.
 
 O site roda com a conta Google de quem acessa. Por isso, só entra quem tem acesso à planilha base e está listado na aba Config.
 
@@ -252,7 +259,7 @@ src/
 | Historico | Registro automático de cada mudança (quem e quando) |
 | GESUAS | Último relatório "Famílias Acompanhadas por Técnico" importado, com CPF, NIS, bairro e endereço tirados dos atendimentos |
 | Atendimentos | Atendimentos importados do relatório "Famílias Atendidas por Técnico" (técnico, responsável, CPF/NIS, bairro e data) |
-| CRM | Casos do CRM: entrada, processo e chave, dados da mulher, origem, técnica, situação (em espera, em acompanhamento, reencaminhado, inativo, arquivado), cadastro no GESUAS e caso ligado aqui. Nasce na primeira gravação |
+| CRM | Casos do CRM: entrada, processo e chave, dados da mulher, origem, técnica, situação (em espera, em acompanhamento, reencaminhado, inativo, arquivado), cadastro no GESUAS. Nasce na primeira gravação |
 | CRM_Contatos | Tentativas de contato e atendimentos de cada caso do CRM (data, meio, resultado, anotação, quem registrou) |
 | Listas | Remetentes, tipos de documento, técnicas, bairros e tipos de registro. Edite aqui para mudar as opções do site |
 | Config | E-mails de acesso, numeração dos casos, dados da última importação do GESUAS e os dias de cada aviso do Painel (`alerta_dias_...`) |
