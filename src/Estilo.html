@@ -439,6 +439,7 @@ details.hist[open] > summary h2::before{content:"▾"}
 .tab-card .filters.mais select{max-width:none}
 /* lista de casos: a linha clicada abre logo abaixo (resumo à esquerda, registros e atendimentos à direita) */
 tr.exp > td{background:var(--surface-2);padding:0;cursor:default}
+.tablewrap tr.exp > td{white-space:normal}
 tbody tr.exp:hover td{background:var(--surface-2)}
 .exp-box{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:18px;padding:14px 16px 16px;border-left:3px solid var(--accent)}
 .exp-res{display:flex;flex-direction:column;gap:10px}
@@ -448,7 +449,8 @@ tbody tr.exp:hover td{background:var(--surface-2)}
 .ibs .ib{width:38px;height:38px}
 .ib[disabled]{opacity:.45;cursor:default}
 /* ícone de copiar só aparece ao passar o mouse na linha (no celular, sempre) */
-@media (hover:hover){ tbody tr .copiar{opacity:0} tbody tr:hover .copiar,tbody tr:focus-within .copiar,.copiar:focus-visible{opacity:1} }
+/* escondido, não ocupa espaço (senão sobra um vão antes do bairro) */
+@media (hover:hover){ tbody tr .copiar{width:0;margin-left:0;opacity:0;overflow:hidden} tbody tr:hover .copiar,tbody tr:focus-within .copiar,.copiar:focus-visible{width:22px;margin-left:3px;opacity:1} }
 @media (max-width:900px){ .exp-box{grid-template-columns:minmax(0,1fr);position:sticky;left:0;width:calc(100vw - 66px);box-sizing:border-box} .exp-tl{max-height:none} }
 tbody tr.sel td{background:var(--accent-soft)}
 tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
@@ -457,6 +459,8 @@ tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .gav-res dd .pill{vertical-align:1px}
 .gav-acoes{gap:8px}
 .gav-tl{display:flex;flex-direction:column}
+.ev-ges{padding:7px 0;color:var(--ink-2);font-size:13px}
+.ev-ges .gav-fonte{margin-right:6px}
 .gav-ev{padding:10px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
 .gav-ev:first-child{border-top:0}
 .gav-q{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
@@ -467,17 +471,27 @@ tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .gav-txt{font-size:13px;color:var(--ink-2);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 /* computador: o menu fica recolhido numa faixa de ícones e abre por cima do conteúdo ao passar o mouse
    (ou ao navegar pelo teclado); celular e tablet, sem mouse, seguem com o menu de sempre */
+/* subitens de Casos: fora do computador (celular, tablet) o bloco não existe para o layout */
+.nav-sub,.nav-sub > div{display:contents}
+/* computador: o menu fica recolhido numa faixa de ícones e abre por cima do conteúdo ao passar o mouse
+   (ou ao navegar pelo teclado). Ele tem sempre a largura de aberto e só a parte visível muda (clip-path):
+   nada é recalculado durante a animação. Os subitens deslizam junto; celular e tablet seguem como antes. */
 @media (min-width:901px) and (hover:hover){
   .app{grid-template-columns:72px minmax(0,1fr)}
   .main{grid-column:2}
-  .side{position:fixed;left:0;top:0;bottom:0;height:auto;width:72px;z-index:20;overflow-x:hidden;transition:width .16s ease,box-shadow .16s ease}
-  .side:hover,.side:has(:focus-visible){width:252px;box-shadow:1px 0 0 var(--line),12px 0 32px rgba(16,40,48,.16);transition-delay:.12s}
+  .side{--abre:.2s cubic-bezier(.2,.7,.2,1);position:fixed;left:0;top:0;bottom:0;height:auto;width:252px;z-index:20;overflow-x:hidden;
+    clip-path:inset(0 180px 0 0);transition:clip-path var(--abre);will-change:clip-path;box-shadow:1px 0 0 var(--line)}
+  .side:hover,.side:has(:focus-visible){clip-path:inset(0 -48px 0 0);box-shadow:1px 0 0 var(--line),12px 0 32px rgba(16,40,48,.16);transition-delay:.06s}
   .brand-ic{display:block}
   .brand,nav button{white-space:nowrap}
-  .brand div,.nav-sec,nav .lbl,nav .count,.who{transition:opacity .12s ease}
-  .side:hover :is(.brand div,.nav-sec,nav .lbl,nav .count,.who),.side:has(:focus-visible) :is(.brand div,.nav-sec,nav .lbl,nav .count,.who){transition-delay:.14s}
+  .brand div,.nav-sec,nav .lbl,nav .count,.who{transition:opacity .14s ease}
+  .side:hover :is(.brand div,.nav-sec,nav .lbl,nav .count,.who),.side:has(:focus-visible) :is(.brand div,.nav-sec,nav .lbl,nav .count,.who){transition-delay:.06s}
   .side:not(:hover):not(:has(:focus-visible)) :is(.brand div,.nav-sec,nav .lbl,nav .count,.who){opacity:0;pointer-events:none}
-  .side:not(:hover):not(:has(:focus-visible)) nav button.sub{display:none}
+  .nav-sub{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--abre),visibility var(--abre)}
+  .nav-sub > div{display:flex;flex-direction:column;gap:2px;min-height:0;overflow:hidden}
+  .side:hover .nav-sub,.side:has(:focus-visible) .nav-sub{grid-template-rows:1fr;transition-delay:.06s}
+  .side:not(:hover):not(:has(:focus-visible)) .nav-sub{visibility:hidden}
+}
 }
 .nota{font-size:12px;color:var(--ink-3)}
 /* ⓘ: explicação que só aparece quando pedida */
