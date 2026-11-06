@@ -667,8 +667,9 @@ function renderNav(){
   const subs = principal.filter(([k]) => filho(k)), resto = principal.filter(([k]) => !filho(k));
   const iPai = resto.findIndex(([k]) => k===pai) + 1;
   const blocoSub = subs.length ? `<div class="nav-sub"><div>${subs.map(botao).join('')}</div></div>` : '';
-  $('#nav').innerHTML = `${sistemas.length?`<div class="nav-sec">Sistema</div>${sistemas.map(botao).join('')}`:''}<div class="nav-sec">Menu principal</div>${resto.slice(0, iPai).map(botao).join('')}${blocoSub}${resto.slice(iPai).map(botao).join('')}${outros.length?`<div class="nav-sec">Outros</div>${outros.map(botao).join('')}`:''}`;
-  $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => {
+  $('#sis').innerHTML = sistemas.length ? `<div class="nav-sec">Sistema</div>${sistemas.map(botao).join('')}` : '';
+  $('#nav').innerHTML = `<div class="nav-sec">Menu principal</div>${resto.slice(0, iPai).map(botao).join('')}${blocoSub}${resto.slice(iPai).map(botao).join('')}${outros.length?`<div class="nav-sec">Outros</div>${outros.map(botao).join('')}`:''}`;
+  document.querySelectorAll('#nav button, #sis button').forEach(b => b.onclick = () => {
     const k = b.dataset.go;
     if (k==='auditoria') return verificarBase();
     if (k==='sis:crm' || k==='sis:creas'){ if (ligado(k)) return; return go(k==='sis:crm' ? 'crm' : 'painel'); }

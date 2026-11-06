@@ -75,6 +75,10 @@ nav button:focus-visible{outline:2px solid var(--accent)}
 nav .count{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
 nav button.sub{padding:6px 12px 6px 40px;font-size:13.5px}
 .who{margin-top:auto;display:flex;flex-direction:column;gap:6px;padding:0 4px}
+/* troca CREAS / CRM no pé do menu, logo acima de quem está usando */
+#sis{margin-top:auto}
+#sis:empty{display:none}
+#sis:not(:empty) + .who{margin-top:0}
 .main{padding-block:24px 60px;padding-inline:28px;min-width:0}
 /* barra de ícones à direita do título de cada tela (flutua: o título ocupa o resto da linha) */
 .barra{float:right;display:flex;align-items:center;gap:10px;margin:0 0 12px 16px}
