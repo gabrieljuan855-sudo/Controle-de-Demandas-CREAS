@@ -2009,7 +2009,7 @@ const aLancarCrm = x => (x.contatos||[]).filter(k => lancavelCrm(k) && !k.gesuas
 const pendCrm = x => (x.contatos||[]).filter(k => String(k.pendencias||'').trim() && !k.pendencia_ok);
 const tagsCrm = x => { const p = pendCrm(x).length, g = aLancarCrm(x).length;
   return (p ? `<div class="pend-tag">⚑ ${p} pendência${p>1?'s':''} em aberto</div>` : '') + (g ? `<div class="pend-tag" style="color:var(--accent)">${g} a lançar no GESUAS</div>` : ''); };
-const MEIOS_CRM = ['Telefone','WhatsApp','Visita domiciliar','Presencial no CRM','Carta / convocação'];
+const MEIOS_CRM = ['Telefone','WhatsApp','Atendimento na unidade','Visita domiciliar','Carta / convocação'];
 const ORIGENS_CRM = ['2ª Vara Criminal','1ª Vara Criminal','Delegacia','CRAS','Conselho Tutelar','Saúde','Espontânea','Denúncia 180'];
 const SITUACOES_CRM = ['Violência doméstica','Violência intrafamiliar','Abuso sexual','Pessoa idosa','Negligência'];
 /* consulta pública do eproc (TJRS); a aba Config pode trocar o endereço na chave crm_link_consulta */
@@ -2107,7 +2107,7 @@ function fichaCrm(x){
   return `<section class="crm-ficha">
     <div class="crm-ficha-cab"><div><h3>${x.nome ? esc(TIT(x.nome)) : '<span class="muted">Nome ainda não anotado</span>'}</h3>
       <div class="muted" style="font-size:12.5px">${esc(x.id)}${anos!=='' ? ` · ${anos} anos` : ''}</div></div>
-      <div class="row" style="gap:6px"><button type="button" class="btn small" data-cedit>${ic('caneta',15)}Editar dados</button>${aberto ? '<button type="button" class="btn small" data-cencerrar>Encerrar…</button>' : '<button type="button" class="btn small" data-creabrir>Reabrir</button>'}</div></div>
+      <div class="row" style="gap:6px"><button type="button" class="btn small" data-cedit>${ic('caneta',15)}Editar dados</button>${aberto ? '<button type="button" class="btn small" data-cencerrar>Encerrar acompanhamento</button>' : '<button type="button" class="btn small" data-creabrir>Reabrir</button>'}</div></div>
     <dl class="crm-dados">
       ${it('Telefone', x.telefone ? `<span class="nw">${esc(x.telefone)}${cp(x.telefone)}</span>` : '')}${it('CPF', esc(x.cpf||''))}
       ${it('Nascimento', x.nascimento ? fmt(x.nascimento) : '')}${it('Endereço', esc([x.endereco, x.bairro].filter(Boolean).join(' · ')))}
@@ -2230,7 +2230,7 @@ function bindCrm(){
     if (pend){ k.pendencia_ok = quando; k.pendencia_ok_por = feito ? DB.email : ''; salvar(x, feito ? 'CRM: pendência resolvida' : 'CRM: pendência reaberta', 'api_crmPendencia', [x.id, kid, feito], 'kpend:'+kid); }
     else { k.gesuas_em = quando; k.gesuas_por = feito ? DB.email : ''; salvar(x, feito ? 'CRM: lançado no GESUAS' : 'CRM: lançamento no GESUAS desfeito', 'api_crmGesuas', [x.id, kid, feito], 'kges:'+kid); }
     novaVersao(); render(); });
-  const enc = ex.querySelector('[data-cencerrar]'); if (enc) enc.onclick = () => modal(`<h2>Encerrar caso do CRM</h2><p class="muted" style="margin:0">${esc(X().nome ? TIT(X().nome) : X().processo || id)}</p>
+  const enc = ex.querySelector('[data-cencerrar]'); if (enc) enc.onclick = () => modal(`<h2>Encerrar acompanhamento</h2><p class="muted" style="margin:0">${esc(X().nome ? TIT(X().nome) : X().processo || id)}</p>
     <div class="choice" style="grid-template-columns:minmax(0,1fr)">
       <label class="opt"><input type="radio" name="m_enc" value="inativo" checked><div><b>Inativo</b><small>Não quis o atendimento ou não foi possível contato.</small></div></label>
       <label class="opt"><input type="radio" name="m_enc" value="reencaminhado"><div><b>Reencaminhado</b><small>Encaminhada a outro serviço da rede.</small></div></label>
@@ -2238,7 +2238,7 @@ function bindCrm(){
     <label class="field"><span>Anotação (opcional)</span><input id="m_encobs" placeholder="Ex.: encaminhada ao CRAS"></label>`, async () => {
       const st = document.querySelector('#layer [name=m_enc]:checked').value, t = $('#m_encobs').value.trim();
       contatoCrm(X(), {data:iso(HOJE), meio:'', resultado:'situacao', status:st, texto:`Encerrado: ${ST_CRM[st].toLowerCase()}${t?'. '+t:''}`});
-      $('#layer').innerHTML = ''; render(); return null; }, 'Encerrar');
+      $('#layer').innerHTML = ''; render(); return null; }, 'Encerrar acompanhamento');
   const rb = ex.querySelector('[data-creabrir]'); if (rb) rb.onclick = () => {
     contatoCrm(X(), {data:iso(HOJE), meio:'', resultado:'situacao', status:'espera', texto:'Caso reaberto'}); toast('Caso reaberto: volta para A fazer.'); render(); };
   const si = $('#crmSint'); if (si) si.onchange = async () => { const f = si.files[0]; si.value = ''; if (!f) return;
