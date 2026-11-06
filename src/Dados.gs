@@ -20,7 +20,7 @@ var ESQUEMA = {
     'endereco', 'bairro', 'tecnica', 'status', 'status_data', 'gesuas', 'caso_id', 'obs', 'atualizado_em'],
   CRM_Contatos: ['id', 'crm_id', 'data', 'meio', 'resultado', 'texto', 'autor', 'criado_em', 'criado_por',
     'pendencias', 'pendencia_ok', 'pendencia_ok_por', 'gesuas_em', 'gesuas_por'],
-  Listas: ['remetentes', 'tipos_documento', 'tecnicas', 'bairros', 'tipos_registro'],
+  Listas: ['remetentes', 'tipos_documento', 'tecnicas', 'bairros', 'tipos_registro', 'tecnicas_crm'],
   Config: ['chave', 'valor', 'observacao']
 };
 

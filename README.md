@@ -137,6 +137,8 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   4. **Primeiro contato:** cada tentativa é registrada com data, meio (telefone, WhatsApp, visita...), resultado, anotação e, se ficou algo para depois, uma **pendência** (fica em aberto até "Pendência resolvida"). Cada contato em que se falou com ela tem "Copiar" e "Marcar como lançado no GESUAS"; tentativas sem retorno e mudanças de situação não são cobradas, nem o que veio da planilha antiga. A lista mostra "⚑ pendência em aberto" e "a lançar no GESUAS", e o filtro "Qualquer situação" mostra só os casos com uma ou outra. "Aceitou o atendimento" passa o caso para Em acompanhamento; "Não quis" deixa inativo; tentativas sem retorno aparecem na lista ("Tentar de novo · 2").
   5. **Acompanhamento ou encerramento:** os atendimentos do acompanhamento são registrados como contatos ("Atendimento realizado"). "Encerrar…" marca como inativo, reencaminhado ou arquivado (fica na linha do tempo, e "Reabrir" volta para A fazer). Contatos do CRM levam a assinatura "CRM".
 
+  As técnicas do CRM são só as da coluna `tecnicas_crm` da aba Listas (separadas das do CREAS); casos antigos com outra técnica continuam com ela e aparecem no filtro.
+
   A lista separa **A fazer** (o mais antigo primeiro), **Em acompanhamento**, **Encerrados** e **Todos**, com busca por nome, processo, CPF ou telefone, filtro por técnica e download em .csv. No menu do CRM, Casos mostra quantos estão em A fazer, com Em acompanhamento e Encerrados logo abaixo.
 
   **Casos da planilha antiga:** enquanto nada tiver vindo dela, o fim da lista oferece "trazer da planilha antiga". Cole o link da planilha Controle (salva como Planilhas Google) e o sistema traz a aba "Casos CRM": status, entrada, origem (Demandas), situação, nome, técnica e bairro; idade, trabalho, composição familiar, encaminhamento e CadÚnico vão para Observações, e a data do último atendimento vira um contato. Linhas sem nome ficam de fora. Só roda uma vez.
@@ -261,7 +263,7 @@ src/
 | Atendimentos | Atendimentos importados do relatório "Famílias Atendidas por Técnico" (técnico, responsável, CPF/NIS, bairro e data) |
 | CRM | Casos do CRM: entrada, processo e chave, dados da mulher, origem, técnica, situação (em espera, em acompanhamento, reencaminhado, inativo, arquivado), cadastro no GESUAS. Nasce na primeira gravação |
 | CRM_Contatos | Tentativas de contato e atendimentos de cada caso do CRM (data, meio, resultado, anotação, quem registrou, pendência e quando foi resolvida, quando foi lançado no GESUAS) |
-| Listas | Remetentes, tipos de documento, técnicas, bairros e tipos de registro. Edite aqui para mudar as opções do site |
+| Listas | Remetentes, tipos de documento, técnicas do CREAS, bairros, tipos de registro e técnicas do CRM (coluna `tecnicas_crm`, que nasce com Lise, Carina e Simone). Edite aqui para mudar as opções do site |
 | Config | E-mails de acesso, numeração dos casos, dados da última importação do GESUAS e os dias de cada aviso do Painel (`alerta_dias_...`) |
 
 ## Privacidade
