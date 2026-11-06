@@ -2009,7 +2009,7 @@ const aLancarCrm = x => (x.contatos||[]).filter(k => lancavelCrm(k) && !k.gesuas
 const pendCrm = x => (x.contatos||[]).filter(k => String(k.pendencias||'').trim() && !k.pendencia_ok);
 const tagsCrm = x => { const p = pendCrm(x).length, g = aLancarCrm(x).length;
   return (p ? `<div class="pend-tag">⚑ ${p} pendência${p>1?'s':''} em aberto</div>` : '') + (g ? `<div class="pend-tag" style="color:var(--accent)">${g} a lançar no GESUAS</div>` : ''); };
-const MEIOS_CRM = ['Telefone','WhatsApp','Visita domiciliar','No CREAS','Carta / convocação'];
+const MEIOS_CRM = ['Telefone','WhatsApp','Visita domiciliar','Presencial no CRM','Carta / convocação'];
 const ORIGENS_CRM = ['2ª Vara Criminal','1ª Vara Criminal','Delegacia','CRAS','Conselho Tutelar','Saúde','Espontânea','Denúncia 180'];
 const SITUACOES_CRM = ['Violência doméstica','Violência intrafamiliar','Abuso sexual','Pessoa idosa','Negligência'];
 /* consulta pública do eproc (TJRS); a aba Config pode trocar o endereço na chave crm_link_consulta */
@@ -2029,24 +2029,10 @@ function pillCrm(x){
     : t ? `<span class="pill p-avaliacao" title="${t} tentativa${t>1?'s':''} sem retorno">Tentar de novo · ${t}</span>` : '<span class="pill p-repasse">Primeiro contato</span>';
   return `<span class="pill ${p==='acomp'?'p-acompanhamento':'p-encerrado'}">${ST_CRM[x.status]}</span>`;
 }
-/* a mulher já é conhecida? relatório do GESUAS importado, atendimentos do GESUAS e casos deste sistema */
-const crmGes = porVersao(x => {
-  const cpf = soDig(x.cpf), nome = String(x.nome||'').trim(), r = {casos:[], ges:null, atend:[]};
-  if (!cpf && !nome) return r;
-  const bate = (c2, n2) => (cpf.length===11 && soDig(c2)===cpf) || (!!nome && !!n2 && mesmoNome(nome, n2));
-  r.casos = coord() ? DB.casos.filter(c => bate(c.cpf, c.responsavel) || c.pessoas.some(p => nome && mesmoNome(nome, p.nome))) : (x.creas||[]).map(id => ({id}));
-  if (temGes()) r.ges = DB.ges.linhas.find(g => bate(g.cpf, g.responsavel)) || null;
-  if (temAtend()){ const I = atendIdx(), vistos = new Set();
-    r.atend = [...(cpf.length===11 ? I.porCpf.get(cpf)||[] : []), ...(nome ? I.porNome.get(norm(nome))||[] : [])]
-      .filter(a => !vistos.has(a.data) && vistos.add(a.data)).sort((a,b) => a.data < b.data ? -1 : 1); }
-  return r;
-});
+/* CRM e CREAS não se misturam: o CRM não mostra casos do CREAS nem os relatórios e atendimentos do GESUAS
+   importados pelo CREAS. "No GESUAS" é só o que a equipe do CRM conferiu no GESUAS e marcou aqui. */
 function gesCelCrm(x){
-  const r = crmGes(x);
-  if (r.ges) return `<span class="pill p-ok" title="No relatório do GESUAS, com ${esc(nomeTecnica(r.ges.tecnico))}">Acompanhada</span>`;
-  if (r.atend.length) return `<span class="pill p-ok" title="Último atendimento no GESUAS: ${fmt(r.atend[r.atend.length-1].data)}">Atendida</span>`;
   if (x.gesuas==='sim') return '<span class="pill p-ok">Tem cadastro</span>';
-  if (r.casos.length) return `<span class="pill p-acompanhamento" title="Caso ${esc(r.casos.map(c => c.id).join(', '))} no CREAS">Caso no CREAS</span>`;
   if (x.gesuas==='nao') return '<span class="muted">Sem cadastro</span>';
   return '<span class="muted">—</span>';
 }
@@ -2069,7 +2055,7 @@ function linhaCrm(x){
     <td>${x.nome ? `<div class="nm">${comCopia(TIT(x.nome))}</div>` : '<span class="muted">Nome no processo</span>'}${sub?`<div class="muted" style="font-size:12px">${sub}</div>`:''}${tagsCrm(x)}</td>
     <td class="mono" style="font-size:12.5px">${x.processo ? `<span class="nw">${esc(x.processo)}${cp(x.processo)}</span>` : '<span class="muted">—</span>'}</td>
     <td class="mono">${x.telefone ? `<span class="nw">${esc(x.telefone)}${cp(x.telefone)}</span>` : '<span class="muted">—</span>'}</td>
-    <td>${p==='processo' && !x.cpf ? '<span class="muted">—</span>' : gesCelCrm(x)}</td>
+    <td>${gesCelCrm(x)}</td>
     <td>${u ? `${fmt(u.data)}<div class="muted" style="font-size:12px">${esc(RES_CRM_ROT[u.resultado]||u.resultado||'')}</div>` : '<span class="muted">—</span>'}</td>
     <td>${pillCrm(x)}${x.tecnica?`<div class="muted" style="font-size:12px">${esc(x.tecnica)}</div>`:''}</td></tr>`;
 }
@@ -2129,14 +2115,8 @@ function expCrm(x){
   </div></div></td></tr>`;
 }
 function gesBoxCrm(x){
-  const r = crmGes(x), linhas = [];
-  if (!String(x.nome||'').trim() && soDig(x.cpf).length!==11) return '<div class="crm-ges muted">Com o nome ou o CPF, o sistema confere se ela já está no GESUAS ou tem caso aqui.</div>';
-  if (r.ges) linhas.push(`✓ No GESUAS: acompanhada por <b>${esc(nomeTecnica(r.ges.tecnico))}</b>${r.ges.inicio?` desde ${esc(r.ges.inicio)}`:''}`);
-  if (r.atend.length) linhas.push(`✓ Atendida no GESUAS: ${r.atend.length} atendimento${r.atend.length>1?'s':''}, o último em ${fmt(r.atend[r.atend.length-1].data)}`);
-  r.casos.forEach(c => linhas.push(coord() ? `Caso no CREAS: <button type="button" class="lnk" data-caso="${esc(c.id)}">${esc(c.id)}</button> <span class="muted">· ${esc(etapaRot(c))}</span>` : `Tem caso no CREAS: <span class="mono">${esc(c.id)}</span>`));
-  if (!linhas.length) linhas.push(`<span class="muted">Não achei ${temGes()||temAtend() ? 'nos relatórios do GESUAS importados nem ' : ''}nos casos do CREAS. Confira no GESUAS:</span>`);
   const b = (v, l) => `<button type="button" class="${x.gesuas===v?'on':''}" data-cges="${v}">${l}</button>`;
-  return `<div class="crm-ges">${linhas.map(l => `<div>${l}</div>`).join('')}<div class="row" style="gap:8px;margin-top:4px"><span style="font-size:12.5px;font-weight:600">Cadastro no GESUAS</span><div class="seg seg-mini">${b('sim','Tem')}${b('nao','Não tem')}</div></div></div>`;
+  return `<div class="crm-ges"><div class="row" style="gap:8px"><span style="font-size:12.5px;font-weight:600">Cadastro no GESUAS</span><div class="seg seg-mini">${b('sim','Tem')}${b('nao','Não tem')}</div>${infoBtn('Confira no GESUAS se ela tem cadastro e marque aqui.')}</div></div>`;
 }
 function linhaCrmTempo(x){
   const L = [...(x.contatos||[])].reverse();
@@ -2174,7 +2154,6 @@ function atualizarLinhaCrm(x){
 function bindGesCrm(id){
   document.querySelectorAll('#crmGesBox [data-cges]').forEach(el => el.onclick = () => { const x = crmPorId(id); if (!x) return;
     editarCrm(x, 'gesuas', x.gesuas===el.dataset.cges ? '' : el.dataset.cges, 'cadastro no GESUAS'); atualizarLinhaCrm(x); });
-  document.querySelectorAll('#crmGesBox [data-caso]').forEach(el => el.onclick = () => { S.rolagem = window.scrollY; go('caso', {caso:el.dataset.caso, tab:'dados', prev:'crm'}); });
 }
 function bindLinhasCrm(){
   document.querySelectorAll('#main tr[data-crm]').forEach(tr => {
@@ -2308,9 +2287,9 @@ function migrarCrm(){
 function baixarCsvCrm(){
   const L = listaCrm();
   const cab = ['Nº','Entrada','Processo','Nome','CPF','Nascimento','Telefone','Endereço','Bairro','Origem','Situação','Técnica','Status','No GESUAS','Último contato','Resultado','Tentativas sem retorno','Pendências em aberto','A lançar no GESUAS','Observações'];
-  const linhas = L.map(x => { const u = ultContatoCrm(x), g = crmGes(x);
+  const linhas = L.map(x => { const u = ultContatoCrm(x);
     return [x.id, fmt(x.entrada), x.processo, x.nome, x.cpf, x.nascimento?fmt(x.nascimento):'', x.telefone, x.endereco, x.bairro, x.origem, x.situacao, x.tecnica, ST_CRM[x.status],
-      g.ges ? 'Acompanhada' : g.atend.length ? 'Atendida' : x.gesuas==='sim' ? 'Tem cadastro' : x.gesuas==='nao' ? 'Sem cadastro' : '', u?fmt(u.data):'', u?RES_CRM_ROT[u.resultado]||'':'', tentativasCrm(x)||'', pendCrm(x).map(k => k.pendencias).join(' | '), aLancarCrm(x).length||'', x.obs]; });
+      x.gesuas==='sim' ? 'Tem cadastro' : x.gesuas==='nao' ? 'Sem cadastro' : '', u?fmt(u.data):'', u?RES_CRM_ROT[u.resultado]||'':'', tentativasCrm(x)||'', pendCrm(x).map(k => k.pendencias).join(' | '), aLancarCrm(x).length||'', x.obs]; });
   const cel = v => { v = String(v ?? '').replace(/"/g,'""'); return /^[=+\-@]/.test(v) ? `"'${v}"` : `"${v}"`; };
   const csv = '﻿' + [cab, ...linhas].map(l => l.map(cel).join(';')).join('\r\n');
   try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));

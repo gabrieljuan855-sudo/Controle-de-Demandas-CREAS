@@ -23,22 +23,6 @@ function exigirCrm() {
 /* contatos do CRM levam a assinatura do CRM, também para quem usa as duas partes */
 var AUTOR_CRM = 'CRM';
 
-/** Para quem usa só o CRM (e não recebe os casos do CREAS): os casos do CREAS com o mesmo CPF ou o mesmo nome
- *  da mulher, só o número. Quem usa o CREAS confere isso no navegador, com a lista que já tem. */
-function anotarCasosCreas(lista) {
-  if (acessoAtual().creas || !lista.length) return lista;
-  var casos = lerTabela('Casos'), pessoas = {}, dig = function (v) { return String(v || '').replace(/\D/g, ''); };
-  lerTabela('Pessoas').forEach(function (p) { var k = String(p.caso_id); (pessoas[k] = pessoas[k] || []).push(String(p.nome || '')); });
-  lista.forEach(function (x) {
-    var cpf = dig(x.cpf), nome = String(x.nome || '').trim();
-    x.creas = !cpf && !nome ? [] : casos.filter(function (c) {
-      if (cpf.length === 11 && dig(c.cpf) === cpf) return true;
-      return !!nome && [String(c.responsavel || '')].concat(pessoas[String(c.id)] || []).some(function (n) { return n && mesmoNome(nome, n); });
-    }).map(function (c) { return String(c.id); });
-  });
-  return lista;
-}
-
 /** As duas abas do CRM só existem depois da primeira gravação: até lá, a leitura devolve lista vazia sem criar nada. */
 function abaCrmExiste(nome) { return !!planilhaBase().getSheetByName(nome); }
 
@@ -48,7 +32,7 @@ function lerCrm(filtroIds) {
   if (abaCrmExiste('CRM_Contatos')) lerTabela('CRM_Contatos').forEach(function (x) {
     var k = String(x.crm_id); (contatos[k] = contatos[k] || []).push(paraCliente(x));
   });
-  return anotarCasosCreas(lerTabela('CRM')
+  return lerTabela('CRM')
     .filter(function (x) { return !filtroIds || filtroIds.indexOf(String(x.id)) >= 0; })
     .map(function (x) {
       var o = paraCliente(x);
@@ -56,7 +40,7 @@ function lerCrm(filtroIds) {
       o.status = STATUS_CRM[o.status] ? o.status : 'espera';
       o.contatos = (contatos[o.id] || []).sort(function (a, b) { return a.data < b.data ? -1 : 1; });
       return o;
-    }));
+    });
 }
 
 function crmUm(id) {

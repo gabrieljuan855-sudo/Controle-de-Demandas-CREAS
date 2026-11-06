@@ -239,9 +239,9 @@ function api_iniciar() {
   var acesso = acessoAtual(), papel = papelAtual();
   var cfg = lerConfig();
   var casos = acesso.creas ? montarCasos().filter(function (c) { return visivelPara(papel, c); }) : [];
-  // o relatório e os atendimentos do GESUAS servem às duas partes: no CRM, para conferir se a mulher já está no GESUAS
-  var ges = lerGesuas(cfg);
-  var atend = lerAtendimentos();
+  // relatórios do GESUAS importados são do CREAS: quem usa só o CRM não os recebe
+  var ges = acesso.creas ? lerGesuas(cfg) : null;
+  var atend = acesso.creas ? lerAtendimentos() : [];
   // na primeira abertura depois da atualização, as linhas dos limites e a do CRM aparecem na Config para a coordenação ajustar
   if (Object.keys(LIMITES_PADRAO).some(function (k) { return !(k in cfg); }) || !('emails_crm' in cfg)) comTrava(function () {
     CONFIG_CACHE = null; var c2 = lerConfig(); completarLimites(c2);
