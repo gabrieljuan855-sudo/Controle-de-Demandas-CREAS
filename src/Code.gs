@@ -26,8 +26,19 @@ var LISTAS_PADRAO = {
   tipos_documento: ['Ofício', 'Requisição', 'Memorando', 'Notícia de Fato', 'E-mail', 'Relatório', 'Sistema', 'Sem documento'],
   tecnicas: ['Alexandra', 'Aline', 'Brenda', 'Liana', 'Mirelle', 'Simone', 'Solange'],
   bairros: [],
-  tipos_registro: ['Atendimento', 'VD', 'Tentativa de VD', 'Contato telefônico / WhatsApp', 'Articulação com a rede', 'Ofício enviado', 'Outro']
+  tipos_registro: ['Atendimento', 'VD', 'Tentativa de VD', 'Contato telefônico / WhatsApp', 'Articulação com a rede', 'Ofício enviado', 'Outro'],
+  tecnicas_crm: ['Lise', 'Carina', 'Simone']
 };
+
+/** Técnicas do CRM: coluna tecnicas_crm da aba Listas. Em planilha criada antes dela, a coluna nasce vazia
+ *  e recebe as do padrão uma vez; depois a coordenação muda os nomes ali. */
+function completarTecnicasCrm() {
+  var sh = aba('Listas'), col = ESQUEMA.Listas.indexOf('tecnicas_crm') + 1, padrao = LISTAS_PADRAO.tecnicas_crm;
+  var ult = sh.getLastRow();
+  if (ult >= 2 && sh.getRange(2, col, ult - 1, 1).getValues().some(function (l) { return String(l[0]).trim(); })) return;
+  garantirTamanho(sh, padrao.length + 1, col);
+  sh.getRange(2, col, padrao.length, 1).setValues(padrao.map(function (t) { return [t]; }));
+}
 
 /** Cria as abas que faltarem. Pode ser rodada de novo sem apagar dados. */
 function configurar() {
@@ -243,12 +254,14 @@ function api_iniciar() {
   var ges = acesso.creas ? lerGesuas(cfg) : null;
   var atend = acesso.creas ? lerAtendimentos() : [];
   // na primeira abertura depois da atualização, as linhas dos limites e a do CRM aparecem na Config para a coordenação ajustar
+  var listas = lerListas();
+  if (!listas.tecnicas_crm.length) { comTrava(completarTecnicasCrm); listas = lerListas(); }
   if (Object.keys(LIMITES_PADRAO).some(function (k) { return !(k in cfg); }) || !('emails_crm' in cfg)) comTrava(function () {
     CONFIG_CACHE = null; var c2 = lerConfig(); completarLimites(c2);
     if (!('emails_crm' in c2)) gravarConfig('emails_crm', '', OBS_EMAILS_CRM);
   });
   return { papel: papel, acesso: acesso, autor: autorAtual(), email: emailAtual(), hoje: dataIso(new Date()), casos: casos, ges: ges, atend: atend,
-    crm: acesso.crm ? lerCrm() : [], listas: lerListas(), limites: lerLimites(cfg), crmConsulta: String(cfg.crm_link_consulta || '') };
+    crm: acesso.crm ? lerCrm() : [], listas: listas, limites: lerLimites(cfg), crmConsulta: String(cfg.crm_link_consulta || '') };
 }
 
 function api_novoCaso(d) {
