@@ -1331,7 +1331,7 @@ function vCaso(){
   const nowIdx = {triagem:1,avaliacao:2,repasse:3,acompanhamento:4,encerrado:-1}[c.etapa];
   // uma página só, com rolagem: dados, registros, acompanhamento e, recolhido no fim, o histórico
   const comAcomp = !!(c.inicio_acomp && coord());
-  return `<div class="row" style="margin-bottom:10px"><button class="btn small" data-back>← Voltar</button>${coord()?'<button class="btn small" data-editar>Editar dados</button>':''}<button class="btn small" data-imprimir>Imprimir ficha</button></div>
+  return `<div class="row" style="margin-bottom:10px"><button class="btn small" data-back>← Voltar</button>${coord()?'<button class="btn small" data-editar>Editar dados</button>':''}<button class="btn small" data-imprimir title="${fichaDeAcomp(c)?'Ficha de encaminhamento para acompanhamento':'Ficha de avaliação social'}">Imprimir ficha</button></div>
   <div class="top"><div><div class="row" style="gap:8px"><span class="mono muted">Caso ${c.id}</span>${pill(c)}${prio(c.prioridade)}${String(c.origem||'').startsWith('migra')?'<span class="pill p-encerrado">migrado</span>':''}</div><h1 style="margin-top:6px">${comCopia(nomeCaso(c))}</h1>
   <p>${esc(c.descricao)}</p></div></div>
   <div class="steps">${stepsArr.map(([l,done],i) => `<div class="step ${i===nowIdx?'now':done?'done':''}"><div class="bar"></div>${l}${i===2&&pulouAval?' <span class="muted">(não houve)</span>':''}</div>`).join('')}</div>
@@ -1454,43 +1454,97 @@ function editarViolacao(c){
       Object.assign(c, {diagnostico:v.codigos, prioridade:v.prioridade, violacao_outra:v.outra});
       salvar(c, 'Violações e prioridade', 'api_violacao', [c.id, v.codigos, v.prioridade, v.outra]); return c; }, 'Salvar', 'primary', 'larga');
 }
+/* ficha impressa: de avaliação social enquanto o caso está em triagem ou avaliação; depois da indicação de
+   acompanhamento (repasse, acompanhamento ou encerrado depois dele), ficha de encaminhamento para acompanhamento */
+const fichaDeAcomp = c => ['repasse','acompanhamento'].includes(c.etapa) || !!c.inicio_acomp;
 function imprimirFicha(c){
   if (!c) return;
-  const boxImp = ([k,l]) => `<div class="fi-item">${c.diagnostico.includes(k)?'☑':'☐'} ${k==='out' ? (c.diagnostico.includes('out')&&c.violacao_outra ? esc(violRot(c, k)) : 'Outra: ______________________') : esc(l)}</div>`;
-  const diagHtml = `<div class="fi-lista">${VIOLACOES.map(boxImp).join('')}</div>`;
-  const vitimas = c.pessoas.map(p => esc(p.nome)).join(', ');
-  const registros = c.registros.map(r => `<div class="fi-reg"><b>${fmt(r.data)} — ${esc(r.tipo)} (${esc(r.autor)})</b><div style="white-space:pre-wrap">${esc(r.texto)}</div>${r.pendencias?`<div style="white-space:pre-wrap;margin-top:3px"><b>Pendências:</b> ${esc(r.pendencias)}</div>`:''}</div>`).join('');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Ficha de Avaliação Social — ${esc(c.id)}</title>
+  const acomp = fichaDeAcomp(c);
+  const titulo = acomp ? 'Ficha de Encaminhamento para Acompanhamento' : 'Ficha de Avaliação Social';
+  const v = x => x ? esc(x) : '<span class="vazio"></span>';
+  const cx = (on, txt) => `<span class="cx">${on?'☑':'☐'} ${txt}</span>`;
+  const linhas = n => Array.from({length:n}).map(() => '<div class="linha"></div>').join('');
+  const sexo = s => s==='F' ? 'Feminino' : s==='M' ? 'Masculino' : '';
+  const pessoas = (c.pessoas.length ? c.pessoas : [{nome:''}]).map(p => `<tr><td>${v(p.nome)}</td><td>${p.nascimento ? fmt(p.nascimento) : ''}</td><td>${p.nascimento ? idade(p.nascimento)+' anos' : ''}</td><td>${sexo(p.sexo)}</td></tr>`).join('');
+  const viol = `<div class="lista">${VIOLACOES.map(([k,l]) => `<div class="item">${c.diagnostico.includes(k)?'☑':'☐'} ${k==='out' ? (c.diagnostico.includes('out')&&c.violacao_outra ? esc(violRot(c, k)) : 'Outra: ____________________') : esc(l)}</div>`).join('')}</div>`;
+  const regs = c.registros.map(r => `<div class="reg"><b>${fmt(r.data)} · ${esc(r.tipo)} · ${esc(r.autor)}</b><div class="txt">${esc(r.texto)}</div>${r.pendencias?`<div class="txt"><b>Pendências:</b> ${esc(r.pendencias)}${r.pendencia_ok?' (resolvida)':''}</div>`:''}</div>`).join('');
+  const discs = (c.discussoes||[]).map(d => `<div class="reg"><b>${fmt(d.data)} · Discussão de caso</b><div class="txt">${esc(d.texto)}</div></div>`).join('');
+  const prioTxt = c.prioridade ? esc(PRIO_ROT[c.prioridade]||c.prioridade) : '';
+  const prazo = c.prazo ? `${fmt(c.prazo)}${c.prazo_respondido?' (respondido)':''}` : '';
+  const conclusao = acomp ? '' : `<h2>Conclusão da avaliação</h2>
+    <div class="lista">${DESFECHOS_AVAL.map(([k,l]) => `<div class="item">${c.desfecho===k || (k==='indicar_acompanhamento' && fichaDeAcomp(c)) ? '☑' : '☐'} ${esc(l)}</div>`).join('')}</div>
+    <div class="grade" style="margin-top:6px"><div class="largo"><b>Prioridade sugerida:</b> ${cx(c.prioridade===1,'1 · Urgente')} ${cx(c.prioridade===2,'2 · Alta')} ${cx(c.prioridade===3,'3 · Regular')}</div></div>`;
+  const tec = c.etapa==='acompanhamento' ? tecnicaRef(c) : c.tecnica;
+  const blocoAcomp = !acomp ? '' : `<h2>Encaminhamento para acompanhamento</h2>
+    <div class="grade">
+      <div><b>Indicado em:</b> ${c.etapa==='repasse' && c.desfecho_data ? fmt(c.desfecho_data) : c.inicio_acomp ? fmt(c.inicio_acomp) : v('')}</div>
+      <div><b>Passou pela avaliação social:</b> ${c.passou_avaliacao ? 'Sim' : 'Não (direto para acompanhamento)'}</div>
+      <div><b>Técnica de referência:</b> ${v(tec)}</div>
+      <div><b>Início do acompanhamento:</b> ${c.inicio_acomp ? fmt(c.inicio_acomp) : v('')}</div>
+      <div><b>Complexidade:</b> ${c.complexidade!=='' && c.complexidade!==undefined && COMPLEX[c.complexidade] ? esc(COMPLEX[c.complexidade]) : `${cx(false,'Baixa')} ${cx(false,'Média')} ${cx(false,'Alta')}`}</div>
+      <div><b>Prioridade:</b> ${prioTxt || v('')}</div>
+      ${c.desfecho_obs ? `<div class="largo"><b>Observação da avaliação:</b> ${esc(c.desfecho_obs)}</div>` : ''}
+      ${c.desligamento ? `<div class="largo"><b>Desligado em:</b> ${fmt(c.desligamento)}${c.desfecho && c.etapa==='encerrado' ? ' · '+esc(c.desfecho) : ''}</div>` : ''}
+    </div>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${titulo} · ${esc(c.id)}</title>
   <style>
-    @page{ size:A4; margin:16mm 14mm; }
-    body{ font-family:Arial, Helvetica, sans-serif; font-size:11.5px; color:#111; margin:0; }
-    h1{ font-size:16px; margin:0 0 2px; }
-    .fi-sub-titulo{ font-size:10.5px; color:#555; margin:0 0 14px; }
-    .campo{ margin:7px 0; border-bottom:1px solid #999; padding-bottom:3px; }
-    .campo b{ display:inline-block; min-width:160px; }
-    h2{ font-size:13px; margin:16px 0 6px; }
-    .fi-titulo{ font-weight:700; margin:10px 0 2px; font-size:11.5px; }
-    .fi-sub{ font-weight:600; margin:5px 0 2px; font-size:11px; }
-    .fi-lista{ column-count:2; column-gap:18px; }
-    .fi-item{ margin:3px 0 3px 4px; break-inside:avoid; }
-    .fi-reg{ margin:6px 0; border-bottom:1px dashed #ccc; padding-bottom:5px; }
-    .fi-linha{ border-bottom:1px solid #999; height:22px; }
+    @page{ size:A4; margin:14mm 14mm 16mm; }
+    body{ font-family:Arial, Helvetica, sans-serif; font-size:13.5px; line-height:1.4; color:#111; margin:0; }
+    .cab{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #111; padding-bottom:6px; margin-bottom:10px; }
+    .cab .org{ font-size:12px; color:#333; }
+    h1{ font-size:20px; margin:2px 0 0; }
+    .num{ text-align:right; font-size:12.5px; }
+    .num b{ font-size:16px; }
+    h2{ font-size:15px; margin:16px 0 6px; padding:3px 6px; background:#eee; border-left:4px solid #111; break-after:avoid; }
+    .grade{ display:grid; grid-template-columns:1fr 1fr; gap:6px 18px; }
+    .grade > div{ border-bottom:1px solid #999; padding:3px 0 4px; min-height:20px; }
+    .grade .largo{ grid-column:1 / -1; }
+    .vazio{ display:inline-block; min-width:140px; }
+    table{ width:100%; border-collapse:collapse; margin:2px 0 4px; }
+    th,td{ border:1px solid #999; padding:5px 6px; text-align:left; font-size:13px; }
+    th{ background:#f3f3f3; font-size:12px; }
+    td:first-child{ width:48%; }
+    .lista{ column-count:2; column-gap:20px; }
+    .item{ margin:3px 0 3px 2px; break-inside:avoid; }
+    .cx{ margin-right:12px; white-space:nowrap; }
+    .desc{ white-space:pre-wrap; border:1px solid #999; padding:6px 8px; min-height:44px; }
+    .reg{ margin:7px 0; border-bottom:1px dashed #bbb; padding-bottom:6px; break-inside:avoid; }
+    .txt{ white-space:pre-wrap; margin-top:2px; }
+    .linha{ border-bottom:1px solid #888; height:30px; }
+    .assin{ display:grid; grid-template-columns:2fr 1fr; gap:30px; margin-top:34px; }
+    .assin div{ border-top:1px solid #111; padding-top:4px; font-size:12px; text-align:center; }
     .noprint{ text-align:right; margin-bottom:10px; }
+    .noprint button{ font-size:14px; padding:6px 14px; }
     @media print{ .noprint{ display:none; } }
   </style></head><body>
   <div class="noprint"><button onclick="window.print()">Imprimir</button></div>
-  <h1>Ficha de Avaliação Social</h1>
-  <div class="fi-sub-titulo">(Grampear no encaminhamento recebido) — Caso ${esc(c.id)}</div>
-  <div class="campo"><b>Possível(is) vítima(s):</b> ${vitimas}</div>
-  <div class="campo"><b>Responsável familiar/CPF:</b> ${esc(c.responsavel)}${c.cpf?' / '+esc(c.cpf):''}</div>
-  <div class="campo"><b>Endereço:</b> ${esc(c.endereco)}${c.bairro?' — '+esc(c.bairro):''}</div>
-  <div class="campo"><b>Contato:</b> ${esc(c.contato)}</div>
-  <div class="campo"><b>Descrição breve:</b> ${esc(c.descricao)}</div>
+  <div class="cab"><div><div class="org">CREAS Taquara · Proteção Social Especial</div><h1>${titulo}</h1></div>
+    <div class="num">Caso <b>${esc(c.id)}</b><br>Impresso em ${fmt(iso(HOJE))}</div></div>
+  ${acomp ? '' : '<div style="font-size:12px;color:#444;margin:-4px 0 8px">Grampear no encaminhamento recebido.</div>'}
+  <h2>Identificação</h2>
+  <table><thead><tr><th>${acomp ? 'Vítima(s)' : 'Possível(is) vítima(s)'}</th><th>Nascimento</th><th>Idade</th><th>Sexo</th></tr></thead><tbody>${pessoas}</tbody></table>
+  <div class="grade">
+    <div><b>Responsável familiar:</b> ${v(c.responsavel)}</div><div><b>CPF:</b> ${v(c.cpf)}</div>
+    <div><b>Endereço:</b> ${v(c.endereco)}</div><div><b>Bairro:</b> ${v(bairroDe(c))}</div>
+    <div class="largo"><b>Contato:</b> ${v(c.contato)}</div>
+  </div>
+  <h2>Encaminhamento recebido</h2>
+  <div class="grade">
+    <div><b>Remetente:</b> ${v(c.remetente)}${c.remetente_detalhe?' · '+esc(c.remetente_detalhe):''}</div><div><b>Documento:</b> ${v([c.doc_tipo, c.doc_num].filter(Boolean).join(' '))}</div>
+    <div><b>Recebido em:</b> ${c.recebido ? fmt(c.recebido) : v('')}</div><div><b>Prazo de resposta:</b> ${prazo || v('')}</div>
+    ${acomp ? '' : `<div class="largo"><b>Prioridade:</b> ${prioTxt || v('')}</div>`}
+  </div>
+  <div style="margin-top:8px"><b>Descrição:</b></div><div class="desc">${esc(c.descricao)}</div>
+  ${blocoAcomp}
   <h2>Violação vivenciada (lista do GESUAS)</h2>
-  ${diagHtml}
-  <h2>Registros de Atendimento</h2>
-  ${registros}
-  ${Array.from({length:8}).map(() => '<div class="fi-linha"></div>').join('')}
+  ${viol}
+  ${conclusao}
+  <h2>Registros de atendimento</h2>
+  ${regs || '<div style="color:#666">Nenhum registro no sistema até a impressão.</div>'}
+  ${discs ? `<h2>Discussões de caso</h2>${discs}` : ''}
+  <h2>${acomp ? 'Anotações do acompanhamento' : 'Anotações da avaliação'}</h2>
+  ${linhas(acomp ? 16 : 18)}
+  <div class="assin"><div>Técnica responsável</div><div>Data</div></div>
   </body></html>`;
   const w = window.open('', '_blank');
   if (!w){ toast('Permita pop-ups para imprimir a ficha.'); return; }
