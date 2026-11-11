@@ -103,15 +103,15 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   - **Um clique numa linha** abre o caso ali mesmo, logo abaixo da linha (outro clique fecha): etapa e técnica, há quantos dias foi o último registro e o último atendimento no GESUAS, prazo de resposta (com **alterar**), situação no GESUAS, origem e pendências em aberto. Ao lado, numa linha do tempo só, os últimos registros (até 8) feitos aqui (avaliação social e acompanhamento) e os atendimentos importados do GESUAS, do mais novo ao mais antigo. Para as famílias que estão só no GESUAS, técnica, PAF e os atendimentos. **Dois cliques** (ou **Abrir caso**, ou Enter) abrem a tela completa, como antes; **Novo registro** abre o caso já no formulário de registro. **Esc** fecha a linha aberta, e ao voltar de um caso a linha dele aparece aberta.
   - **Menos poluição:** o ícone de copiar ao lado dos nomes só aparece ao passar o mouse na linha (no celular, sempre); o número do ofício fica na linha aberta.
   - **Baixar lista (.csv)** (ícone): baixa a lista filtrada, na ordem da tela, para abrir no Excel ou no Planilhas.
-  - **Menu lateral:** o número ao lado de **Casos** é o da lista que ele abre (**Em atendimento**). Logo abaixo (com o menu aberto) ficam **Avaliação social** e o nome de cada técnica, com o número de famílias que ela acompanha (somados, dão o total da aba Acompanhamento); cada um abre a lista já filtrada. Casos continua abrindo a lista geral. Em **Outros** fica **Verificar a base**.
+  - **Menu lateral:** o número ao lado de **Casos** é o da lista que ele abre (**Em atendimento**). Logo abaixo (com o menu aberto) ficam **Avaliação social** e o nome de cada técnica, com o número de famílias que ela acompanha: as que estão no GESUAS e as repassadas a ela que ainda estão fora dele (aguardando inclusão ou que saíram). O nome abre essa lista, com a coluna No GESUAS mostrando a situação de cada uma. Casos continua abrindo a lista geral. Em **Outros** fica **Verificar a base**.
   - **Famílias que estão só no GESUAS** também abrem, para consulta: técnica, início, serviço, PAF, CPF, NIS, bairro, endereço, a lista de atendimentos importados e os casos deste sistema com o mesmo nome. Abrem pela lista de Acompanhamento e pelas tabelas da Conferência GESUAS.
   - Ao voltar de um caso, a lista abre no mesmo ponto em que estava. O caso mostra também os **outros casos da mesma família** (mesmo nome ou CPF).
 - **Situação no GESUAS de cada caso em acompanhamento**, sempre em relação à data do relatório importado:
   - **registrado** (com PAF e último atendimento);
   - **repassado depois do relatório**: ainda não dá para cobrar, aguarda o próximo relatório;
   - **a conferir**: família com o mesmo sobrenome no relatório;
-  - **não registrado**: repasse até 90 dias antes do relatório e a família não aparece; vira cobrança para a técnica;
-  - **não consta no GESUAS / saiu do GESUAS**: em acompanhamento aqui há mais de 90 dias e fora do relatório, ou a família já esteve no GESUAS e sumiu; provavelmente desligada lá. O caso mostra o botão para desligar, e a importação oferece desligar esses casos de uma vez (desmarcados por padrão).
+  - **não registrado**: a família nunca apareceu num relatório do GESUAS, há quantos dias for desde o repasse (o número de dias aparece ao lado); vira cobrança para a técnica;
+  - **saiu do GESUAS**: a família já apareceu num relatório do GESUAS e sumiu do último; provavelmente desligada lá. O caso mostra o botão para desligar, e a importação oferece desligar esses casos de uma vez (desmarcados por padrão).
 - **MSE (LA/PSC)** vem no mesmo relatório do GESUAS, mas fica fora das contas do PAEFI (painel, carga por técnica, territórios); aparece no filtro de serviço.
 - **Atendimentos do GESUAS em qualquer caso**, inclusive na avaliação social: a ficha do caso mostra quantos atendimentos há no GESUAS e o último, pelo CPF ou pelo nome.
 - **Indicadores.** Só usam o que já é registrado no trabalho do dia a dia e no relatório do GESUAS, sem campos extras. Com filtro de período (últimos 12 meses, ano atual, ano anterior, tudo):
@@ -138,6 +138,8 @@ Sistema web (Google Apps Script) para registrar os encaminhamentos recebidos pel
   5. **Acompanhamento ou encerramento:** os atendimentos do acompanhamento são registrados como contatos ("Atendimento realizado"). "Encerrar acompanhamento" marca como inativo, reencaminhado ou arquivado (fica na linha do tempo, e "Reabrir" volta para A fazer). Contatos do CRM levam a assinatura "CRM".
 
   As técnicas do CRM são só as da coluna `tecnicas_crm` da aba Listas (separadas das do CREAS); casos antigos com outra técnica continuam com ela e aparecem no filtro.
+
+  Os títulos das colunas da lista ordenam por elas (um clique, de novo ao contrário, mais uma vez volta ao normal).
 
   A lista separa **A fazer** (o mais antigo primeiro), **Em acompanhamento**, **Encerrados** e **Todos**, com busca por nome, processo, CPF ou telefone, filtro por técnica e download em .csv. No menu do CRM, Casos mostra quantos estão em A fazer, com Em acompanhamento e Encerrados logo abaixo.
 

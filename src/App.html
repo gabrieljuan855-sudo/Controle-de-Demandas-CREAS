@@ -191,7 +191,7 @@ const DESFECHOS_AVAL = [
 
 /* ================= estado ================= */
 let DB = { papel:'', email:'', casos:[], ges:null, listas:{} };
-const S = { view:'painel', caso:null, tab:'dados', f:{etapa:'ativos', tec:'', pend:'', serv:'paefi', per:'', rem:'', bairro:'', viol:'', prio:'', busca:''}, ordem:'', maisFiltros:false, crm:{seg:'fazer', busca:'', tec:'', pend:''}, crmSel:null, crmEdit:null, draft:null, editando:null, gTec:'', gPrevia:null, prev:'painel' };
+const S = { view:'painel', caso:null, tab:'dados', f:{etapa:'ativos', tec:'', pend:'', serv:'paefi', per:'', rem:'', bairro:'', viol:'', prio:'', busca:''}, ordem:'', maisFiltros:false, crm:{seg:'fazer', busca:'', tec:'', pend:'', ordem:''}, crmSel:null, crmEdit:null, draft:null, editando:null, gTec:'', gPrevia:null, prev:'painel' };
 const coord = () => DB.papel === 'coordenacao';
 /* assinatura de quem está usando: todos têm o mesmo acesso, muda só o nome nos registros */
 const autorTxt = () => DB.autor || 'Coordenação';
@@ -314,8 +314,8 @@ function refGes(){
 }
 /* situação de um caso em acompanhamento frente ao relatório:
    ok (está lá) · manual (confirmado à mão) · depois (repassado depois da data do relatório: ainda não dá para cobrar)
-   · possivel (mesmo sobrenome, conferir) · ausente (repasse recente e não está lá: cobrar a técnica)
-   · antigo (já esteve no GESUAS e saiu, ou repasse há mais de 90 dias e não está lá: provavelmente desligado no GESUAS).
+   · possivel (mesmo sobrenome, conferir) · ausente (nunca foi achado lá: cobrar a inclusão, há quantos dias for)
+   · antigo (já esteve no GESUAS e saiu: provavelmente desligado lá).
    Quem já foi achado lá (gesuas_visto, gravado na importação, ou família escolhida à mão) e sumiu é sempre "antigo" (saiu):
    nunca volta a ser cobrado como "não registrado". "*" é a confirmação antiga sem família escolhida (manual). */
 const statusGes = porVersao(statusGesCalc);
@@ -332,8 +332,8 @@ function statusGesCalc(c){
   if (ini && ini > ref) return {tipo:'depois', dias: dias(ini)};
   const cand = candidatosSobrenome(c);
   if (cand.length) return {tipo:'possivel', cand, dias: dias(ini)};
-  const d = ini ? Math.round((D(ref) - D(ini))/864e5) : null;
-  return {tipo: d===null || d > 90 ? 'antigo' : 'ausente', dias: dias(ini)};
+  // nunca apareceu no GESUAS: continua "não registrado", sem prazo para virar "desligado"
+  return {tipo:'ausente', dias: ini ? dias(ini) : null};
 }
 
 /* leitura do PDF "Famílias Acompanhadas por Técnico" (pdf.js) */
@@ -615,10 +615,11 @@ document.addEventListener('click', e => {
 
 /* ================= navegação ================= */
 /* menu em duas seções; Casos é um grupo com Avaliação social e, logo abaixo, cada técnica com as famílias que acompanha */
-/* técnicas da aba Acompanhamento, com quantas famílias cada uma tem; somadas, dão o total da aba */
+/* técnicas em acompanhamento, com quantas famílias cada uma tem: as do GESUAS e as repassadas a ela que ainda estão
+   fora dele (aguardando inclusão ou que saíram), as mesmas da lista que o nome abre */
 function tecnicasAcomp(){
   const m = new Map();
-  listaCasos({etapa:'acompanhamento'}).forEach(it => { const k = tecItem(it); if (!k) return;
+  [...listaCasos({etapa:'acompanhamento'}), ...DB.casos.filter(c => c.etapa==='acompanhamento' && aguardaGesuas(c))].forEach(it => { const k = tecItem(it); if (!k) return;
     if (!m.has(k)) m.set(k, {k, n:0, nome: TECNICAS().find(t => primeiroNome(t)===k) || (it.ges ? nomeTecnica(it.ges.tecnico) : tecnicaRef(it))});
     m.get(k).n++; });
   return [...m.values()].sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -839,7 +840,7 @@ const PENDENCIAS = {
   nreg:     ['Repassado e não registrado no GESUAS', c => (statusGes(c)||{}).tipo==='ausente', 'ges'],
   conferir: ['A conferir no GESUAS (mesmo sobrenome)', c => (statusGes(c)||{}).tipo==='possivel', 'ges'],
   depois:   ['Repassado depois do último relatório', c => (statusGes(c)||{}).tipo==='depois', 'ges'],
-  antigo:   ['Não consta no GESUAS (desligado lá?)', c => (statusGes(c)||{}).tipo==='antigo', 'ges'],
+  antigo:   ['Saiu do GESUAS (desligar aqui?)', c => (statusGes(c)||{}).tipo==='antigo', 'ges'],
   semfam:   ['Confirmado no GESUAS sem a família escolhida', c => (statusGes(c)||{}).tipo==='manual', 'ges'],
   registrado:['Registrado no GESUAS', c => ['ok','manual'].includes((statusGes(c)||{}).tipo), 'ges', g => true],
   paf:      ['PAF em branco no GESUAS', c => { const x = statusGes(c); return !!x && x.tipo==='ok' && x.paf!=='Preenchido'; }, 'ges', g => g.paf!=='Preenchido'],
@@ -875,7 +876,9 @@ const MAIS_FILTROS = ['per','rem','bairro','viol','prio'];
    "todos" são os encaminhamentos deste sistema, inclusive os encerrados. */
 function listaCasos(f){
   const etapa = f.etapa || 'ativos', pend = PENDENCIAS[f.pend], serv = f.serv || 'paefi';
-  let L = DB.casos.filter(c => etapa==='todos' ? true : etapa==='ativos' ? c.etapa!=='encerrado' : etapaLista(c)===etapa);
+  // acompanhamento de uma técnica (o nome dela no menu): também os casos repassados a ela que estão fora do GESUAS
+  let L = DB.casos.filter(c => etapa==='todos' ? true : etapa==='ativos' ? c.etapa!=='encerrado'
+    : etapaLista(c)===etapa || (etapa==='acompanhamento' && f.tec && c.etapa==='acompanhamento'));
   if (pend) L = L.filter(pend[1]);
   if (f.per){ const P = periodoInd(f.per); L = L.filter(c => noPeriodo(c.recebido, P)); }
   if (f.rem) L = L.filter(c => remDe(c)===f.rem);
@@ -1004,7 +1007,7 @@ function vCasos(){
 function baixarCsv(){
   const L = ordenar(listaCasos(filtrosAtuais()), S.ordem || (ETAPAS_FILA.includes(S.f.etapa) ? 'fila' : ''));
   const cab = ['Nº','Vítima(s)','Responsável familiar','CPF','Bairro','Endereço','Contato','Remetente','Documento','Recebido','Prazo','Prioridade','Etapa','Desfecho','Técnica','Início do acompanhamento','Situação no GESUAS','PAF (GESUAS)'];
-  const SIT = {ok:'Registrado', manual:'Confirmado manualmente', depois:'Aguardando relatório', possivel:'Conferir (sobrenome)', ausente:'Não registrado', antigo:'Não consta'};
+  const SIT = {ok:'Registrado', manual:'Confirmado manualmente', depois:'Aguardando relatório', possivel:'Conferir (sobrenome)', ausente:'Não registrado', antigo:'Saiu do GESUAS'};
   const linhas = L.map(it => { if (it.ges){ const g = it.ges;
       return ['GESUAS'+(ehMSE(g)?' (MSE)':''), '', TIT(g.responsavel), fmtCpf(g.cpf), g.bairro?TIT(g.bairro):'', g.endereco||'', '', '', '', '', '', '', ETAPAS.acompanhamento, '', nomeTecnica(g.tecnico), g.inicio, 'Só no GESUAS', g.paf||'Em branco']; }
     const c = it, s = statusGes(c);
@@ -1053,6 +1056,8 @@ const mesmoSel = (a, b) => !!a && !!b && (a.caso ? a.caso===b.caso : !!a.fam && 
 const selCls = sel => ` title="Um clique: abre o resumo abaixo · Dois cliques: abre o caso"${mesmoSel(S.sel, sel) ? ' class="sel" aria-expanded="true"' : ' aria-expanded="false"'}`;
 /* atendimentos do GESUAS sem repetir o mesmo dia com a mesma técnica */
 const atendUnicos = L => { const vistos = new Set(); return L.filter(a => { const k = a.data+'|'+norm(a.tecnico); if (vistos.has(k)) return false; vistos.add(k); return true; }); };
+/* "há 1 dia", "há 12 dias"; sem data, "sem data de repasse" */
+const haNDias = n => n===null || n===undefined ? 'sem data de repasse' : n===1 ? 'há 1 dia' : `há ${n} dias`;
 const haDias = d => { const n = dias(d); return n<=0 ? 'hoje' : n===1 ? 'ontem' : `há ${n} dias`; };
 const MAX_TL = 8;
 /* registros daqui e atendimentos do GESUAS numa lista só, do mais novo ao mais antigo. Atendimento do GESUAS
@@ -1729,7 +1734,7 @@ function buscarNoGesuas(c){
 /* situação no GESUAS (célula "No GESUAS") e PAF; a primeira também aparece sozinha na aba Repasse */
 function gesSit(c){
   const s = statusGes(c); if (!s) return '<span class="muted">—</span>';
-  if (s.tipo==='ausente') return `<span class="pill p-crit">Não registrado</span><div class="muted" style="font-size:12px">há ${s.dias} dias</div>`;
+  if (s.tipo==='ausente') return `<span class="pill p-crit">Não registrado</span><div class="muted" style="font-size:12px">${haNDias(s.dias)}</div>`;
   if (s.tipo==='possivel') return `<span class="pill p-avaliacao">Conferir</span><div class="muted" style="font-size:12px">mesmo sobrenome</div>`;
   if (s.tipo==='depois') return `<span class="pill p-encerrado">Aguardando relatório</span><div class="muted" style="font-size:12px">repasse após ${fmt(refGes())}</div>`;
   if (s.tipo==='antigo') return s.saiu ? `<span class="pill p-encerrado">Saiu do GESUAS</span><div class="muted" style="font-size:12px">desligar aqui?</div>` : `<span class="pill p-encerrado">Não consta</span><div class="muted" style="font-size:12px">desligado no GESUAS?</div>`;
@@ -1739,7 +1744,7 @@ function gesSit(c){
 }
 /* situação no GESUAS numa linha, para o painel lateral (a data do último atendimento já aparece acima) */
 function gesSitCurta(s){
-  const T = {ok:['p-ok','Registrado'], manual:['p-ok','Confirmado, falta escolher a família'], depois:['p-encerrado','Aguardando o próximo relatório'], possivel:['p-avaliacao','Conferir: mesmo sobrenome'], ausente:['p-crit',`Não registrado (repassado há ${s.dias} dias)`], antigo:['p-encerrado', s.saiu ? 'Saiu do GESUAS (desligar aqui?)' : 'Não consta (desligado lá?)']}[s.tipo] || ['p-encerrado', s.tipo];
+  const T = {ok:['p-ok','Registrado'], manual:['p-ok','Confirmado, falta escolher a família'], depois:['p-encerrado','Aguardando o próximo relatório'], possivel:['p-avaliacao','Conferir: mesmo sobrenome'], ausente:['p-crit',`Não registrado (${s.dias===null ? 'sem data de repasse' : 'repassado '+haNDias(s.dias)})`], antigo:['p-encerrado', s.saiu ? 'Saiu do GESUAS (desligar aqui?)' : 'Não consta (desligado lá?)']}[s.tipo] || ['p-encerrado', s.tipo];
   return `<span class="pill ${T[0]}">${esc(T[1])}</span>${s.tipo==='ok' ? ` <span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">PAF ${esc(s.paf==='Preenchido'?'preenchido':'em branco')}</span>` : ''}`;
 }
 function gesCells(c){
@@ -1756,7 +1761,7 @@ function gesBox(c){
   if (s.tipo==='depois') return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><span class="label">No GESUAS</span><div style="margin-top:4px">Repassado depois do relatório em uso (${fmt(refGes())}). A conferência acontece no próximo relatório importado.</div></div>`;
   if (s.tipo==='antigo') return `<div class="dup stack" style="gap:8px"><div>${s.saiu ? `<b>Saiu do GESUAS.</b> A família${c.gesuas_visto||c.gesuas_vinculo?` (${esc(TIT(c.gesuas_visto||c.gesuas_vinculo))})`:''} já esteve no GESUAS e não aparece no relatório de ${fmt(refGes())}. Provavelmente foi desligada lá.` : `<b>Não consta no relatório do GESUAS.</b> Este caso está em acompanhamento aqui${c.inicio_acomp?' desde '+fmt(c.inicio_acomp):''}, mas a família não aparece no relatório de ${fmt(refGes())}. Provavelmente foi desligada no GESUAS.`}</div>
     <div class="row" style="gap:6px"><button type="button" class="btn small primary" data-out="deslig">Desligar do acompanhamento</button>${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
-  if (s.tipo==='ausente') return `<div class="dup stack" style="gap:8px;border-color:var(--crit);background:var(--crit-soft)"><div><b style="color:var(--crit)">Não encontrado no GESUAS.</b> Repassado a ${esc(c.tecnica)} há ${s.dias} dias. Conferido no relatório ${esc(DB.ges.origem)}.</div>
+  if (s.tipo==='ausente') return `<div class="dup stack" style="gap:8px;border-color:var(--crit);background:var(--crit-soft)"><div><b style="color:var(--crit)">Não encontrado no GESUAS.</b> Repassado a ${esc(c.tecnica)} ${haNDias(s.dias)}. Conferido no relatório ${esc(DB.ges.origem)}.</div>
     <div class="row" style="gap:6px">${gvBtn(c,'manual','Está no GESUAS: buscar família')}${desfazer}</div></div>`;
   return `<div class="panel" style="box-shadow:none;background:var(--surface-2)"><div class="row" style="justify-content:space-between;gap:6px"><span class="label">No GESUAS${s.confirmado?' · confirmado':''}</span><div class="row" style="gap:6px">${s.confirmado?'':gvBtn(c,'rejeitar','Não é esta família',s.g.responsavel)}${desfazer}</div></div><dl style="margin-top:6px"><dt>Responsável</dt><dd>${comCopiaComo(TIT(s.g.responsavel), s.g.responsavel)}</dd><dt>Início</dt><dd class="mono">${esc(s.g.inicio)}</dd>${temAtend()?(() => { const l = atendimentosDaFamilia(s.g), u = l.length ? l[l.length-1].data : ''; return `<dt>Último atendimento</dt><dd>${u?`<span class="mono">${fmt(u)}</span> · ${l.length} atendimento${l.length>1?'s':''} importado${l.length>1?'s':''}`:'nenhum nos atendimentos importados'}</dd>`; })():''}<dt>Serviço</dt><dd>${esc(s.g.servico)}</dd><dt>PAF</dt><dd><span class="pill ${s.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(s.paf||'Em branco')}</span></dd></dl></div>`;
 }
@@ -1803,7 +1808,7 @@ function vGesuas(){
   <section class="panel stack" style="margin-bottom:16px">
     <div><h2>Por técnica <span class="muted" style="font-weight:500;font-size:13px">relatório de ${fmt(refGes())}</span></h2><div class="nota">Clique num número para abrir a lista.</div></div>
     ${tabelaTecnicas(R)}
-    ${nAnt?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nAnt} caso${nAnt>1?'s':''} em acompanhamento aqui não aparece${nAnt>1?'m':''} no GESUAS</b> (já estiveram lá e saíram, ou repasse há mais de 90 dias). Provavelmente ${nAnt>1?'foram desligados':'foi desligado'} lá: abra para desligar ou vincular à família.</span><button type="button" class="btn small" ${linkLista({etapa:'repasse', pend:'antigo'})}>Ver a lista</button></div>`:''}
+    ${nAnt?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nAnt} caso${nAnt>1?'s':''} em acompanhamento aqui ${nAnt>1?'saíram':'saiu'} do GESUAS</b> (já ${nAnt>1?'estiveram':'esteve'} lá e não ${nAnt>1?'aparecem':'aparece'} no último relatório). Provavelmente ${nAnt>1?'foram desligados':'foi desligado'} lá: abra para desligar ou vincular à família.</span><button type="button" class="btn small" ${linkLista({etapa:'repasse', pend:'antigo'})}>Ver a lista</button></div>`:''}
     ${nSemFam?`<div class="dup row" style="justify-content:space-between;gap:8px"><span><b>${nSemFam} caso${nSemFam>1?'s':''} confirmado${nSemFam>1?'s':''} à mão sem a família do GESUAS escolhida.</b> Escolha a família em cada um, uma vez só, para o sistema perceber quando ela sair do GESUAS.</span><button type="button" class="btn small" ${linkLista({etapa:'acompanhamento', pend:'semfam'})}>Ver a lista</button></div>`:''}
   </section>
   ${secoes.length || S.gTec?`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">O que cada técnica precisa resolver</h2><select id="gTec" aria-label="Técnica"><option value="">Todas as técnicas</option>${R.map(t => `<option value="${t.k}" ${S.gTec===t.k?'selected':''}>${esc(nomeTecnica(t.nome))}</option>`).join('')}</select></div>`:''}
@@ -2102,8 +2107,24 @@ function listaCrm(seg){
     && (!f.busca || casaBusca(norm([x.id, x.nome, x.processo, soDig(x.processo), x.cpf, soDig(x.cpf), x.telefone, soDig(x.telefone), x.bairro, x.endereco, x.origem, x.tecnica].join(' ')), f.busca)));
   // a fazer: quem chegou primeiro, primeiro; nas outras abas, os mais novos em cima
   const ent = x => String(x.entrada||'');
-  return L.sort((a,b) => s[0]==='fazer' ? (ent(a) < ent(b) ? -1 : ent(a) > ent(b) ? 1 : 0) : (ent(a) < ent(b) ? 1 : ent(a) > ent(b) ? -1 : 0));
+  L.sort((a,b) => s[0]==='fazer' ? (ent(a) < ent(b) ? -1 : ent(a) > ent(b) ? 1 : 0) : (ent(a) < ent(b) ? 1 : ent(a) > ent(b) ? -1 : 0));
+  // clique no título da coluna: ordena por ela (de novo, ao contrário; mais uma vez, volta ao normal)
+  const o = f.ordem || '', k = o.replace(/^-/, ''), CH = ORD_CRM[k];
+  if (!CH) return L;
+  const vazio = v => v === '' || v === null || v === undefined;
+  return L.map((x, i) => ({x, i, v: CH(x)})).sort((a,b) => vazio(a.v) !== vazio(b.v) ? (vazio(a.v) ? 1 : -1)
+    : (a.v < b.v ? -1 : a.v > b.v ? 1 : a.i - b.i) * (o.startsWith('-') ? -1 : 1)).map(z => z.x);
 }
+/* chaves de ordenação das colunas da lista do CRM (vazio vai sempre para o fim) */
+const PASSO_ORD = {processo:1, contato:2, acomp:3, fim:4};
+const ORD_CRM = {
+  entrada: x => String(x.entrada||'').slice(0,10),
+  nome: x => norm(x.nome),
+  tel: x => soDig(x.telefone),
+  ges: x => x.gesuas==='sim' ? 1 : x.gesuas==='nao' ? 2 : '',
+  ult: x => { const u = ultContatoCrm(x); return u ? String(u.data||'').slice(0,10) : ''; },
+  sit: x => PASSO_ORD[passoCrm(x)] * 10 + (tentativasCrm(x) ? 1 : 0)
+};
 function linhaCrm(x){
   const u = ultContatoCrm(x), p = passoCrm(x), sel = S.crmSel===x.id;
   const sub = [x.bairro, x.origem].filter(Boolean).map(esc).join(' · ');
@@ -2131,7 +2152,9 @@ function vCrm(){
       <button type="button" class="ib" data-ccsv title="Baixar a lista (.csv)" aria-label="Baixar lista"${L.length?'':' disabled'}>${ic('baixar')}</button>
     </span>
   </div>
-  <div class="tablewrap"><table><thead><tr><th>Entrada</th><th>Mulher</th><th>Telefone</th><th>No GESUAS</th><th>Último contato</th><th>Situação</th></tr></thead>
+  <div class="tablewrap"><table><thead><tr>${[['entrada','Entrada'],['nome','Mulher'],['tel','Telefone'],['ges','No GESUAS'],['ult','Último contato'],['sit','Situação']].map(([k,l]) => {
+    const on = f.ordem===k ? ' ↑' : f.ordem==='-'+k ? ' ↓' : '';
+    return `<th${on?` aria-sort="${on===' ↑'?'ascending':'descending'}"`:''}><button type="button" class="ord${on?' on':''}" data-cord="${k}" title="Ordenar por esta coluna">${l}${on}</button></th>`; }).join('')}</tr></thead>
   <tbody>${rows || `<tr><td colspan="6" class="empty">${crmLista().length ? 'Nenhum caso com esses filtros.' : 'Nenhum caso do CRM ainda. Use o + no alto para cadastrar.'}</td></tr>`}</tbody></table></div></div>
   ${L.length>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${L.length}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, L.length-LIM_LISTA)}</button></div>`:''}
   ${migrado?'':'<p class="muted" style="font-size:12.5px;margin:12px 2px 0">Os casos da aba "Casos CRM" da planilha antiga podem vir para cá: <button type="button" class="lnk" data-cmigrar>trazer da planilha antiga</button>.</p>'}`;
@@ -2243,7 +2266,8 @@ function bindCrm(){
   bindLinhasCrm();
   m.querySelectorAll('[data-cseg]').forEach(el => el.onclick = () => { S.crm.seg = el.dataset.cseg; LIM_LISTA = 300; render(); });
   const ct = $('#cTec'); if (ct) ct.onchange = () => { S.crm.tec = ct.value; render(); };
-  const cl = m.querySelector('[data-climpar]'); if (cl) cl.onclick = () => { S.crm.tec = ''; S.crm.busca = ''; S.crm.pend = ''; render(); };
+  const cl = m.querySelector('[data-climpar]'); if (cl) cl.onclick = () => { S.crm.tec = ''; S.crm.busca = ''; S.crm.pend = ''; S.crm.ordem = ''; render(); };
+  m.querySelectorAll('[data-cord]').forEach(el => el.onclick = () => { const k = el.dataset.cord, o = S.crm.ordem||''; S.crm.ordem = o===k ? '-'+k : o==='-'+k ? '' : k; render(); });
   const cp2 = $('#cPend'); if (cp2) cp2.onchange = () => { S.crm.pend = cp2.value; LIM_LISTA = 300; render(); };
   const cc = m.querySelector('[data-ccsv]'); if (cc) cc.onclick = baixarCsvCrm;
   const mg = m.querySelector('[data-cmigrar]'); if (mg) mg.onclick = migrarCrm;
