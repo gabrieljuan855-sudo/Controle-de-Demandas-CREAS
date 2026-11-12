@@ -615,11 +615,12 @@ document.addEventListener('click', e => {
 
 /* ================= navegação ================= */
 /* menu em duas seções; Casos é um grupo com Avaliação social e, logo abaixo, cada técnica com as famílias que acompanha */
-/* técnicas em acompanhamento, com quantas famílias cada uma tem: as do GESUAS e as repassadas a ela que ainda estão
-   fora dele (aguardando inclusão ou que saíram), as mesmas da lista que o nome abre */
+/* técnicas com casos em atendimento e quantos cada uma tem: no GESUAS e repassados a ela que ainda estão fora dele
+   (aguardando inclusão ou que saíram). O nome abre a aba Em atendimento filtrada por ela, com a mesma contagem */
 function tecnicasAcomp(){
   const m = new Map();
-  [...listaCasos({etapa:'acompanhamento'}), ...DB.casos.filter(c => c.etapa==='acompanhamento' && aguardaGesuas(c))].forEach(it => { const k = tecItem(it); if (!k) return;
+  // os casos em atendimento de cada técnica: no GESUAS, repassados a ela e ainda fora dele, e as famílias só do GESUAS
+  listaCasos({etapa:'ativos'}).forEach(it => { const k = tecItem(it); if (!k) return;
     if (!m.has(k)) m.set(k, {k, n:0, nome: TECNICAS().find(t => primeiroNome(t)===k) || (it.ges ? nomeTecnica(it.ges.tecnico) : tecnicaRef(it))});
     m.get(k).n++; });
   return [...m.values()].sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -655,7 +656,7 @@ function renderNav(){
   // troca de parte, para quem usa as duas
   const sistemas = coord() && temCrm() ? [['sis:creas','CREAS','','CREAS: Centro de Referência Especializado de Assistência Social','creas'],['sis:crm','CRM','','CRM: Centro de Referência da Mulher','mulher']] : [];
   const naLista = ['casos','caso','familia'].includes(S.view);
-  const naTec = S.view==='casos' && S.f.etapa==='acompanhamento' && S.f.tec;
+  const naTec = S.view==='casos' && ['ativos','acompanhamento'].includes(S.f.etapa) && S.f.tec;
   const ligado = k => k==='sis:crm' ? modoCrm() : k==='sis:creas' ? !modoCrm()
     : cseg(k) ? modoCrm() && S.crm.seg===cseg(k)
     : k==='crm' ? modoCrm() && ['fazer','todos'].includes(S.crm.seg)
@@ -677,7 +678,7 @@ function renderNav(){
     if (k==='crm' || cseg(k)){ LIM_LISTA = 300; S.crm.seg = cseg(k) || 'fazer'; S.crmSel = null; return go('crm'); }
     if (k==='campo') lsSet(COMPLETO_KEY, null);
     if (k==='casos' || sub(k) || tec(k)){ LIM_LISTA = 300; S.ordem = ''; S.maisFiltros = false;
-      S.f = tec(k) ? {...FILTRO_VAZIO, etapa:'acompanhamento', tec:tec(k)} : {...FILTRO_VAZIO, etapa: sub(k) || 'ativos'}; }
+      S.f = tec(k) ? {...FILTRO_VAZIO, etapa:'ativos', tec:tec(k)} : {...FILTRO_VAZIO, etapa: sub(k) || 'ativos'}; }
     go(sub(k) || tec(k) ? 'casos' : k);
   });
   renderBarra();
