@@ -1624,7 +1624,7 @@ function menuBaixar(btn, csv, pdf){
   mn.querySelector('button').focus();
 }
 /* página de lista para imprimir em A4: cabeçalho, filtros usados, tabela e aviso de dados pessoais */
-function imprimirLista(titulo, filtros, cab, linhas, larg){
+function imprimirLista(titulo, filtros, ordem, cab, linhas, larg){
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(titulo)} · ${fmt(iso(HOJE))}</title>
   <style>
     @page{ size:A4; margin:12mm 11mm 14mm; }
@@ -1652,7 +1652,7 @@ function imprimirLista(titulo, filtros, cab, linhas, larg){
   <div class="noprint"><button onclick="window.print()">Imprimir ou salvar em PDF</button></div>
   <div class="cab"><div><div class="org">${modoCrm() ? 'CRM Taquara · Centro de Referência da Mulher' : 'CREAS Taquara · Proteção Social Especial'}</div><h1>${esc(titulo)}</h1></div>
     <div class="num"><b>${linhas.length}</b> ${linhas.length===1?'caso':'casos'}<br>${fmt(iso(HOJE))}</div></div>
-  ${filtros ? `<div class="filtros"><b>Filtros:</b> ${esc(filtros)}</div>` : ''}
+  <div class="filtros"><b>Filtros:</b> ${esc(filtros || 'nenhum')}${ordem ? ` &nbsp;·&nbsp; <b>Ordem:</b> ${esc(ordem)}` : ''}</div>
   <table><colgroup>${larg.map(w => `<col style="width:${w}%">`).join('')}</colgroup>
   <thead><tr>${cab.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
   <tbody>${linhas.map(l => `<tr>${l.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>
@@ -1663,9 +1663,15 @@ function imprimirLista(titulo, filtros, cab, linhas, larg){
   if (!w){ toast('Permita pop-ups para gerar o PDF.'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
-/* PDF da lista de casos do CREAS: a mesma lista e a mesma ordem da tela, sem limite de linhas */
+/* "técnica (crescente)": a ordem escolhida no clique do cabeçalho, para o topo do PDF */
+const ordemTxt = (o, ROT) => { const k = String(o||'').replace(/^-/,''); return ROT[k] ? `${ROT[k]} (${o.startsWith('-') ? 'decrescente' : 'crescente'})` : ''; };
+const ROT_ORD = {id:'nº', nome:'nome', rem:'remetente', recebido:'data de recebimento', prazo:'prazo', mov:'última movimentação', etapa:'etapa', sit:'situação',
+  desde:'data do repasse', tec:'técnica', inicio:'início do acompanhamento', cx:'complexidade', ges:'situação no GESUAS', prio:'prioridade'};
+/* PDF da lista de casos do CREAS: a mesma lista, com os mesmos filtros e a mesma ordem da tela (inclusive a do
+   clique no cabeçalho), sem limite de linhas */
 function pdfLista(){
-  const f = filtrosAtuais(), L = ordenar(listaCasos(f), S.ordem || (ETAPAS_FILA.includes(f.etapa) ? 'fila' : ''));
+  const f = filtrosAtuais(), fila = ETAPAS_FILA.includes(f.etapa), L = ordenar(listaCasos(f), S.ordem || (fila ? 'fila' : ''));
+  const ordem = S.ordem ? ordemTxt(S.ordem, ROT_ORD) : fila ? 'prioridade e, em cada uma, o mais antigo primeiro' : '';
   const ABAS = {ativos:'Em atendimento', triagem:'Triagem', avaliacao:'Avaliação', repasse:'Repasse', acompanhamento:'Acompanhamento', encerrado:'Encerrados', todos:'Todos'};
   const comGes = ['ativos','acompanhamento'].includes(f.etapa);
   const PER = Object.fromEntries(PERIODOS()), PRIO = {1:'Urgente', 2:'Alta', 3:'Regular', 0:'Sem prioridade'};
@@ -1683,10 +1689,10 @@ function pdfLista(){
     return [`<span class="mono">${esc(c.id)}</span>`,
       `<b>${esc(pessoasTxt(c))}</b>${p([resp && 'Resp.: '+esc(resp), esc(bairroDe(c))].filter(Boolean).join(' · '))}${p(esc(c.contato||''))}`,
       `${esc(remDe(c))}${p(esc(doc))}${p([c.recebido && 'recebido '+fmt(c.recebido), prazo].filter(Boolean).join(' · '))}`,
-      `${esc(etapaRot(c))}${p(esc(tec||''))}${p(c.inicio_acomp && c.etapa==='acompanhamento' ? 'desde '+fmt(c.inicio_acomp) : '')}${p(c.etapa==='encerrado' ? esc(c.desfecho||'') : '')}`,
+      `${esc(etapaRot(c))}${p(esc(tec||''))}${p(c.inicio_acomp && c.etapa==='acompanhamento' ? 'desde '+fmt(c.inicio_acomp) : '')}${p(c.etapa==='acompanhamento' && COMPLEX[c.complexidade] ? 'complexidade '+esc(COMPLEX[c.complexidade].toLowerCase()) : '')}${p(c.etapa==='repasse' && desdeRepasse(c) ? 'repassado em '+fmt(desdeRepasse(c)) : '')}${p(['triagem','avaliacao'].includes(c.etapa) && ultimaMov(c) ? 'últ. movimentação '+fmt(ultimaMov(c)) : '')}${p(c.etapa==='encerrado' ? esc(c.desfecho||'') : '')}`,
       c.prioridade ? esc(PRIO[c.prioridade]||c.prioridade) : '—',
       s ? `${esc(SIT[s.tipo]||'')}${p(s.tipo==='ok' ? 'PAF '+esc((s.paf||'em branco').toLowerCase()) : '')}` : '—']; });
-  imprimirLista('Casos · '+(ABAS[f.etapa]||f.etapa), filtros, ['Nº','Vítima(s) / família','Encaminhamento','Situação','Prior.','GESUAS'], linhas, [9,30,20,19,8,14]);
+  imprimirLista('Casos · '+(ABAS[f.etapa]||f.etapa), filtros, ordem, ['Nº','Vítima(s) / família','Encaminhamento','Situação','Prior.','GESUAS'], linhas, [9,30,20,19,8,14]);
 }
 /* baixa a lista filtrada, na ordem da tela; ; e BOM para o Excel em português abrir certo */
 function baixarCsv(){
@@ -3052,7 +3058,7 @@ function migrarCrm(){
       DB.crm = r.crm; $('#layer').innerHTML = ''; S.crm.seg = 'fazer'; render();
       toast(`${r.trazidos} casos trazidos da planilha antiga.`); return null; }, 'Trazer');
 }
-/* PDF da lista do CRM: a mesma lista e a mesma ordem da tela */
+/* PDF da lista do CRM: a mesma lista, com os mesmos filtros e a mesma ordem da tela (inclusive a do clique no cabeçalho) */
 function pdfListaCrm(){
   const f = S.crm, L = listaCrm(), aba = (SEGS_CRM.find(z => z[0]===f.seg) || [,''])[1];
   const filtros = [f.pend==='pend' && 'com pendência em aberto', f.pend==='ges' && 'a lançar no GESUAS', f.tec && 'técnica '+nomeTecCrm(f.tec), f.busca && `busca "${f.busca}"`].filter(Boolean).join(' · ');
@@ -3064,7 +3070,9 @@ function pdfListaCrm(){
       `${esc(nomeTecCrm(primeiroNome(x.tecnica))||'—')}`,
       u ? `${fmt(u.data)}${p(esc(RES_CRM_ROT[u.resultado]||''))}` : '—',
       `${pillCrm(x).replace(/<[^>]+>/g,'')}${p(x.gesuas==='sim' ? 'tem cadastro no GESUAS' : x.gesuas==='nao' ? 'sem cadastro no GESUAS' : '')}${p(pend.length ? 'pendência: '+esc(pend.map(k => k.pendencias).join('; ')) : '')}`]; });
-  imprimirLista('Casos do CRM · '+aba, filtros, ['Entrada','Mulher','Telefone','Técnica','Último contato','Situação'], linhas, [12,30,14,11,13,20]);
+  const ordem = ordemTxt(f.ordem, {entrada:'entrada', nome:'nome', tel:'telefone', ges:'no GESUAS', ult:'último contato', sit:'situação'})
+    || (f.seg==='fazer' ? 'entrada, a mais antiga primeiro' : 'entrada, a mais recente primeiro');
+  imprimirLista('Casos do CRM · '+aba, filtros, ordem, ['Entrada','Mulher','Telefone','Técnica','Último contato','Situação'], linhas, [12,30,14,11,13,20]);
 }
 function baixarCsvCrm(){
   const L = listaCrm();
