@@ -1508,7 +1508,7 @@ const ORDENS = {
   id:      it => it.ges ? '' : it.id,
   nome:    it => norm(it.ges ? it.ges.responsavel : nomeCaso(it)),
   rem:     it => it.ges ? '' : norm(remDe(it)),
-  recebido:it => it.ges ? '' : String(it.recebido||''),
+  recebido:it => it.ges ? dataBr(it.ges.inicio) : String(it.recebido||''),
   prazo:   it => it.ges || !it.prazo || it.prazo_respondido || it.etapa==='encerrado' ? '' : String(it.prazo),
   mov:     it => it.ges ? '' : String(ultimaMov(it)||''),
   etapa:   it => it.ges ? 'acompanhamento' : etapaLista(it),
@@ -1566,7 +1566,7 @@ function vCasos(){
   const total = L.length, V = L.slice(0, LIM_LISTA);
   const linhaGes = g => `<tr data-lf="${esc(g.responsavel)}" tabindex="0"${selCls({fam:g.responsavel})}><td class="muted" style="font-size:12px">GESUAS${ehMSE(g)?' · MSE':''}</td><td><div class="nm">${comCopiaComo(TIT(g.responsavel), g.responsavel)}</div><div class="muted" style="font-size:12px">Responsável no GESUAS${g.bairro?' · '+esc(TIT(g.bairro)):''}${temAtend()?(() => { const u = ultimoAtend(g); return ' · '+(u?'último atendimento '+fmt(u):'sem atendimento importado'); })():''}</div></td><td>${esc(nomeTecnica(g.tecnico))}</td><td class="mono">${esc(g.inicio)}</td><td class="muted">—</td><td><span class="pill p-ok">Registrado</span></td><td><span class="pill ${g.paf==='Preenchido'?'p-ok':'p-avaliacao'}">${esc(g.paf||'Em branco')}</span></td></tr>`;
   // família só do GESUAS na aba Em atendimento, nas mesmas colunas dos casos
-  const linhaGesAtend = g => `<tr data-lf="${esc(g.responsavel)}" tabindex="0"${selCls({fam:g.responsavel})}><td class="muted" style="font-size:12px">GESUAS${ehMSE(g)?' · MSE':''}</td><td><div class="nm">${comCopiaComo(TIT(g.responsavel), g.responsavel)}</div><div class="muted" style="font-size:12px">Responsável no GESUAS${g.bairro?' · '+esc(TIT(g.bairro)):''}</div></td><td><span class="muted">—</span></td><td class="muted">Incluída direto no GESUAS</td><td class="mono muted">—</td><td class="mono"><span class="muted">—</span></td><td><span class="pill p-acompanhamento">Em acompanhamento</span><div class="muted" style="font-size:12px">${esc(nomeTecnica(g.tecnico))}</div></td></tr>`;
+  const linhaGesAtend = g => `<tr data-lf="${esc(g.responsavel)}" tabindex="0"${selCls({fam:g.responsavel})}><td class="muted" style="font-size:12px">GESUAS${ehMSE(g)?' · MSE':''}</td><td><div class="nm">${comCopiaComo(TIT(g.responsavel), g.responsavel)}</div><div class="muted" style="font-size:12px">Responsável no GESUAS${g.bairro?' · '+esc(TIT(g.bairro)):''}</div></td><td><span class="muted">—</span></td><td class="muted">Incluída direto no GESUAS</td><td>${g.inicio ? `<span class="mono">${esc(g.inicio)}</span><div class="muted" style="font-size:12px">início no GESUAS</div>` : '<span class="muted">—</span>'}</td><td class="mono"><span class="muted">—</span></td><td><span class="pill p-acompanhamento">Em acompanhamento</span><div class="muted" style="font-size:12px">${esc(nomeTecnica(g.tecnico))}</div></td></tr>`;
   const desdeCel = c => { const d = desdeRepasse(c); return d ? `<td class="mono">${fmt(d)}<div class="muted" style="font-size:12px;font-weight:400">há ${dias(d)} dia${dias(d)===1?'':'s'}</div></td>` : '<td class="muted">—</td>'; };
   const ultimaCol = c => {
     if (fila){ const u = ultimaMov(c), d = dias(u); return `<td class="mono"${c.etapa==='avaliacao'&&d>LIM().avaliacao?' style="color:var(--warn);font-weight:600"':''}>${fmt(u)}<div class="muted" style="font-size:12px;font-weight:400">há ${d} dia${d===1?'':'s'}</div></td>`; }
@@ -1682,7 +1682,7 @@ function pdfLista(){
   const linhas = L.map(it => {
     if (it.ges){ const g = it.ges;
       return [`<span class="mono">GESUAS${ehMSE(g)?' · MSE':''}</span>`, `<b>${esc(TIT(g.responsavel))}</b>${p(['Responsável no GESUAS', g.bairro && esc(TIT(g.bairro))].filter(Boolean).join(' · '))}`,
-        '<span class="p">Incluída direto no GESUAS</span>', `Em acompanhamento${p(esc(nomeTecnica(g.tecnico)))}${p(g.inicio ? 'desde '+esc(g.inicio) : '')}`, '—', `Registrado${p('PAF '+esc((g.paf||'em branco').toLowerCase()))}`]; }
+        `<span class="p">Incluída direto no GESUAS</span>${p(g.inicio ? 'início '+esc(g.inicio) : '')}`, `Em acompanhamento${p(esc(nomeTecnica(g.tecnico)))}${p(g.inicio ? 'desde '+esc(g.inicio) : '')}`, '—', `Registrado${p('PAF '+esc((g.paf||'em branco').toLowerCase()))}`]; }
     const c = it, s = statusGes(c), resp = respDif(c), tec = c.etapa==='acompanhamento' ? tecnicaRef(c) : c.tecnica;
     const doc = [c.doc_tipo, c.doc_num].filter(Boolean).join(' ');
     const prazo = c.prazo && !c.prazo_respondido && c.etapa!=='encerrado' ? 'prazo '+fmt(c.prazo) : '';
