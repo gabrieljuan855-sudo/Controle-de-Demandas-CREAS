@@ -477,6 +477,12 @@ tbody tr.exp:hover td{background:var(--surface-2)}
 .ibs{display:inline-flex;gap:8px;align-items:center;margin-left:auto}
 .ibs .ib{width:38px;height:38px}
 .ib[disabled]{opacity:.45;cursor:default}
+.menu-baixar{position:absolute;z-index:60;min-width:260px;background:var(--surface);border:1px solid var(--borda-cartao);border-radius:12px;box-shadow:var(--shadow-lg,var(--shadow));padding:6px;display:flex;flex-direction:column;gap:2px}
+.menu-baixar button{all:unset;cursor:pointer;display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:8px;color:var(--ink)}
+.menu-baixar button:hover,.menu-baixar button:focus-visible{background:var(--accent-soft);color:var(--accent)}
+.menu-baixar svg{flex:none;margin-top:1px}
+.menu-baixar span{display:flex;flex-direction:column;gap:1px}
+.menu-baixar small{color:var(--ink-2);font-size:12px}
 /* ícone de copiar só aparece ao passar o mouse na linha (no celular, sempre) */
 /* escondido, não ocupa espaço (senão sobra um vão antes do bairro) */
 @media (hover:hover){ tbody tr .copiar{width:0;margin-left:0;opacity:0;overflow:hidden} tbody tr:hover .copiar,tbody tr:focus-within .copiar,.copiar:focus-visible{width:22px;margin-left:3px;opacity:1} }
@@ -1174,6 +1180,7 @@ const ICONES = {
   auto:'<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
   sino:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   busca:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  imprimir:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
   baixar:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
   filtro:'<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
   relogio:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -1584,7 +1591,7 @@ function vCasos(){
     <span class="ibs">
       <button type="button" class="ib${abrir?' on':''}" data-mais aria-expanded="${abrir}" title="${abrir?'Menos filtros':'Mais filtros: período, remetente, bairro, violação e prioridade'}" aria-label="Mais filtros">${ic('filtro')}${nMais?`<span class="badge warn">${nMais}</span>`:''}</button>
       ${algum?`<button type="button" class="ib" data-limpar title="Limpar filtros e busca" aria-label="Limpar filtros">${ic('fechar')}</button>`:''}
-      <button type="button" class="ib" data-csv title="Baixar a lista filtrada (.csv, abre no Excel ou no Planilhas)" aria-label="Baixar lista"${total?'':' disabled'}>${ic('baixar')}</button>
+      <button type="button" class="ib" data-csv title="Baixar a lista filtrada: planilha ou PDF para imprimir" aria-label="Baixar lista" aria-haspopup="menu"${total?'':' disabled'}>${ic('baixar')}</button>
     </span>
   </div>
   ${abrir?`<div class="filters mais">
@@ -1598,11 +1605,93 @@ function vCasos(){
   <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">Nenhum caso com esses filtros.${f.busca&&f.etapa!=='todos'&&listaCasos({...f, etapa:'todos'}).length?' <button type="button" class="btn small" data-seg="todos">Procurar em todos</button>':''}</td></tr>`}</tbody></table></div></div>
   ${total>LIM_LISTA?`<div class="row" style="margin-top:10px"><span class="muted">Mostrando ${LIM_LISTA} de ${total}.</span><button type="button" class="btn small" data-maislinhas>Mostrar mais ${Math.min(300, total-LIM_LISTA)}</button></div>`:''}`;
 }
+const SIT = {ok:'Registrado', manual:'Confirmado manualmente', depois:'Aguardando relatório', possivel:'Conferir (sobrenome)', ausente:'Não registrado', antigo:'Saiu do GESUAS'};
+/* menu do ícone de baixar: planilha (.csv) ou PDF (abre a impressão, onde se escolhe "Salvar como PDF") */
+function menuBaixar(btn, csv, pdf){
+  // um segundo clique no ícone fecha o menu
+  const velho = $('#menuBaixar'); if (velho){ velho._fechar(); return; }
+  const r = btn.getBoundingClientRect(), mn = document.createElement('div');
+  mn.id = 'menuBaixar'; mn.className = 'menu-baixar'; mn.setAttribute('role', 'menu');
+  mn.innerHTML = `<button type="button" role="menuitem" data-mb="pdf">${ic('imprimir')}<span><b>PDF para imprimir</b><small>Folha A4, com as principais informações de cada caso</small></span></button>
+    <button type="button" role="menuitem" data-mb="csv">${ic('baixar')}<span><b>Planilha (.csv)</b><small>Todas as colunas, abre no Excel ou no Planilhas</small></span></button>`;
+  mn.style.top = (r.bottom + window.scrollY + 6) + 'px'; mn.style.right = Math.max(8, document.documentElement.clientWidth - r.right) + 'px';
+  document.body.appendChild(mn);
+  const fechar = () => { mn.remove(); document.removeEventListener('mousedown', fora, true); document.removeEventListener('keydown', esc_, true); };
+  const fora = e => { if (!mn.contains(e.target) && !btn.contains(e.target)) fechar(); };
+  const esc_ = e => { if (e.key==='Escape'){ e.stopPropagation(); fechar(); btn.focus(); } };
+  mn._fechar = fechar; document.addEventListener('mousedown', fora, true); document.addEventListener('keydown', esc_, true);
+  mn.querySelectorAll('[data-mb]').forEach(b => b.onclick = () => { fechar(); (b.dataset.mb==='pdf' ? pdf : csv)(); });
+  mn.querySelector('button').focus();
+}
+/* página de lista para imprimir em A4: cabeçalho, filtros usados, tabela e aviso de dados pessoais */
+function imprimirLista(titulo, filtros, cab, linhas, larg){
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(titulo)} · ${fmt(iso(HOJE))}</title>
+  <style>
+    @page{ size:A4; margin:12mm 11mm 14mm; }
+    body{ font-family:Arial, Helvetica, sans-serif; font-size:11.5px; line-height:1.35; color:#111; margin:0; }
+    .cab{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #111; padding-bottom:5px; margin-bottom:6px; }
+    .org{ font-size:11px; color:#444; }
+    h1{ font-size:18px; margin:1px 0 0; }
+    .num{ text-align:right; font-size:11px; color:#333; }
+    .num b{ font-size:15px; color:#111; }
+    .filtros{ font-size:11px; color:#333; margin:0 0 8px; }
+    table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+    thead{ display:table-header-group; }
+    th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:#444; border-bottom:1.5px solid #111; padding:4px 5px; }
+    td{ vertical-align:top; border-bottom:1px solid #ccc; padding:5px 5px; overflow-wrap:anywhere; }
+    tr{ break-inside:avoid; }
+    tbody tr:nth-child(even) td{ background:#f6f6f6; }
+    td b{ font-size:12px; }
+    .p{ color:#444; font-size:10.5px; }
+    .mono{ font-family:ui-monospace, Consolas, monospace; font-size:10.5px; white-space:nowrap; }
+    .rod{ margin-top:10px; font-size:10px; color:#555; border-top:1px solid #999; padding-top:4px; }
+    .noprint{ text-align:right; margin-bottom:8px; }
+    .noprint button{ font-size:14px; padding:6px 14px; }
+    @media print{ .noprint{ display:none; } tbody tr:nth-child(even) td{ -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+  </style></head><body>
+  <div class="noprint"><button onclick="window.print()">Imprimir ou salvar em PDF</button></div>
+  <div class="cab"><div><div class="org">${modoCrm() ? 'CRM Taquara · Centro de Referência da Mulher' : 'CREAS Taquara · Proteção Social Especial'}</div><h1>${esc(titulo)}</h1></div>
+    <div class="num"><b>${linhas.length}</b> ${linhas.length===1?'caso':'casos'}<br>${fmt(iso(HOJE))}</div></div>
+  ${filtros ? `<div class="filtros"><b>Filtros:</b> ${esc(filtros)}</div>` : ''}
+  <table><colgroup>${larg.map(w => `<col style="width:${w}%">`).join('')}</colgroup>
+  <thead><tr>${cab.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+  <tbody>${linhas.map(l => `<tr>${l.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>
+  <div class="rod">Documento com dados pessoais: guardar com o mesmo cuidado da planilha. Impresso por ${esc(autorTxt())} em ${fmt(iso(HOJE))}.</div>
+  <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w){ toast('Permita pop-ups para gerar o PDF.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+/* PDF da lista de casos do CREAS: a mesma lista e a mesma ordem da tela, sem limite de linhas */
+function pdfLista(){
+  const f = filtrosAtuais(), L = ordenar(listaCasos(f), S.ordem || (ETAPAS_FILA.includes(f.etapa) ? 'fila' : ''));
+  const ABAS = {ativos:'Em atendimento', triagem:'Triagem', avaliacao:'Avaliação', repasse:'Repasse', acompanhamento:'Acompanhamento', encerrado:'Encerrados', todos:'Todos'};
+  const comGes = ['ativos','acompanhamento'].includes(f.etapa);
+  const PER = Object.fromEntries(PERIODOS()), PRIO = {1:'Urgente', 2:'Alta', 3:'Regular', 0:'Sem prioridade'};
+  const filtros = [f.tec && 'técnica '+nomeTecnica(f.tec), f.pend && pendRot(f.pend), comGes && f.serv==='mse' && 'só MSE', comGes && f.serv==='todos' && 'PAEFI e MSE',
+    f.per && 'recebido: '+String(PER[f.per]||f.per).toLowerCase(), f.rem && 'remetente '+f.rem, f.bairro && 'bairro '+f.bairro, f.viol && 'violação: '+(DIAG_LABEL[f.viol]||f.viol),
+    f.prio && 'prioridade '+(PRIO[f.prio]||f.prio), f.busca && `busca "${f.busca}"`].filter(Boolean).join(' · ');
+  const p = t => t ? `<div class="p">${t}</div>` : '';
+  const linhas = L.map(it => {
+    if (it.ges){ const g = it.ges;
+      return [`<span class="mono">GESUAS${ehMSE(g)?' · MSE':''}</span>`, `<b>${esc(TIT(g.responsavel))}</b>${p(['Responsável no GESUAS', g.bairro && esc(TIT(g.bairro))].filter(Boolean).join(' · '))}`,
+        '<span class="p">Incluída direto no GESUAS</span>', `Em acompanhamento${p(esc(nomeTecnica(g.tecnico)))}${p(g.inicio ? 'desde '+esc(g.inicio) : '')}`, '—', `Registrado${p('PAF '+esc((g.paf||'em branco').toLowerCase()))}`]; }
+    const c = it, s = statusGes(c), resp = respDif(c), tec = c.etapa==='acompanhamento' ? tecnicaRef(c) : c.tecnica;
+    const doc = [c.doc_tipo, c.doc_num].filter(Boolean).join(' ');
+    const prazo = c.prazo && !c.prazo_respondido && c.etapa!=='encerrado' ? 'prazo '+fmt(c.prazo) : '';
+    return [`<span class="mono">${esc(c.id)}</span>`,
+      `<b>${esc(pessoasTxt(c))}</b>${p([resp && 'Resp.: '+esc(resp), esc(bairroDe(c))].filter(Boolean).join(' · '))}${p(esc(c.contato||''))}`,
+      `${esc(remDe(c))}${p(esc(doc))}${p([c.recebido && 'recebido '+fmt(c.recebido), prazo].filter(Boolean).join(' · '))}`,
+      `${esc(etapaRot(c))}${p(esc(tec||''))}${p(c.inicio_acomp && c.etapa==='acompanhamento' ? 'desde '+fmt(c.inicio_acomp) : '')}${p(c.etapa==='encerrado' ? esc(c.desfecho||'') : '')}`,
+      c.prioridade ? esc(PRIO[c.prioridade]||c.prioridade) : '—',
+      s ? `${esc(SIT[s.tipo]||'')}${p(s.tipo==='ok' ? 'PAF '+esc((s.paf||'em branco').toLowerCase()) : '')}` : '—']; });
+  imprimirLista('Casos · '+(ABAS[f.etapa]||f.etapa), filtros, ['Nº','Vítima(s) / família','Encaminhamento','Situação','Prior.','GESUAS'], linhas, [9,30,20,19,8,14]);
+}
 /* baixa a lista filtrada, na ordem da tela; ; e BOM para o Excel em português abrir certo */
 function baixarCsv(){
   const L = ordenar(listaCasos(filtrosAtuais()), S.ordem || (ETAPAS_FILA.includes(S.f.etapa) ? 'fila' : ''));
   const cab = ['Nº','Vítima(s)','Responsável familiar','CPF','Bairro','Endereço','Contato','Remetente','Documento','Recebido','Prazo','Prioridade','Etapa','Desfecho','Técnica','Início do acompanhamento','Situação no GESUAS','PAF (GESUAS)'];
-  const SIT = {ok:'Registrado', manual:'Confirmado manualmente', depois:'Aguardando relatório', possivel:'Conferir (sobrenome)', ausente:'Não registrado', antigo:'Saiu do GESUAS'};
   const linhas = L.map(it => { if (it.ges){ const g = it.ges;
       return ['GESUAS'+(ehMSE(g)?' (MSE)':''), '', TIT(g.responsavel), fmtCpf(g.cpf), g.bairro?TIT(g.bairro):'', g.endereco||'', '', '', '', '', '', '', ETAPAS.acompanhamento, '', nomeTecnica(g.tecnico), g.inicio, 'Só no GESUAS', g.paf||'Em branco']; }
     const c = it, s = statusGes(c);
@@ -2744,7 +2833,7 @@ function vCrm(){
     ${tecs.length?`<select id="cTec" aria-label="Técnica" class="${f.tec?'ativo':''}"><option value="">Todas as técnicas</option>${tecs.map(t => `<option value="${esc(t)}" ${f.tec===t?'selected':''}>${esc(nomeTecCrm(t))}</option>`).join('')}</select>`:''}
     <span class="ibs">
       ${f.tec||f.busca||f.pend?`<button type="button" class="ib" data-climpar title="Limpar filtros e busca" aria-label="Limpar filtros">${ic('fechar')}</button>`:''}
-      <button type="button" class="ib" data-ccsv title="Baixar a lista (.csv)" aria-label="Baixar lista"${L.length?'':' disabled'}>${ic('baixar')}</button>
+      <button type="button" class="ib" data-ccsv title="Baixar a lista: planilha ou PDF para imprimir" aria-label="Baixar lista" aria-haspopup="menu"${L.length?'':' disabled'}>${ic('baixar')}</button>
     </span>
   </div>
   <div class="tablewrap"><table><thead><tr>${[['entrada','Entrada'],['nome','Mulher'],['tel','Telefone'],['ges','No GESUAS'],['ult','Último contato'],['sit','Situação']].map(([k,l]) => {
@@ -2864,7 +2953,7 @@ function bindCrm(){
   const cl = m.querySelector('[data-climpar]'); if (cl) cl.onclick = () => { S.crm.tec = ''; S.crm.busca = ''; S.crm.pend = ''; S.crm.ordem = ''; render(); };
   m.querySelectorAll('[data-cord]').forEach(el => el.onclick = () => { const k = el.dataset.cord, o = S.crm.ordem||''; S.crm.ordem = o===k ? '-'+k : o==='-'+k ? '' : k; render(); });
   const cp2 = $('#cPend'); if (cp2) cp2.onchange = () => { S.crm.pend = cp2.value; LIM_LISTA = 300; render(); };
-  const cc = m.querySelector('[data-ccsv]'); if (cc) cc.onclick = baixarCsvCrm;
+  const cc = m.querySelector('[data-ccsv]'); if (cc) cc.onclick = () => menuBaixar(cc, baixarCsvCrm, pdfListaCrm);
   const mg = m.querySelector('[data-cmigrar]'); if (mg) mg.onclick = migrarCrm;
   const b = $('#busca'); if (b){ b.oninput = () => { S.crm.busca = b.value; LIM_LISTA = 300; clearTimeout(BUSCA_T); BUSCA_T = setTimeout(() => { const pos = b.selectionStart; render(); const nb = $('#busca'); if (nb){ nb.focus(); nb.setSelectionRange(pos,pos); } }, 150); };
     b.onkeydown = e => { if (e.key==='Escape' && b.value){ e.preventDefault(); b.value=''; b.oninput(); } }; }
@@ -2962,6 +3051,20 @@ function migrarCrm(){
       toast('Lendo a planilha…'); const r = await run('api_crmMigrar', u);
       DB.crm = r.crm; $('#layer').innerHTML = ''; S.crm.seg = 'fazer'; render();
       toast(`${r.trazidos} casos trazidos da planilha antiga.`); return null; }, 'Trazer');
+}
+/* PDF da lista do CRM: a mesma lista e a mesma ordem da tela */
+function pdfListaCrm(){
+  const f = S.crm, L = listaCrm(), aba = (SEGS_CRM.find(z => z[0]===f.seg) || [,''])[1];
+  const filtros = [f.pend==='pend' && 'com pendência em aberto', f.pend==='ges' && 'a lançar no GESUAS', f.tec && 'técnica '+nomeTecCrm(f.tec), f.busca && `busca "${f.busca}"`].filter(Boolean).join(' · ');
+  const p = t => t ? `<div class="p">${t}</div>` : '';
+  const linhas = L.map(x => { const u = ultContatoCrm(x), pend = pendCrm(x);
+    return [`<span class="mono">${fmt(x.entrada)}</span>`,
+      `<b>${x.nome ? esc(x.nome) : '<i>sem nome (abrir o processo)</i>'}</b>${p([x.nascimento && idade(x.nascimento)+' anos', esc(x.bairro||'')].filter(Boolean).join(' · '))}${p(esc(x.endereco||''))}`,
+      esc(x.telefone||'—'),
+      `${esc(nomeTecCrm(primeiroNome(x.tecnica))||'—')}`,
+      u ? `${fmt(u.data)}${p(esc(RES_CRM_ROT[u.resultado]||''))}` : '—',
+      `${pillCrm(x).replace(/<[^>]+>/g,'')}${p(x.gesuas==='sim' ? 'tem cadastro no GESUAS' : x.gesuas==='nao' ? 'sem cadastro no GESUAS' : '')}${p(pend.length ? 'pendência: '+esc(pend.map(k => k.pendencias).join('; ')) : '')}`]; });
+  imprimirLista('Casos do CRM · '+aba, filtros, ['Entrada','Mulher','Telefone','Técnica','Último contato','Situação'], linhas, [12,30,14,11,13,20]);
 }
 function baixarCsvCrm(){
   const L = listaCrm();
@@ -3120,7 +3223,7 @@ function bind(){
   const lim = m.querySelector('[data-limpar]'); if (lim) lim.onclick = () => { S.maisFiltros = false; filtrar({...FILTRO_VAZIO, etapa:S.f.etapa}); };
   const mf = m.querySelector('[data-mais]'); if (mf) mf.onclick = () => { if (S.maisFiltros && MAIS_FILTROS.some(k => S.f[k])){ toast('Limpe os filtros extras para recolher.'); return; } S.maisFiltros = !S.maisFiltros; render(); };
   const ml = m.querySelector('[data-maislinhas]'); if (ml) ml.onclick = () => { LIM_LISTA += 300; render(); };
-  const csv = m.querySelector('[data-csv]'); if (csv) csv.onclick = baixarCsv;
+  const csv = m.querySelector('[data-csv]'); if (csv) csv.onclick = () => menuBaixar(csv, baixarCsv, pdfLista);
   m.querySelectorAll('[data-ord]').forEach(el => el.onclick = () => { const k = el.dataset.ord; S.ordem = S.ordem===k ? '-'+k : S.ordem==='-'+k ? '' : k; render(); });
   const pt = m.querySelector('[data-paineltudo]'); if (pt) pt.onclick = () => { S.painelTudo = !S.painelTudo; render(); };
   m.querySelectorAll('[data-ptipo]').forEach(el => el.onclick = () => { S.painelTipo = S.painelTipo===el.dataset.ptipo ? '' : el.dataset.ptipo; render(); });
