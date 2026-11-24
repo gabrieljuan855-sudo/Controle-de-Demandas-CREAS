@@ -467,6 +467,12 @@ tbody tr.exp:hover td{background:var(--surface-2)}
 .ibs{display:inline-flex;gap:8px;align-items:center;margin-left:auto}
 .ibs .ib{width:38px;height:38px}
 .ib[disabled]{opacity:.45;cursor:default}
+.menu-baixar{position:absolute;z-index:60;min-width:260px;background:var(--surface);border:1px solid var(--borda-cartao);border-radius:12px;box-shadow:var(--shadow-lg,var(--shadow));padding:6px;display:flex;flex-direction:column;gap:2px}
+.menu-baixar button{all:unset;cursor:pointer;display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:8px;color:var(--ink)}
+.menu-baixar button:hover,.menu-baixar button:focus-visible{background:var(--accent-soft);color:var(--accent)}
+.menu-baixar svg{flex:none;margin-top:1px}
+.menu-baixar span{display:flex;flex-direction:column;gap:1px}
+.menu-baixar small{color:var(--ink-2);font-size:12px}
 /* ícone de copiar só aparece ao passar o mouse na linha (no celular, sempre) */
 /* escondido, não ocupa espaço (senão sobra um vão antes do bairro) */
 @media (hover:hover){ tbody tr .copiar{width:0;margin-left:0;opacity:0;overflow:hidden} tbody tr:hover .copiar,tbody tr:focus-within .copiar,.copiar:focus-visible{width:22px;margin-left:3px;opacity:1} }
